@@ -1,0 +1,174 @@
+-- LocalScript inside StarterPlayerScripts
+local player = game.Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local RunService = game:GetService("RunService")
+
+-- Create GUI
+local screenGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
+local frame = Instance.new("Frame", screenGui)
+frame.Size = UDim2.new(0, 200, 0, 310)
+frame.Position = UDim2.new(0.5, -100, 0.5, -100)
+frame.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+frame.Active = true
+frame.Draggable = true
+
+-- Create GUI elements for staring functionality
+local toggleStareButton = Instance.new("TextButton", frame)
+toggleStareButton.Size = UDim2.new(0, 180, 0, 40)
+toggleStareButton.Position = UDim2.new(0, 10, 0, 10)
+toggleStareButton.Text = "Stare OFF"
+toggleStareButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+
+local increaseStareDistanceButton = Instance.new("TextButton", frame)
+increaseStareDistanceButton.Size = UDim2.new(0, 85, 0, 30)
+increaseStareDistanceButton.Position = UDim2.new(0, 10, 0, 60)
+increaseStareDistanceButton.Text = "+"
+
+local decreaseStareDistanceButton = Instance.new("TextButton", frame)
+decreaseStareDistanceButton.Size = UDim2.new(0, 85, 0, 30)
+decreaseStareDistanceButton.Position = UDim2.new(0, 105, 0, 60)
+decreaseStareDistanceButton.Text = "-"
+
+local stareDistanceLabel = Instance.new("TextLabel", frame)
+stareDistanceLabel.Size = UDim2.new(0, 180, 0, 30)
+stareDistanceLabel.Position = UDim2.new(0, 10, 0, 90)
+stareDistanceLabel.Text = "Stare Distance: 20 studs"
+stareDistanceLabel.BackgroundTransparency = 1
+
+-- Create GUI elements for backward walking functionality
+local toggleBackwardButton = Instance.new("TextButton", frame)
+toggleBackwardButton.Size = UDim2.new(0, 180, 0, 40)
+toggleBackwardButton.Position = UDim2.new(0, 10, 0, 140)
+toggleBackwardButton.Text = "Backward OFF"
+toggleBackwardButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+
+local increaseBackwardDistanceButton = Instance.new("TextButton", frame)
+increaseBackwardDistanceButton.Size = UDim2.new(0, 85, 0, 30)
+increaseBackwardDistanceButton.Position = UDim2.new(0, 10, 0, 190)
+increaseBackwardDistanceButton.Text = "+"
+
+local decreaseBackwardDistanceButton = Instance.new("TextButton", frame)
+decreaseBackwardDistanceButton.Size = UDim2.new(0, 85, 0, 30)
+decreaseBackwardDistanceButton.Position = UDim2.new(0, 105, 0, 190)
+decreaseBackwardDistanceButton.Text = "-"
+
+local backwardDistanceLabel = Instance.new("TextLabel", frame)
+backwardDistanceLabel.Size = UDim2.new(0, 180, 0, 30)
+backwardDistanceLabel.Position = UDim2.new(0, 10, 0, 220)
+backwardDistanceLabel.Text = "Backward Distance: 10 studs"
+backwardDistanceLabel.BackgroundTransparency = 1
+
+local destroyButton = Instance.new("TextButton", frame)
+destroyButton.Size = UDim2.new(0, 180, 0, 40)
+destroyButton.Position = UDim2.new(0, 10, 0, 260)
+destroyButton.Text = "Destroy"
+
+-- Initialize states
+local stareEnabled = false
+local backwardEnabled = false
+local stareDistance = 20
+local backwardDistance = 10
+
+-- Function to find the closest player within a specified distance
+local function findClosestPlayer(maxDistance)
+    local closestPlayer = nil
+    local shortestDistance = math.huge
+    
+    for _, otherPlayer in pairs(game.Players:GetPlayers()) do
+        if otherPlayer ~= player and otherPlayer.Character and otherPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            local distance = (character.HumanoidRootPart.Position - otherPlayer.Character.HumanoidRootPart.Position).magnitude
+            if distance < shortestDistance and distance <= maxDistance then
+                closestPlayer = otherPlayer
+                shortestDistance = distance
+            end
+        end
+    end
+    
+    return closestPlayer
+end
+
+-- Function to stare at the closest player
+local function stareAtClosestPlayer()
+    local closestPlayer = findClosestPlayer(stareDistance)
+    if closestPlayer and closestPlayer.Character and closestPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        local lookAt = closestPlayer.Character.HumanoidRootPart.Position
+        local characterPos = character.HumanoidRootPart.Position
+        local direction = (lookAt - characterPos).unit
+        
+        local lookVector = (lookAt - characterPos).unit
+        lookVector = Vector3.new(lookVector.X, 0, lookVector.Z).unit
+        character.HumanoidRootPart.CFrame = CFrame.lookAt(characterPos, characterPos + lookVector)
+    end
+end
+
+-- Function to walk backward from the closest player
+local function walkBackwardFromClosestPlayer()
+    local closestPlayer = findClosestPlayer(backwardDistance)
+    if closestPlayer and closestPlayer.Character and closestPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        local direction = (character.HumanoidRootPart.Position - closestPlayer.Character.HumanoidRootPart.Position).unit
+        character.Humanoid:MoveTo(character.HumanoidRootPart.Position + direction * 5) -- Move backward
+    end
+end
+
+-- Toggle button functionality for staring
+toggleStareButton.MouseButton1Click:Connect(function()
+    stareEnabled = not stareEnabled
+    if stareEnabled then
+        toggleStareButton.Text = "Stare ON"
+        toggleStareButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+    else
+        toggleStareButton.Text = "Stare OFF"
+        toggleStareButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+    end
+end)
+
+-- Toggle button functionality for backward walking
+toggleBackwardButton.MouseButton1Click:Connect(function()
+    backwardEnabled = not backwardEnabled
+    if backwardEnabled then
+        toggleBackwardButton.Text = "Backward ON"
+        toggleBackwardButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+    else
+        toggleBackwardButton.Text = "Backward OFF"
+        toggleBackwardButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+    end
+end)
+
+-- Destroy button functionality
+destroyButton.MouseButton1Click:Connect(function()
+    screenGui:Destroy()
+end)
+
+-- Increase stare distance button functionality
+increaseStareDistanceButton.MouseButton1Click:Connect(function()
+    stareDistance = stareDistance + 5
+    stareDistanceLabel.Text = "Stare Distance: " .. stareDistance .. " studs"
+end)
+
+-- Decrease stare distance button functionality
+decreaseStareDistanceButton.MouseButton1Click:Connect(function()
+    stareDistance = math.max(5, stareDistance - 5)
+    stareDistanceLabel.Text = "Stare Distance: " .. stareDistance .. " studs"
+end)
+
+-- Increase backward distance button functionality
+increaseBackwardDistanceButton.MouseButton1Click:Connect(function()
+    backwardDistance = backwardDistance + 5
+    backwardDistanceLabel.Text = "Backward Distance: " .. backwardDistance .. " studs"
+end)
+
+-- Decrease backward distance button functionality
+decreaseBackwardDistanceButton.MouseButton1Click:Connect(function()
+    backwardDistance = math.max(5, backwardDistance - 5)
+    backwardDistanceLabel.Text = "Backward Distance: " .. backwardDistance .. " studs"
+end)
+
+-- Update loop
+RunService.RenderStepped:Connect(function()
+    if stareEnabled then
+        stareAtClosestPlayer()
+    end
+    if backwardEnabled then
+        walkBackwardFromClosestPlayer()
+    end
+end)
