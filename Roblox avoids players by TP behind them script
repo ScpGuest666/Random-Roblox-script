@@ -1,0 +1,143 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+local Workspace = game:GetService("Workspace")
+
+-- Create GUI
+local screenGui = Instance.new("ScreenGui", LocalPlayer.PlayerGui)
+local frame = Instance.new("Frame", screenGui)
+frame.Size = UDim2.new(0, 250, 0, 200)
+frame.Position = UDim2.new(0, 10, 0, 10)
+frame.BackgroundColor3 = Color3.new(0.5, 0.5, 0.5)
+frame.Active = true
+frame.Draggable = true
+
+local onButton = Instance.new("TextButton", frame)
+onButton.Size = UDim2.new(0, 60, 0, 30)
+onButton.Position = UDim2.new(0, 10, 0, 10)
+onButton.Text = "On"
+onButton.BackgroundColor3 = Color3.new(1, 0, 0)  -- Red color initially
+
+local offButton = Instance.new("TextButton", frame)
+offButton.Size = UDim2.new(0, 60, 0, 30)
+offButton.Position = UDim2.new(0, 80, 0, 10)
+offButton.Text = "Off"
+offButton.BackgroundColor3 = Color3.new(1, 0, 0)  -- Red color initially
+
+local destroyButton = Instance.new("TextButton", frame)
+destroyButton.Size = UDim2.new(0, 30, 0, 30)
+destroyButton.Position = UDim2.new(0, 150, 0, 10)
+destroyButton.Text = "X"
+
+-- Labels for distances
+local withinLabel = Instance.new("TextLabel", frame)
+withinLabel.Size = UDim2.new(0, 100, 0, 30)
+withinLabel.Position = UDim2.new(0, 10, 0, 50)
+withinLabel.Text = "Within Studs: 20"
+
+local teleportLabel = Instance.new("TextLabel", frame)
+teleportLabel.Size = UDim2.new(0, 100, 0, 30)
+teleportLabel.Position = UDim2.new(0, 10, 0, 90)
+teleportLabel.Text = "Teleport Studs: 30"
+
+-- Increase/Decrease buttons for within studs
+local withinPlus = Instance.new("TextButton", frame)
+withinPlus.Size = UDim2.new(0, 30, 0, 30)
+withinPlus.Position = UDim2.new(0, 120, 0, 50)
+withinPlus.Text = "+"
+
+local withinMinus = Instance.new("TextButton", frame)
+withinMinus.Size = UDim2.new(0, 30, 0, 30)
+withinMinus.Position = UDim2.new(0, 160, 0, 50)
+withinMinus.Text = "-"
+
+-- Increase/Decrease buttons for teleport studs
+local teleportPlus = Instance.new("TextButton", frame)
+teleportPlus.Size = UDim2.new(0, 30, 0, 30)
+teleportPlus.Position = UDim2.new(0, 120, 0, 90)
+teleportPlus.Text = "+"
+
+local teleportMinus = Instance.new("TextButton", frame)
+teleportMinus.Size = UDim2.new(0, 30, 0, 30)
+teleportMinus.Position = UDim2.new(0, 160, 0, 90)
+teleportMinus.Text = "-"
+
+local active = false
+local withinStuds = 20
+local teleportStuds = 30
+local minTeleportStuds = 10  -- Minimum teleport distance
+
+-- Function to check if a position is safe for teleporting
+local function isSafePosition(position)
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterDescendantsInstances = {Character}
+    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+
+    local raycastResult = Workspace:Raycast(position, Vector3.new(0, -100, 0), raycastParams)
+    return raycastResult and raycastResult.Position and raycastResult.Position.Y < position.Y
+end
+
+-- Function to calculate the position behind a player
+local function getTeleportPosition(playerHumanoidRootPart)
+    local direction = (HumanoidRootPart.Position - playerHumanoidRootPart.Position).unit
+    local teleportDistance = math.max(teleportStuds, minTeleportStuds)  -- Ensure teleport distance is at least minTeleportStuds
+    return playerHumanoidRootPart.Position - direction * teleportDistance
+end
+
+-- Function to check distance and teleport
+local function avoidPlayers()
+    if not active then return end
+
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local otherHumanoidRootPart = player.Character.HumanoidRootPart
+            local distance = (HumanoidRootPart.Position - otherHumanoidRootPart.Position).Magnitude
+            if distance < withinStuds then
+                local newPosition = getTeleportPosition(otherHumanoidRootPart)
+                if isSafePosition(newPosition) then
+                    HumanoidRootPart.CFrame = CFrame.new(newPosition)
+                end
+            end
+        end
+    end
+end
+
+onButton.MouseButton1Click:Connect(function()
+    active = true
+    onButton.BackgroundColor3 = Color3.new(0, 1, 0)  -- Green color
+    offButton.BackgroundColor3 = Color3.new(1, 0, 0)  -- Red color
+end)
+
+offButton.MouseButton1Click:Connect(function()
+    active = false
+    onButton.BackgroundColor3 = Color3.new(1, 0, 0)  -- Red color
+    offButton.BackgroundColor3 = Color3.new(0, 1, 0)  -- Green color
+end)
+
+destroyButton.MouseButton1Click:Connect(function()
+    screenGui:Destroy()
+end)
+
+withinPlus.MouseButton1Click:Connect(function()
+    withinStuds = withinStuds + 1
+    withinLabel.Text = "Within Studs: " .. withinStuds
+end)
+
+withinMinus.MouseButton1Click:Connect(function()
+    withinStuds = math.max(1, withinStuds - 1)
+    withinLabel.Text = "Within Studs: " .. withinStuds
+end)
+
+teleportPlus.MouseButton1Click:Connect(function()
+    teleportStuds = teleportStuds + 1
+    teleportLabel.Text = "Teleport Studs: " .. teleportStuds
+end)
+
+teleportMinus.MouseButton1Click:Connect(function()
+    teleportStuds = math.max(minTeleportStuds, teleportStuds - 1)
+    teleportLabel.Text = "Teleport Studs: " .. teleportStuds
+end)
+
+RunService.Stepped:Connect(avoidPlayers)
