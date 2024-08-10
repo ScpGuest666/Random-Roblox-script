@@ -1,0 +1,148 @@
+-- Create ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+screenGui.ResetOnSpawn = false
+
+-- Create Frame
+local frame = Instance.new("Frame")
+frame.Parent = screenGui
+frame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+frame.Size = UDim2.new(0, 200, 0, 130)
+frame.Position = UDim2.new(0.5, -100, 0.5, -65)
+frame.Active = true
+frame.Draggable = true
+
+-- Create On Button
+local onButton = Instance.new("TextButton")
+onButton.Parent = frame
+onButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+onButton.Size = UDim2.new(0, 60, 0, 30)
+onButton.Position = UDim2.new(0, 20, 0, 20)
+onButton.Text = "On"
+onButton.TextScaled = true
+
+-- Create Off Button
+local offButton = Instance.new("TextButton")
+offButton.Parent = frame
+offButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+offButton.Size = UDim2.new(0, 60, 0, 30)
+offButton.Position = UDim2.new(0, 120, 0, 20)
+offButton.Text = "Off"
+offButton.TextScaled = true
+
+-- Create Destroy Button
+local destroyButton = Instance.new("TextButton")
+destroyButton.Parent = frame
+destroyButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+destroyButton.Size = UDim2.new(0, 160, 0, 30)
+destroyButton.Position = UDim2.new(0, 20, 0, 60)
+destroyButton.Text = "Destroy"
+destroyButton.TextScaled = true
+
+-- Create Recover Button
+local recoverButton = Instance.new("TextButton")
+recoverButton.Parent = frame
+recoverButton.BackgroundColor3 = Color3.fromRGB(0, 0, 255)
+recoverButton.Size = UDim2.new(0, 160, 0, 30)
+recoverButton.Position = UDim2.new(0, 20, 0, 100)
+recoverButton.Text = "Recover"
+recoverButton.TextScaled = true
+
+-- Create Status Indicator
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Parent = frame
+statusLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+statusLabel.Size = UDim2.new(0, 200, 0, 30)
+statusLabel.Position = UDim2.new(0, 0, 0, -30)
+statusLabel.Text = "Status: Off"
+statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+statusLabel.TextScaled = true
+
+-- Create Destroy Functionality
+local buildingEnabled = false
+local selectedPart = nil
+local deletedParts = {}  -- Table to store deleted parts and their original positions
+local debounce = false  -- Debounce flag to prevent multiple deletions
+
+local function enableBuilding()
+    buildingEnabled = true
+    statusLabel.Text = "Status: On"
+    statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+
+    local player = game.Players.LocalPlayer
+    local mouse = player:GetMouse()
+
+    -- Mouse Button Down
+    mouse.Button1Down:Connect(function()
+        if buildingEnabled and not debounce then
+            debounce = true
+            local target = mouse.Target
+            if target and target ~= selectedPart then
+                -- If there's already a selected part, destroy it
+                if selectedPart then
+                    selectedPart:Destroy()
+                end
+                -- Select and destroy the new target
+                selectedPart = target
+                print("Selected Part: " .. selectedPart.Name)
+
+                -- Store the deleted part and its original position
+                local partClone = selectedPart:Clone()
+                table.insert(deletedParts, {
+                    Part = partClone,
+                    Position = selectedPart.Position
+                })
+                selectedPart:Destroy()
+                selectedPart = nil
+            end
+            -- Reset debounce after a short delay
+            wait(0.1)  -- Adjust the delay as needed
+            debounce = false
+        end
+    end)
+end
+
+local function disableBuilding()
+    buildingEnabled = false
+    statusLabel.Text = "Status: Off"
+    statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+    selectedPart = nil
+end
+
+local function recoverParts()
+    for _, partData in ipairs(deletedParts) do
+        local recoveredPart = partData.Part
+        recoveredPart.Parent = workspace
+        recoveredPart.Position = partData.Position
+        print("Recovered Part: " .. recoveredPart.Name)
+    end
+    deletedParts = {}  -- Clear the list after recovery
+end
+
+local function destroyGui()
+    -- Recover all deleted parts when GUI is destroyed
+    recoverParts()
+    screenGui:Destroy()
+    disableBuilding()
+end
+
+-- Button Functions
+onButton.MouseButton1Click:Connect(function()
+    if not buildingEnabled then
+        enableBuilding()
+    end
+end)
+
+offButton.MouseButton1Click:Connect(function()
+    if buildingEnabled then
+        disableBuilding()
+    end
+end)
+
+destroyButton.MouseButton1Click:Connect(function()
+    destroyGui()
+end)
+
+recoverButton.MouseButton1Click:Connect(function()
+    recoverParts()
+end)
