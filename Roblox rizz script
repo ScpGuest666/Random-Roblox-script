@@ -1,0 +1,1020 @@
+-- Create ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+screenGui.ResetOnSpawn = false
+
+-- Create Frame
+local frame = Instance.new("Frame")
+frame.Parent = screenGui
+frame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+frame.Size = UDim2.new(0, 200, 0, 100)
+frame.Position = UDim2.new(0.5, -100, 0.5, -50)
+frame.Active = true
+frame.Draggable = true
+
+-- Create On Button
+local onButton = Instance.new("TextButton")
+onButton.Parent = frame
+onButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+onButton.Size = UDim2.new(0, 60, 0, 30)
+onButton.Position = UDim2.new(0, 20, 0, 20)
+onButton.Text = "On"
+onButton.TextScaled = true
+
+-- Create Off Button
+local offButton = Instance.new("TextButton")
+offButton.Parent = frame
+offButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+offButton.Size = UDim2.new(0, 60, 0, 30)
+offButton.Position = UDim2.new(0, 120, 0, 20)
+offButton.Text = "Off"
+offButton.TextScaled = true
+
+-- Create Destroy Button
+local destroyButton = Instance.new("TextButton")
+destroyButton.Parent = frame
+destroyButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+destroyButton.Size = UDim2.new(0, 160, 0, 30)
+destroyButton.Position = UDim2.new(0, 20, 0, 60)
+destroyButton.Text = "Destroy"
+destroyButton.TextScaled = true
+
+-- Create Status Indicator
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Parent = frame
+statusLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+statusLabel.Size = UDim2.new(0, 200, 0, 30)
+statusLabel.Position = UDim2.new(0, 0, 0, -30)
+statusLabel.Text = "Status: Off"
+statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+statusLabel.TextScaled = true
+
+-- List of phrases and cooldown tracker
+local phrases = {
+     "Are you a campfire? Because you're making my heart melt.",
+    "You must be WiFi because I'm feeling a connection.",
+    "Are you a star? Because your beauty lights up the night.",
+    "Do you have a name, or can I call you mine?",
+    "If you were a vegetable, you'd be a cute-cumber.",
+    "Are you a bank loan? Because you have my interest.",
+    "Is your aura made of gold? Because you're priceless.",
+    "You're the reason even the darkest days seem bright.",
+    "I must be a photographer because I can picture us together.",
+    "Are you a cloud? Because my day brightens when you're near.",
+    "If my love were a question, you'd be the answer.",
+    "You must be a keyboard, because you're just my type.",
+    "Are you a sunrise? Because you brighten my morning.",
+    "Do you have a light? Because you've sparked a fire in me.",
+    "You're like the ocean calm, beautiful, and deep.",
+    "If I were to write a story, you'd be my happy ending.",
+    "Are you a melody? Because you've been playing in my head all day.",
+    "You must be made of stardust, because your sparkle is out of this world.",
+    "Are you a diamond? Because you shine under any light.",
+    "If hearts were locks, you’d be the only key.",
+    "You're like a puzzle, and I'm captivated by every piece.",
+    "You must be a spark, because you've ignited something special in me.",
+    "Is your smile a magnet? Because I'm drawn to it every time.",
+    "Are you a rare book? Because you're one of a kind.",
+    "If love were a game, you'd be my winning hand.",
+    "You're the reason I believe in love at first sight.",
+    "You must be a lighthouse, because you guide me through the dark.",
+    "Are you a snowflake? Because you're unique and one of a kind.",
+    "Your presence is like a warm breeze—comforting and refreshing.",
+    "You must be a mirror, because I see my future in you.",
+    "Are you a rainbow? Because you color my world.",
+    "You must be a comet, because my heart races every time you're near.",
+    "Are you an angel? Because heaven is missing one.",
+    "If my heart were a garden, you'd be the most beautiful flower.",
+    "You must be a breeze, because you just swept me off my feet.",
+    "Is your smile a compass? Because it always points me in the right direction.",
+    "You must be a galaxy, because I'm lost in your eyes.",
+    "If stars were wishes, I'd spend them all on you.",
+    "Are you a flame? Because you've ignited a fire in my heart.",
+    "You must be a dream, because reality is better with you in it.",
+    "Is your voice made of velvet? Because it’s so smooth.",
+    "You must be a magnet, because I'm stuck on you.",
+    "Are you a painter? Because you've brightened my world with your colors.",
+    "You must be a star, because my night is incomplete without you.",
+    "Is your love a melody? Because it's music to my ears.",
+    "You must be a poet, because every word from you feels like art.",
+    "Are you the moon? Because you light up my darkest nights.",
+    "You must be a rose, because you’ve bloomed in my heart.",
+    "Is your heart a treasure chest? Because it's full of gold.",
+    "You must be a gentle breeze, because I feel calm whenever you're near.",
+    "Is your soul a song? Because I could listen to you forever.",
+    "You must be a lighthouse, because you guide me home.",
+    "Are you a river? Because your love flows through my heart.",
+    "You must be a starfish, because you've stuck to my heart.",
+    "Is your heart a map? Because I’m lost without you.",
+    "You must be a butterfly, because you bring life wherever you go.",
+    "Are you a book? Because I can’t put you down.",
+    "You must be a spark, because you light up my world.",
+    "Is your laughter a melody? Because it's music to my soul.",
+    "You must be a flower, because you brighten up my day.",
+    "Are you a jewel? Because you shine brighter than any gem.",
+    "You must be the sun, because my world revolves around you.",
+    "Is your touch made of magic? Because every moment with you feels enchanting.",
+    "You must be a magnet, because you pull me in every time.",
+    "Are you a wish come true? Because I've been dreaming of you.",
+    "You must be a candle, because you light up even my darkest days.",
+    "Is your laugh contagious? Because I can’t stop smiling.",
+    "You must be a spark, because you've ignited something special in me.",
+    "Are you the stars? Because you make my night sparkle.",
+    "You must be a compass, because you give my life direction.",
+    "Is your love a melody? Because I can't get it out of my head.",
+    "You must be the ocean, because I'm lost in your depths.",
+    "Are you a shooting star? Because you’ve made my wish come true.",
+    "You must be a sunrise, because my day starts with you.",
+    "Is your voice a lullaby? Because it brings me peace.",
+    "You must be a pearl, because you're rare and precious.",
+    "Are you a garden? Because you make everything around you bloom.",
+    "You must be a song, because you play in my heart on repeat.",
+    "Is your love a flame? Because it warms my heart.",
+    "You must be a butterfly, because you bring beauty wherever you go.",
+    "Are you the wind? Because you move me in ways I can't explain.",
+    "You must be a rainbow, because you bring color to my life.",
+    "Is your presence a gift? Because I feel blessed every time you're near.",
+    "You must be a melody, because you make my heart sing.",
+    "Are you a diamond? Because you're a cut above the rest.",
+    "You must be the moon, because you light up my world even from afar.",
+    "Is your love a sunrise? Because it brings warmth to my soul.",
+    "You must be a spark, because you light up my life.",
+    "Are you a rose? Because you make everything around you beautiful.",
+    "You must be a whisper, because your voice is like a secret I want to keep.",
+    "Are you a daydream? Because I get lost in you.",
+    "You must be a breeze, because you make everything feel lighter.",
+    "Is your smile a sunrise? Because it brightens up my day.",
+    "You must be a pearl, because you’re one in a million.",
+    "Are you a melody? Because I can't get you out of my head.",
+    "You must be a warm hug, because you bring me comfort.",
+    "Is your heart a garden? Because it’s full of beautiful things.",
+    "You must be a shooting star, because you make my wishes come true.",
+    "Are you a compass? Because you give me direction.",
+    "You must be a painter, because you color my world.",
+    "Is your presence a light? Because you brighten my darkest days.",
+    "You must be a rose, because you’ve bloomed in my heart.",
+    "Are you a magnet? Because I'm attracted to you.",
+    "You must be a snowflake, because you're one of a kind.",
+    "Is your love a treasure? Because I feel lucky to have found you.",
+    "You must be a melody, because you’re always on my mind.",
+    "Are you a sunrise? Because you start my day perfectly.",
+    "You must be a breeze, because you make everything better.",
+    "Is your smile a key? Because it opens up my heart.",
+    "You must be a flame, because you light up my life.",
+    "Are you a lighthouse? Because you guide me through the storm.",
+    "You must be a gentle rain, because you make everything feel fresh.",
+    "Is your love a melody? Because it plays in my heart.",
+    "You must be a star, because you shine in my sky.",
+    "Are you a flower? Because you bring beauty to the world.",
+    "You must be a warm breeze, because you make me feel alive.",
+    "Is your voice a melody? Because it’s music to my ears.",
+    "You must be a diamond, because you’re rare and precious.",
+    "Are you a whisper? Because you’re the secret I want to keep.",
+    "You must be a rainbow, because you bring color to my life.",
+    "Are you a beacon? Because you light up my path.",
+    "You must be a spark, because you’ve ignited something in me.",
+    "Is your love a garden? Because it’s growing in my heart.",
+    "You must be a sunset, because you leave me in awe.",
+    "Are you a star? Because you make my nights brighter.",
+    "You must be a melody, because you’re stuck in my head.",
+    "Is your smile a magnet? Because I’m drawn to it.",
+    "You must be a warm fire, because you make me feel cozy.",
+    "Are you a painter? Because you’ve added color to my life.",
+    "You must be a shooting star, because you make my wishes come true.",
+    "Is your laugh a melody? Because it’s music to my soul.",
+    "You must be a diamond, because you’re flawless.",
+    "Are you a snowflake? Because you’re unique and beautiful.",
+    "You must be a compass, because you point me in the right direction.",
+    "Is your heart a lighthouse? Because it guides me home.",
+    "You must be a melody, because you’re always in tune with my heart.",
+    "Are you a sunrise? Because you start my day with warmth.",
+    "You must be a gentle breeze, because you bring peace to my soul.",
+    "Is your love a spark? Because it’s set my heart on fire.",
+    "You must be a star, because you’re always shining.",
+    "Are you a painter? Because you’ve drawn me into your world.",
+    "You must be a whisper, because you’re a sweet secret.",
+    "Is your smile a sunrise? Because it brightens my day.",
+    "You must be a breeze, because you make everything feel light.",
+    "Are you a rose? Because you’ve bloomed in my heart.",
+    "You must be a warm hug, because you bring comfort.",
+    "Is your love a treasure? Because I feel rich with you.",
+    "You must be a spark, because you light up my life.",
+    "Are you a lighthouse? Because you guide me through the dark.",
+    "You must be a star, because you’re always in my sky.",
+    "In your eyes, I find my forever home.",
+    "Your smile paints my world with endless light.",
+    "With every heartbeat, I whisper your name.",
+    "You are the melody my heart dances to.",
+    "In your embrace, I find my true peace.",
+    "Your love is the anchor to my wandering soul.",
+    "Every moment with you feels like a dream.",
+    "Your laughter is the music I live for.",
+    "You are the missing piece of my heart’s puzzle.",
+    "Loving you is the best adventure of my life.",
+    "In your touch, I discover the warmth of the sun.",
+    "Your voice is the song that soothes my soul.",
+    "Every glance from you makes my heart skip a beat.",
+    "Your love is the light that guides me home.",
+    "With you, time stands still and hearts race.",
+    "You are the reason my dreams are sweet.",
+    "Your kiss is the magic that awakens my heart.",
+    "You are the star that lights up my darkest nights.",
+    "In your love, I find my greatest strength.",
+    "Your presence is the calm in my storm.",
+    "In your eyes, I find my forever home.",
+    "Your smile paints my world with endless light.",
+    "With every heartbeat, I whisper your name.",
+    "You are the melody my heart dances to.",
+    "In your embrace, I find my true peace.",
+    "Your love is the anchor to my wandering soul.",
+    "Every moment with you feels like a dream.",
+    "Your laughter is the music I live for.",
+    "You are the missing piece of my heart’s puzzle.",
+    "Loving you is the best adventure of my life.",
+    "Your love is the rhythm to which my heart beats.",
+    "You are the moon to my night and the sun to my day.",
+    "In your arms, I find my truest self.",
+    "Your love is the compass that guides my heart.",
+    "You are the poetry my soul has always known.",
+    "With you, every moment is a breath of eternity.",
+    "Your eyes are the windows to my happiness.",
+    "You are the heartbeat in my quiet moments.",
+    "Your love is the spark that ignites my soul.",
+    "With you, I am exactly where I need to be.",
+    "Your laughter is the key to my joy.",
+    "In your smile, I see the promise of forever.",
+    "You are the whisper in my silence.",
+    "Your love is the dream I never want to wake from.",
+    "You are the muse that colors my world.",
+    "In your gaze, I lose and find myself all at once.",
+    "Your love is the warmth in my coldest nights.",
+    "With you, love feels like home.",
+    "You are the calm in the chaos of my heart.",
+    "Your touch is the answer to every question my heart asks.",
+    "You are the beginning and end of all my love stories.",
+    "In your embrace, I find the world and more.",
+    "Your love is the melody that makes my heart sing.",
+    "You are the light that makes my world shine brighter.",
+    "With you, every moment is a piece of heaven.",
+    "Your love is the horizon I chase with all my heart.",
+    "You are the wind beneath the wings of my dreams.",
+    "In your presence, my heart feels complete.",
+    "Your love is the anchor that holds me steady.",
+    "With you, love is an endless adventure.",
+    "You are the breath that fills my lungs with life.",
+    "Your love is the thread that weaves my heart together.",
+    "You are the echo of every beat of my heart.",
+    "In your love, I find the strength to be vulnerable.",
+    "Your love is the story I want to write every day.",
+    "You are the light that guides me through the darkness.",
+    "With you, love is always in bloom.",
+    "Your love is the peace in my restless heart.",
+    "You are the dream that I never want to end.",
+    "In your love, I find the courage to be myself.",
+    "Your love is the promise that tomorrow will be beautiful.",
+    "You are the heart that beats within mine.",
+    "With you, every day is a love letter to life.",
+    "Your love is the fire that warms my soul.",
+    "You are the melody that makes my heart dance.",
+    "In your arms, I find the world fades away.",
+    "Your love is the foundation of my happiness.",
+    "You are the sun that brightens my every morning.",
+    "With you, love feels like the air I breathe.",
+    "Your love is the whisper that lulls me to sleep.",
+    "You are the star that guides me through the night.",
+    "In your love, I find the strength to face anything.",
+    "Your love is the compass that points me home.",
+    "You are the light in every shadowed corner of my heart.",
+    "With you, every moment is filled with magic.",
+    "Your love is the rhythm that makes life a song.",
+    "You are the reason my heart never feels alone.",
+    "In your love, I find the courage to dream bigger.",
+    "Your love is the blanket that keeps my heart warm.",
+    "You are the sparkle in every drop of joy in my life.",
+    "With you, love is an endless adventure.",
+    "Your love is the lighthouse that guides me safely to shore.",
+    "You are the whisper in the wind that makes my heart sing.",
+    "In your love, I find the meaning of forever.",
+    "Your love is the treasure I seek every day.",
+    "You are the warmth that melts away my fears.",
+    "With you, love is the heartbeat of my life.",
+    "Your love is the song I hum when I’m alone.",
+    "You are the light that banishes the shadows of doubt.",
+    "In your love, I find the courage to face the unknown.",
+    "Your love is the anchor in the stormy seas of life.",
+    "You are the breath of fresh air that revives my spirit.",
+    "With you, love is the fire that never goes out.",
+    "Your love is the smile that brightens my darkest days.",
+    "You are the heartbeat in every moment of joy.",
+    "In your love, I find the strength to be my true self.",
+    "Your love is the whisper that quiets my restless mind.",
+    "You are the sun that rises in my heart each day.",
+    "With you, love is the journey I never want to end.",
+    "Your love is the dream that makes life worth living.",
+    "You are the calm in the storm of my emotions.",
+    "In your love, I find the peace I’ve been searching for.",
+    "Your love is the melody that plays in my heart.",
+    "You are the light that makes my soul shine.",
+    "With you, every moment is a love story.",
+    "Your love is the song that fills the silence.",
+    "You are the laughter that brightens my world.",
+    "In your love, I find the home I’ve always wanted.",
+    "Your love is the bridge that connects our hearts.",
+    "You are the dream that makes me never want to wake up.",
+    "With you, love is the air that I breathe.",
+    "Your love is the light that guides me through life.",
+    "You are the warmth that melts away the cold.",
+    "In your love, I find the strength to face the world.",
+    "Your love is the answer to every question my heart asks.",
+    "You are the melody that my heart beats to.",
+    "With you, every moment is filled with magic.",
+    "Your love is the light in the darkest of nights.",
+    "You are the heartbeat that keeps me alive.",
+    "In your love, I find the meaning of life.",
+    "In your eyes, I find my forever home.",
+    "Your smile paints my world with endless light.",
+    "With every heartbeat, I whisper your name.",
+    "You are the melody my heart dances to.",
+    "In your embrace, I find my true peace.",
+    "Your love is the anchor to my wandering soul.",
+    "Every moment with you feels like a dream.",
+    "Your laughter is the music I live for.",
+    "You are the missing piece of my heart’s puzzle.",
+    "Loving you is the best adventure of my life.",
+    "Your love is the rhythm to which my heart beats.",
+    "You are the moon to my night and the sun to my day.",
+    "In your arms, I find my truest self.",
+    "Your love is the compass that guides my heart.",
+    "You are the poetry my soul has always known.",
+    "With you, every moment is a breath of eternity.",
+    "Your eyes are the windows to my happiness.",
+    "You are the heartbeat in my quiet moments.",
+    "Your love is the spark that ignites my soul.",
+    "With you, I am exactly where I need to be.",
+    "Your laughter is the key to my joy.",
+    "In your smile, I see the promise of forever.",
+    "You are the whisper in my silence.",
+    "Your love is the dream I never want to wake from.",
+    "You are the muse that colors my world.",
+    "In your gaze, I lose and find myself all at once.",
+    "Your love is the warmth in my coldest nights.",
+    "With you, love feels like home.",
+    "You are the calm in the chaos of my heart.",
+    "Your touch is the answer to every question my heart asks.",
+    "You are the beginning and end of all my love stories.",
+    "In your embrace, I find the world and more.",
+    "Your love is the melody that makes my heart sing.",
+    "You are the light that makes my world shine brighter.",
+    "With you, every moment is a piece of heaven.",
+    "Your love is the horizon I chase with all my heart.",
+    "You are the wind beneath the wings of my dreams.",
+    "In your presence, my heart feels complete.",
+    "Your love is the anchor that holds me steady.",
+    "With you, love is an endless adventure.",
+    "You are the breath that fills my lungs with life.",
+    "Your love is the thread that weaves my heart together.",
+    "You are the echo of every beat of my heart.",
+    "In your love, I find the strength to be vulnerable.",
+    "Your love is the story I want to write every day.",
+    "You are the light that guides me through the darkness.",
+    "With you, love is always in bloom.",
+    "Your love is the peace in my restless heart.",
+    "You are the dream that I never want to end.",
+    "In your love, I find the courage to be myself.",
+    "Your love is the promise that tomorrow will be beautiful.",
+    "You are the heart that beats within mine.",
+    "With you, every day is a love letter to life.",
+    "Your love is the fire that warms my soul.",
+    "You are the melody that makes my heart dance.",
+    "In your arms, I find the world fades away.",
+    "Your love is the foundation of my happiness.",
+    "You are the sun that brightens my every morning.",
+    "With you, love feels like the air I breathe.",
+    "Your love is the whisper that lulls me to sleep.",
+    "You are the star that guides me through the night.",
+    "In your love, I find the strength to face anything.",
+    "Your love is the compass that points me home.",
+    "You are the light in every shadowed corner of my heart.",
+    "With you, every moment is filled with magic.",
+    "Your love is the rhythm that makes life a song.",
+    "You are the reason my heart never feels alone.",    "In your love, I find the courage to dream bigger.",
+    "Your love is the blanket that keeps my heart warm.",
+    "You are the sparkle in every drop of joy in my life.",
+    "With you, love is an endless adventure.",
+    "Your love is the lighthouse that guides me safely to shore.",
+    "You are the whisper in the wind that makes my heart sing.",
+    "In your love, I find the meaning of forever.",
+    "Your love is the treasure I seek every day.",
+    "You are the warmth that melts away my fears.",
+    "With you, love is the heartbeat of my life.",
+    "Your love is the song I hum when I’m alone.",
+    "You are the light that banishes the shadows of doubt.",
+    "In your love, I find the courage to face the unknown.",
+    "Your love is the anchor in the stormy seas of life.",
+    "You are the breath of fresh air that revives my spirit.",
+    "With you, love is the fire that never goes out.",
+    "Your love is the smile that brightens my darkest days.",
+    "You are the heartbeat in every moment of joy.",
+    "In your love, I find the strength to be my true self.",
+    "Your love is the whisper that quiets my restless mind.",
+    "You are the sun that rises in my heart each day.",
+    "With you, love is the journey I never want to end.",
+    "Your love is the dream that makes life worth living.",
+    "You are the calm in the storm of my emotions.",
+    "In your love, I find the peace I’ve been searching for.",
+    "Your love is the melody that plays in my heart.",
+    "You are the light that makes my soul shine.",
+    "With you, every moment is a love story.",
+    "Your love is the song that fills the silence.",
+    "You are the laughter that brightens my world.",
+    "In your love, I find the home I’ve always wanted.",
+    "Your love is the bridge that connects our hearts.",
+    "You are the dream that makes me never want to wake up.",
+    "With you, love is the air that I breathe.",
+    "Your love is the light that guides me through life.",
+    "You are the warmth that melts away the cold.",
+    "In your love, I find the strength to face the world.",
+    "Your love is the answer to every question my heart asks.",
+    "You are the melody that my heart beats to.",
+    "With you, every moment is filled with magic.",
+    "Your love is the light in the darkest of nights.",
+    "You are the heartbeat that keeps me alive.",
+    "In your love, I find the meaning of life.",
+    "Your love is the ink that writes the story of my heart.",
+    "You are the sunshine that makes my soul bloom.",
+    "In your smile, I find my eternal happiness.",
+    "Your love is the bridge between my dreams and reality.",
+    "You are the heartbeat that keeps my soul alive.",
+    "In your eyes, I find the reflection of my best self.",
+    "Your love is the fire that warms my coldest days.",
+    "You are the starlight that guides me through the night.",
+    "In your embrace, I find the meaning of home.",
+    "Your love is the wind that carries me to new heights.",
+    "You are the melody that brings my heart to life.",
+    "In your laughter, I hear the music of the universe.",
+    "Your love is the compass that guides me through life’s storms.",
+    "You are the dream that I never want to end.",
+    "In your presence, my heart finds its rhythm.",
+    "Your love is the whisper that calms my fears.",
+    "You are the light that brightens my darkest hours.",
+    "In your love, I find my strength and courage.",
+    "Your love is the tapestry that weaves our souls together.",
+    "You are the peace that settles my restless heart.",
+    "In your gaze, I find the promise of forever.",
+    "Your love is the anchor that keeps me grounded.",
+    "You are the smile that lights up my world.",
+    "In your arms, I find the refuge I’ve been searching for.",
+    "Your love is the song that my heart always sings.",
+    "You are the whisper of love in the silence of my soul.",
+    "In your love, I find the beauty in every moment.",
+    "Your love is the dream that fills my waking hours.",
+    "You are the warmth in every breath I take.",
+    "In your presence, I find the world fades away.",
+    "Your love is the light that guides me home.",
+    "You are the rhythm to which my heart beats.",
+    "In your love, I find the strength to face any challenge.",
+    "Your love is the melody that plays in my dreams.",
+    "You are the light that shines through my darkest nights.",
+    "Your love is the muse that inspires my heart.",
+    "You are the calm after every storm I face.",
+    "In your smile, I find the promise of tomorrow.",
+    "Your touch is the spark that ignites my soul.",
+    "You are the poetry that my heart longs to recite.",
+    "With you, every moment is a beautiful adventure.",
+    "Your laughter is the melody my heart dances to.",
+    "You are the sun that lights up my world.",
+    "In your love, I find the strength to dream big.",
+    "Your love is the sunrise that starts my day.",
+    "You are the joy in every beat of my heart.",
+    "With you, life feels like an endless celebration.",
+    "Your love is the shelter that keeps me warm.",
+    "You are the treasure I’ve been searching for.",
+    "In your eyes, I see the reflection of our future.",
+    "Your love is the light that brightens my path.",
+    "You are the heartbeat that makes my soul sing.",
+    "With you, love is a journey worth taking.",
+    "Your touch is the promise of forever.",
+    "You are the gentle breeze that calms my spirit.",
+    "In your love, I find my true self.",
+    "Your love is the anchor that keeps me steady.",
+    "You are the star that guides me through the night.",
+    "With you, every day is a new beginning.",
+    "Your love is the melody that makes my heart beat.",
+    "You are the dream that brings me peace.",
+    "In your embrace, I find my forever home.",
+    "Your love is the fire that warms my soul.",
+    "You are the harmony in every song of my heart.",
+    "With you, life is an endless romance.",
+    "Your love is the beacon that lights my way.",
+    "You are the magic in every moment we share.",
+    "In your eyes, I find the reflection of my dreams.",
+    "Your love is the pulse that keeps me alive.",
+    "You are the light that chases away my fears.",
+    "With you, every touch is a promise of forever.",
+    "Your love is the muse that inspires my every thought.",
+    "You are the joy that fills my heart with peace.",
+    "In your presence, I find my heart’s true rhythm.",
+    "Your love is the melody that makes life beautiful.",
+    "You are the calm in every storm I face.",
+    "With you, every second is a treasure.",
+    "Your love is the warmth that fills my days.",
+    "You are the star that makes my night shine bright.",
+    "In your love, I find the strength to face the world.",
+    "Your love is the whisper that soothes my soul.",
+    "You are the heartbeat that gives my life meaning.",
+    "With you, every dream feels attainable.",
+    "Your love is the joy that lights up my life.",
+    "You are the sunshine that brightens my darkest hours.",
+    "In your eyes, I see the story of our love.",
+    "Your love is the melody that makes my heart dance.",
+    "You are the reason my soul feels at home.",
+    "With you, every moment is a cherished memory.",
+    "Your love is the beacon that guides me safely.",
+    "You are the smile that makes my world complete.",
+    "In your embrace, I find my heart’s true home.",
+    "Your love is the rhythm to which my soul sings.",
+    "You are the light that makes every day brighter.",
+    "With you, love is the adventure of a lifetime.",
+    "Your love is the warmth that melts away all my worries.",
+    "You are the dream that makes my heart soar.",
+    "In your eyes, I find the depth of my emotions.",
+    "Your love is the song that plays in my heart.",
+    "You are the calm in the whirlwind of my life.",
+    "With you, every heartbeat feels like a blessing.",
+    "Your love is the fire that fuels my passion.",
+    "You are the light that guides me through the dark.",
+    "In your love, I find my heart’s true desire.",
+    "Your love is the compass that points me home.",
+    "You are the joy that makes my life complete.",
+    "With you, every moment is a piece of paradise.",
+    "Your love is the melody that makes my heart sing.",
+    "You are the sunrise that brightens my day.",
+    "In your embrace, I find my true peace.",
+    "Your love is the whisper that calms my fears.",
+    "You are the star that lights up my night sky.",
+    "With you, every touch is a promise of forever.",
+    "Your love is the warmth that fills my soul.",
+    "You are the dream that makes my heart dance.",
+    "In your eyes, I find the reflection of my love.",
+    "Your love is the light that guides me home.",
+    "You are the heartbeat that keeps me alive.",
+    "With you, every moment is a celebration of love.",
+    "Your love is the melody that makes my heart beat.",
+    "You are the sunshine that brightens my world.",
+    "In your presence, I find my heart’s true rhythm.",
+    "Your love is the anchor that keeps me grounded.",
+    "You are the star that makes my night shine bright.",
+    "In your love, I find my heart's true home.",
+    "You are the heartbeat that keeps my world alive.",
+    "Your touch is the melody my soul has been longing for.",
+    "With you, every moment is a cherished memory.",
+    "Your smile is the light that brightens my darkest days.",
+    "You are the star that guides me through the night.",
+    "In your eyes, I see the promise of forever.",
+    "Your love is the compass that leads me to my dreams.",
+    "You are the sunrise that begins my every day.",
+    "With you, every heartbeat feels like a gift.",
+    "Your love is the warmth that melts away all my fears.",
+    "You are the melody that plays in the song of my heart.",
+    "In your embrace, I find the strength to be myself.",
+    "Your love is the gentle breeze that soothes my soul.",
+    "You are the light that makes every day brighter.",
+    "With you, love is an endless adventure.",
+    "Your love is the rhythm to which my heart dances.",
+    "You are the dream that fills my nights with joy.",
+    "In your presence, I find my heart's true rhythm.",
+    "Your love is the anchor that keeps me grounded.",
+    "You are the spark that ignites my passion.",
+    "With you, every day feels like a new beginning.",
+    "Your love is the treasure I have been seeking.",
+    "You are the warmth that makes my heart sing.",
+    "In your eyes, I find the reflection of my dreams.",
+    "Your love is the light that guides me through every storm.",
+    "You are the reason my heart feels complete.",
+    "With you, every moment is a piece of paradise.",
+    "Your love is the melody that makes my soul soar.",
+    "You are the sunshine that brightens my every day.",
+    "In your embrace, I find my true peace.",
+    "Your love is the whisper that calms my deepest fears.",
+    "You are the star that shines in my darkest nights.",
+    "With you, love feels like an endless journey.",
+    "Your love is the fire that warms my heart.",
+    "You are the dream that I never want to wake up from.",
+    "In your presence, I find the courage to be myself.",
+    "Your love is the anchor that steadies my soul.",
+    "You are the light that chases away the shadows.",
+    "With you, every heartbeat is a celebration of love.",
+    "Your love is the melody that makes life beautiful.",
+    "You are the calm in every storm I face.",
+    "In your eyes, I see the reflection of my heart's desires.",
+    "Your love is the rhythm that makes my soul dance.",
+    "You are the joy that fills my heart with peace.",
+    "With you, every day feels like a new adventure.",
+    "Your love is the warmth that melts my worries away.",
+    "You are the light that guides me home.",
+    "In your embrace, I find my heart's true sanctuary.",
+    "Your love is the fire that fuels my dreams.",
+    "You are the melody that makes my heart beat with joy.",
+    "With you, every moment is a treasure to cherish.",
+    "Your love is the gentle breeze that soothes my soul.",
+    "You are the star that brightens my darkest nights.",
+    "In your eyes, I find the reflection of my deepest emotions.",
+    "Your love is the compass that leads me to you.",
+    "You are the warmth that makes my heart feel at home.",
+    "With you, every day is a beautiful journey.",
+    "Your love is the melody that makes my soul sing.",
+    "You are the light that guides me through life's challenges.",
+    "In your presence, I find the peace I've been searching for.",
+    "Your love is the whisper that calms my restless mind.",
+    "You are the joy that makes my heart come alive.",
+    "With you, every moment feels like a dream come true.",
+    "Your love is the anchor that keeps me steady in life's storms.",
+    "You are the sunshine that brightens every corner of my life.",
+    "In your embrace, I find the world and more.",
+    "Your love is the rhythm that makes my heart dance.",
+    "You are the dream that makes my heart soar.",
+    "With you, every heartbeat is a step closer to forever.",
+    "Your love is the fire that keeps my soul alive.",
+    "You are the light that makes my world complete.",
+    "In your eyes, I find the reflection of my truest self.",
+    "Your love is the melody that makes every moment special.",
+    "You are the calm that soothes my restless heart.",
+    "With you, every day is a celebration of love.",
+    "Your love is the spark that ignites my dreams.",
+    "You are the joy that fills my heart with endless happiness.",
+    "In your presence, I find the strength to face anything.",
+    "Your love is the warmth that melts away all my fears.",
+    "You are the star that shines brightly in my life.",
+    "With you, every moment is a precious gift.",
+    "Your love is the melody that makes my soul sing with joy.",
+    "You are the light that brightens my every day.",
+    "In your embrace, I find my heart's true sanctuary.",
+    "Your love is the compass that guides me through life's journey.",
+    "You are the warmth that makes my soul feel at home.",
+    "With you, every heartbeat is a promise of forever.",
+    "Your love is the fire that warms my heart and soul.",
+    "You are the dream that makes my life complete.",
+    "In your eyes, I find the reflection of my deepest desires.",
+    "Your love is the melody that makes my heart dance.",
+    "You are the joy that fills my heart with boundless happiness.",
+    "With you, every moment is a cherished memory.",
+    "Your love is the light that guides me through the dark.",
+    "You are the warmth that melts away all my worries.",
+    "In your embrace, I find the strength to be my true self.",
+    "Your love is the rhythm that makes my soul sing with joy.",
+    "You are the star that brightens my darkest nights.",
+    "With you, every heartbeat is a celebration of our love.",
+    "Your love is the melody that makes my life beautiful.",
+    "You are the calm in the storm of my emotions.",
+    "In your eyes, I see the reflection of my heart's true desires.",
+    "Your love is the warmth that fills my soul with peace.",
+    "You are the dream that makes my heart soar.",
+    "With you, every day is a new adventure in love.",
+    "Your love is the light that makes every moment special.",
+    "You are the melody that brings joy to my heart.",
+    "In your presence, I find my heart's true rhythm.",
+    "Your love is the anchor that keeps me grounded in every storm.",
+    "You are the sunshine that makes my life shine brighter.",
+    "With you, every heartbeat feels like a gift from the heavens.",
+    "Your love is the gentle breeze that soothes my soul.",
+    "You are the light that guides me through every challenge.",
+    "In your embrace, I find my heart's true sanctuary.",
+    "Your love is the rhythm that makes my heart dance with joy.",
+    "You are the star that shines brightly in my life.",
+    "With you, every moment is a treasure to cherish forever.",
+    "Your love is the melody that makes my soul sing with happiness.",
+    "You are the warmth that fills my heart with boundless love.",
+    "In your eyes, I find the reflection of my deepest dreams.",
+    "Your love is the spark that ignites my passion for life.",
+    "You are the joy that makes every day a beautiful adventure.",
+    "With you, every heartbeat is a promise of eternal love.",
+    "Your love is the fire that warms my heart and soul.",
+    "You are the dream that makes my life complete.",
+    "In your presence, I find the courage to be my true self.",
+    "Your love is the anchor that keeps me steady in every storm.",
+    "You are the light that brightens every corner of my world.",
+    "With you, every moment is a celebration of our love story.",
+    "Your love is the melody that makes every day special.",
+    "You are the warmth that melts away all my fears.",
+    "In your embrace, I find the strength to face anything.",
+    "Your love is the rhythm that makes my heart dance with joy.",
+    "You are the star that lights up my darkest nights.",
+    "With you, every heartbeat is a step closer to forever.",
+    "Your love is the spark that ignites my dreams and passions.",
+    "You are the joy that fills my heart with endless happiness.",
+    "In your eyes, I see the reflection of my deepest desires.",
+    "Your love is the melody that makes my life worth living.",
+    "You are the calm in the whirlwind of my emotions.",
+    "With you, every day feels like a beautiful adventure.",
+    "Your love is the warmth that makes my heart feel at home.",
+    "You are the star that shines brightly in my life.",
+    "In your embrace, I find my heart's true sanctuary.",
+    "Your love is the compass that guides me through every challenge.",
+    "You are the light that makes my world shine brighter.",
+    "With you, every moment is a cherished memory of our love.",
+    "Your love is the melody that makes my soul sing with joy.",
+    "Your love is the light that brightens my every day.",
+    "In your eyes, I find the reflection of my deepest feelings.",
+    "You are the melody that makes my heart dance with joy.",
+    "With you, every moment is a beautiful chapter in our story.",
+    "Your love is the warmth that melts away my every worry.",
+    "You are the sunshine that brightens even my darkest days.",
+    "In your embrace, I find my heart's true peace.",
+    "Your love is the anchor that keeps me grounded through every storm.",
+    "You are the dream that fills my nights with endless joy.",
+    "With you, every heartbeat feels like a gift from above.",
+    "Your love is the spark that ignites my deepest passions.",
+    "You are the star that guides me through the darkest nights.",
+    "In your eyes, I see the promise of a beautiful future.",
+    "Your love is the rhythm that makes my soul sing.",
+    "You are the light that chases away my every fear.",
+    "With you, every moment is a cherished memory in our love story.",
+    "Your love is the melody that makes my heart feel alive.",
+    "You are the warmth that fills my soul with comfort.",
+    "In your presence, I find the strength to be myself.",
+    "Your love is the compass that leads me to my heart's desires.",
+    "You are the calm in every storm I face.",
+    "With you, every day feels like a new beginning.",
+    "Your love is the joy that makes my heart soar.",
+    "You are the reason my world feels complete.",
+    "In your embrace, I find my heart’s true sanctuary.",
+    "Your love is the fire that keeps my soul burning bright.",
+    "You are the dream that makes every moment magical.",
+    "With you, every heartbeat is a celebration of our love.",
+    "Your love is the melody that makes every day special.",
+    "You are the star that lights up my nights.",
+    "In your eyes, I see the reflection of my deepest dreams.",
+    "Your love is the whisper that soothes my restless mind.",
+    "You are the joy that fills my heart with boundless happiness.",
+    "With you, every moment is a beautiful adventure.",
+    "Your love is the warmth that melts away all my fears.",
+    "You are the light that guides me through every challenge.",
+    "In your embrace, I find my heart’s true home.",
+    "Your love is the rhythm that makes my soul dance.",
+    "You are the sunshine that makes my world shine brighter.",
+    "With you, every heartbeat is a promise of eternal love.",
+    "Your love is the spark that ignites my dreams and passions.",
+    "You are the calm that soothes my every worry.",
+    "In your eyes, I find the reflection of my heart’s deepest desires.",
+    "Your love is the melody that makes my life beautiful.",
+    "You are the star that brightens every moment of my life.",
+    "With you, every day feels like a celebration of our love.",
+    "Your love is the anchor that keeps me steady in every storm.",
+    "You are the warmth that makes my heart feel at home.",
+    "In your presence, I find the strength to face anything.",
+    "Your love is the rhythm that makes my heart sing with joy.",
+    "You are the light that makes every moment special.",
+    "With you, every heartbeat is a step closer to forever.",
+    "Your love is the melody that makes my soul feel alive.",
+    "You are the dream that makes every moment worth cherishing.",
+    "In your eyes, I see the reflection of my deepest love.",
+    "Your love is the warmth that fills my heart with peace.",
+    "You are the joy that makes my world complete.",
+    "With you, every day is a beautiful adventure in love.",
+    "Your love is the spark that lights up my every moment.",
+    "You are the sunshine that brightens my darkest hours.",
+    "In your embrace, I find my heart’s true sanctuary.",
+    "Your love is the melody that makes my heart dance with joy.",
+    "You are the star that guides me through the night.",
+    "With you, every heartbeat is a gift from the heavens.",
+    "Your love is the warmth that melts away all my fears.",
+    "You are the light that makes my world shine brighter.",
+    "In your presence, I find my heart’s true rhythm.",
+    "Your love is the anchor that keeps me grounded through every storm.",
+    "You are the dream that makes my heart soar.",
+    "With you, every moment is a celebration of our love story.",
+    "Your love is the melody that makes life worth living.",
+    "You are the joy that fills my heart with boundless happiness.",
+    "In your eyes, I see the reflection of my deepest desires.",
+    "Your love is the spark that ignites my deepest passions.",
+    "You are the calm in the whirlwind of my emotions.",
+    "With you, every heartbeat is a step closer to forever.",
+    "Your love is the light that guides me through every challenge.",
+    "You are the star that brightens my darkest nights.",
+    "In your embrace, I find my heart’s true peace.",
+    "Your love is the warmth that makes every moment special.",
+    "You are the dream that fills my nights with endless joy.",
+    "With you, every day is a beautiful chapter in our love story.",
+    "Your love is the melody that makes my heart feel alive.",
+    "You are the light that chases away all my fears.",
+    "In your eyes, I find the reflection of my deepest feelings.",
+    "Your love is the spark that ignites my dreams and passions.",
+    "You are the sunshine that brightens my every day.",
+    "With you, every moment is a treasured memory of our love.",
+    "Your love is the rhythm that makes my heart dance.",
+    "You are the warmth that melts away all my worries.",
+    "In your embrace, I find the strength to be myself.",
+    "Your love is the melody that makes my soul sing with joy.",
+    "You are the star that lights up my darkest nights.",
+    "With you, every heartbeat is a celebration of our love story.",
+    "Your love is the fire that keeps my heart burning bright.",
+    "You are the joy that makes my life complete.",
+    "In your eyes, I see the reflection of my truest self.",
+    "Your love is the anchor that steadies my heart through every storm.",
+    "You are the dream that makes every moment magical.",
+    "With you, every day feels like a new beginning in love.",
+    "Your love is the melody that makes every day special.",
+    "You are the sunshine that brightens my every day.",
+    "In your embrace, I find my heart's true sanctuary.",
+    "Your love is the rhythm that makes my soul dance with joy.",
+    "You are the star that guides me through the night.",
+    "With you, every heartbeat is a gift from above.",
+    "Your love is the warmth that melts away all my fears.",
+    "You are the light that brightens my world.",
+    "In your presence, I find my heart’s true peace.",
+    "Your love is the anchor that keeps me steady through every storm.",
+    "You are the joy that fills my heart with endless happiness.",
+    "With you, every moment is a cherished memory in our love story.",
+    "Your love is the melody that makes my heart sing with joy.",
+    "You are the warmth that makes my soul feel at home.",
+    "In your eyes, I find the reflection of my deepest dreams.",
+    "Your love is the spark that ignites my deepest passions.",
+    "You are the light that chases away all my fears.",
+    "With you, every heartbeat feels like a step closer to forever.",
+    "Your love is the melody that makes every day worth living.",
+    "You are the star that shines brightly in my life.",
+    "In your embrace, I find my heart’s true rhythm.",
+    "Your love is the fire that warms my soul.",
+    "You are the dream that makes every moment special.",
+    "With you, every day feels like an adventure in love.",
+    "Your love is the warmth that fills my heart with peace.",
+    "You are the light that brightens my every day.",
+    "In your presence, I find my heart’s true sanctuary.",
+    "Your love is the rhythm that makes my soul sing.",
+    "You are the star that guides me through the night.",
+    "With you, every heartbeat is a gift of eternal love.",
+    "Your love is the spark that ignites my dreams.",
+    "You are the joy that makes my life complete.",
+    "In your eyes, I see the reflection of my deepest feelings.",
+    "Your love is the melody that makes my heart feel alive.",
+    "You are the calm that soothes my every worry.",
+    "With you, every moment is a beautiful memory in our love story.",
+    "Your love is the warmth that melts away all my fears.",
+    "You are the star that lights up my darkest nights.",
+    "In your embrace, I find my heart’s true peace.",
+    "Your love is the rhythm that makes my soul dance with joy.",
+    "You are the light that guides me through every challenge.",
+    "With you, every heartbeat feels like a celebration of our love.",
+    "Your love is the melody that makes every day special.",
+    "You are the dream that fills my nights with endless joy.",
+    "In your eyes, I find the reflection of my deepest dreams.",
+    "Your love is the spark that ignites my passion for life."
+}
+
+local cooldowns = {}
+local sentMessages = {} -- Track sent messages and their timestamps
+
+-- Initialize cooldown tracker
+for i = 1, #phrases do
+    cooldowns[i] = 0
+end
+
+-- Variables to control chat loop and timing
+local isChatting = false
+local lastChatTime = 0
+local chatInterval = 10
+
+-- Function to get the closest player within a specified distance
+local function getClosestPlayer(distance)
+    local success, result = pcall(function()
+        local closestPlayer = nil
+        local shortestDistance = distance
+        local localPlayer = game.Players.LocalPlayer
+        local character = localPlayer.Character
+        local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
+
+        if not humanoidRootPart then
+            warn("HumanoidRootPart not found for the local player.")
+            return nil
+        end
+
+        for _, player in pairs(game.Players:GetPlayers()) do
+            if player ~= localPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                local otherHumanoidRootPart = player.Character.HumanoidRootPart
+                local dist = (humanoidRootPart.Position - otherHumanoidRootPart.Position).magnitude
+                if dist < shortestDistance then
+                    closestPlayer = player
+                    shortestDistance = dist
+                end
+            end
+        end
+        return closestPlayer
+    end)
+
+    if not success then
+        warn("Error in getClosestPlayer: " .. result)
+    end
+
+    return result
+end
+
+-- Function to check if the local player is staring at the target player
+local function isStaringAt(targetPlayer)
+    local success, result = pcall(function()
+        local localPlayer = game.Players.LocalPlayer
+        local character = localPlayer.Character
+        local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
+        local targetHumanoidRootPart = targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+
+        if not humanoidRootPart or not targetHumanoidRootPart then
+            warn("HumanoidRootPart not found for one of the players.")
+            return false
+        end
+
+        local directionToTarget = (targetHumanoidRootPart.Position - humanoidRootPart.Position).unit
+        local lookAtDirection = humanoidRootPart.CFrame.LookVector.unit
+        return directionToTarget:Dot(lookAtDirection) > 0.9 -- Adjust threshold as needed
+    end)
+
+    if not success then
+        warn("Error in isStaringAt: " .. result)
+    end
+
+    return result
+end
+
+-- Function to select a random phrase that's not on cooldown and not recently sent
+local function getRandomPhrase()
+    local success, result = pcall(function()
+        local availablePhrases = {}
+
+        -- Get the current time
+        local currentTime = tick()
+
+        -- Gather all phrases that are not on cooldown
+        for i = 1, #phrases do
+            if currentTime - cooldowns[i] >= 600 then -- 600 seconds cooldown
+                if not sentMessages[phrases[i]] or currentTime - sentMessages[phrases[i]] >= 600 then
+                    table.insert(availablePhrases, i)
+                end
+            end
+        end
+
+        -- If no phrases are available, return nil
+        if #availablePhrases == 0 then return nil end
+
+        -- Select a random index from the available phrases
+        local randomIndex = availablePhrases[math.random(1, #availablePhrases)]
+
+        -- Update the cooldown for the selected phrase
+        cooldowns[randomIndex] = currentTime
+        -- Update the sent messages tracker
+        sentMessages[phrases[randomIndex]] = currentTime
+
+        -- Return the selected phrase
+        return phrases[randomIndex]
+    end)
+
+    if not success then
+        warn("Error in getRandomPhrase: " .. result)
+    end
+
+    return result
+end
+
+-- Function to start chatting
+local function startChatting()
+    isChatting = true
+    while isChatting do
+        local success = pcall(function()
+            local currentTime = tick()
+            if currentTime - lastChatTime >= chatInterval then
+                local closestPlayer = getClosestPlayer(10)
+                if closestPlayer and isStaringAt(closestPlayer) then
+                    -- Get a random phrase that's not on cooldown
+                    local randomPhrase = getRandomPhrase()
+                    if randomPhrase then
+                        -- Make the character say the selected phrase
+                        game.ReplicatedStorage.DefaultChatSystemChatEvents.SayMessageRequest:FireServer(randomPhrase, "All")
+                        -- Update the last chat time
+                        lastChatTime = currentTime
+                    end
+                end
+            end
+            wait(0.1) -- Small wait to prevent excessive loop iterations
+        end)
+
+        if not success then
+            warn("Error in startChatting loop.")
+        end
+    end
+end
+
+-- Button Functions
+onButton.MouseButton1Click:Connect(function()
+    statusLabel.Text = "Status: On"
+    statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+    if not isChatting then
+        startChatting()
+    end
+end)
+
+offButton.MouseButton1Click:Connect(function()
+    statusLabel.Text = "Status: Off"
+    statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+    isChatting = false
+end)
+
+destroyButton.MouseButton1Click:Connect(function()
+    screenGui:Destroy()
+end)
