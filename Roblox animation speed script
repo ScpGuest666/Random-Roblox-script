@@ -1,0 +1,125 @@
+-- Create ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+screenGui.ResetOnSpawn = false
+
+-- Create Frame
+local frame = Instance.new("Frame")
+frame.Parent = screenGui
+frame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+frame.Size = UDim2.new(0, 300, 0, 220)
+frame.Position = UDim2.new(0.5, -150, 0.5, -100)
+frame.Active = true
+frame.Draggable = true
+
+-- Create On Button
+local onButton = Instance.new("TextButton")
+onButton.Parent = frame
+onButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+onButton.Size = UDim2.new(0, 60, 0, 30)
+onButton.Position = UDim2.new(0, 20, 0, 20)
+onButton.Text = "On"
+onButton.TextScaled = true
+
+-- Create Off Button
+local offButton = Instance.new("TextButton")
+offButton.Parent = frame
+offButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+offButton.Size = UDim2.new(0, 60, 0, 30)
+offButton.Position = UDim2.new(0, 100, 0, 20)
+offButton.Text = "Off"
+offButton.TextScaled = true
+
+-- Create Destroy Button
+local destroyButton = Instance.new("TextButton")
+destroyButton.Parent = frame
+destroyButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+destroyButton.Size = UDim2.new(0, 260, 0, 30)
+destroyButton.Position = UDim2.new(0, 20, 0, 60)
+destroyButton.Text = "Destroy"
+destroyButton.TextScaled = true
+
+-- Create Increase Speed Button
+local increaseButton = Instance.new("TextButton")
+increaseButton.Parent = frame
+increaseButton.BackgroundColor3 = Color3.fromRGB(0, 0, 255)
+increaseButton.Size = UDim2.new(0, 60, 0, 30)
+increaseButton.Position = UDim2.new(0, 20, 0, 100)
+increaseButton.Text = "+"
+increaseButton.TextScaled = true
+
+-- Create Decrease Speed Button
+local decreaseButton = Instance.new("TextButton")
+decreaseButton.Parent = frame
+decreaseButton.BackgroundColor3 = Color3.fromRGB(255, 255, 0)
+decreaseButton.Size = UDim2.new(0, 60, 0, 30)
+decreaseButton.Position = UDim2.new(0, 100, 0, 100)
+decreaseButton.Text = "-"
+decreaseButton.TextScaled = true
+
+-- Create Speed Input Box
+local speedBox = Instance.new("TextBox")
+speedBox.Parent = frame
+speedBox.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+speedBox.Size = UDim2.new(0, 160, 0, 30)
+speedBox.Position = UDim2.new(0, 20, 0, 140)
+speedBox.PlaceholderText = "Enter Speed"
+speedBox.TextScaled = true
+speedBox.Text = "2" -- Default speed
+
+-- Create Status Indicator
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Parent = frame
+statusLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+statusLabel.Size = UDim2.new(0, 300, 0, 30)
+statusLabel.Position = UDim2.new(0, 0, 0, 0)
+statusLabel.Text = "Status: Off"
+statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+statusLabel.TextScaled = true
+
+-- Animation Speed Variables
+local isAnimating = false
+local speedMultiplier = tonumber(speedBox.Text) or 2
+
+local function modifyAnimationSpeed()
+    while isAnimating do
+        local character = game.Players.LocalPlayer.Character
+        if character then
+            for _, anim in pairs(character:FindFirstChildOfClass("Humanoid"):GetPlayingAnimationTracks()) do
+                anim:AdjustSpeed(speedMultiplier)
+            end
+        end
+        wait(0.1) -- Reactivate every 0.1 seconds
+    end
+end
+
+-- Button Functions
+onButton.MouseButton1Click:Connect(function()
+    speedMultiplier = tonumber(speedBox.Text) or 2
+    isAnimating = true
+    statusLabel.Text = "Status: On"
+    statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+    modifyAnimationSpeed()
+end)
+
+offButton.MouseButton1Click:Connect(function()
+    isAnimating = false
+    statusLabel.Text = "Status: Off"
+    statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+end)
+
+destroyButton.MouseButton1Click:Connect(function()
+    isAnimating = false
+    screenGui:Destroy()
+end)
+
+increaseButton.MouseButton1Click:Connect(function()
+    speedMultiplier = (tonumber(speedBox.Text) or 2) + 1
+    speedBox.Text = tostring(speedMultiplier)
+end)
+
+decreaseButton.MouseButton1Click:Connect(function()
+    speedMultiplier = (tonumber(speedBox.Text) or 2) - 1
+    if speedMultiplier < 0 then speedMultiplier = 0 end
+    speedBox.Text = tostring(speedMultiplier)
+end)
