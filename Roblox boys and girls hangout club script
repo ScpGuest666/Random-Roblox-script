@@ -1,0 +1,368 @@
+-- Create ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+screenGui.ResetOnSpawn = false
+
+-- Create Frame
+local frame = Instance.new("Frame")
+frame.Parent = screenGui
+frame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+frame.Size = UDim2.new(0, 200, 0, 140)
+frame.Position = UDim2.new(0.5, -100, 0.5, -70)
+frame.Active = true
+frame.Draggable = true
+
+-- Create On Button
+local onButton = Instance.new("TextButton")
+onButton.Parent = frame
+onButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+onButton.Size = UDim2.new(0, 60, 0, 30)
+onButton.Position = UDim2.new(0, 20, 0, 20)
+onButton.Text = "On"
+onButton.TextScaled = true
+
+-- Create Off Button
+local offButton = Instance.new("TextButton")
+offButton.Parent = frame
+offButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+offButton.Size = UDim2.new(0, 60, 0, 30)
+offButton.Position = UDim2.new(0, 120, 0, 20)
+offButton.Text = "Off"
+offButton.TextScaled = true
+
+-- Create Teleport Button
+local teleportButton = Instance.new("TextButton")
+teleportButton.Parent = frame
+teleportButton.BackgroundColor3 = Color3.fromRGB(0, 0, 255)
+teleportButton.Size = UDim2.new(0, 160, 0, 30)
+teleportButton.Position = UDim2.new(0, 20, 0, 60)
+teleportButton.Text = "Teleport"
+teleportButton.TextScaled = true
+
+-- Create Destroy Button
+local destroyButton = Instance.new("TextButton")
+destroyButton.Parent = frame
+destroyButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+destroyButton.Size = UDim2.new(0, 160, 0, 30)
+destroyButton.Position = UDim2.new(0, 20, 0, 100)
+destroyButton.Text = "Destroy"
+destroyButton.TextScaled = true
+
+-- Create Status Indicator
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Parent = frame
+statusLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+statusLabel.Size = UDim2.new(0, 200, 0, 30)
+statusLabel.Position = UDim2.new(0, 0, 0, -30)
+statusLabel.Text = "Status: Off"
+statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+statusLabel.TextScaled = true
+
+-- Variables
+local isActive = false
+local lastPosition = nil
+
+-- Button Functions
+onButton.MouseButton1Click:Connect(function()
+    statusLabel.Text = "Status: On"
+    statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+    isActive = true
+end)
+
+offButton.MouseButton1Click:Connect(function()
+    statusLabel.Text = "Status: Off"
+    statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+    isActive = false
+end)
+
+teleportButton.MouseButton1Click:Connect(function()
+    if isActive and lastPosition then
+        -- Teleport 50 studs downward from the last recorded position
+        local newPosition = lastPosition + Vector3.new(0, -500, 0)
+        game.Players.LocalPlayer.Character:SetPrimaryPartCFrame(CFrame.new(newPosition))
+    end
+end)
+
+destroyButton.MouseButton1Click:Connect(function()
+    screenGui:Destroy()
+end)
+
+-- Track the player's position
+game:GetService("RunService").Heartbeat:Connect(function()
+    if isActive and game.Players.LocalPlayer.Character then
+        lastPosition = game.Players.LocalPlayer.Character.HumanoidRootPart.Position
+    end
+end)
+
+-- Teleport the player back to their last position after they die
+local function onCharacterAdded(character)
+    character:WaitForChild("Humanoid").Died:Connect(function()
+        wait(1) -- Short delay to ensure the character respawns fully
+        if lastPosition then
+            character:SetPrimaryPartCFrame(CFrame.new(lastPosition))
+        end
+    end)
+end
+
+-- Connect the CharacterAdded event
+game.Players.LocalPlayer.CharacterAdded:Connect(onCharacterAdded)
+
+-- Initial binding if the player is already spawned
+if game.Players.LocalPlayer.Character then
+    onCharacterAdded(game.Players.LocalPlayer.Character)
+end
+
+
+-- Create ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+screenGui.ResetOnSpawn = false
+
+-- Create Frame
+local frame = Instance.new("Frame")
+frame.Parent = screenGui
+frame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+frame.Size = UDim2.new(0, 200, 0, 100)
+frame.Position = UDim2.new(0.5, -100, 0.5, -50)
+frame.Active = true
+frame.Draggable = true
+
+-- Create On Button
+local onButton = Instance.new("TextButton")
+onButton.Parent = frame
+onButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+onButton.Size = UDim2.new(0, 60, 0, 30)
+onButton.Position = UDim2.new(0, 20, 0, 20)
+onButton.Text = "On"
+onButton.TextScaled = true
+
+-- Create Off Button
+local offButton = Instance.new("TextButton")
+offButton.Parent = frame
+offButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+offButton.Size = UDim2.new(0, 60, 0, 30)
+offButton.Position = UDim2.new(0, 120, 0, 20)
+offButton.Text = "Off"
+offButton.TextScaled = true
+
+-- Create Destroy Button
+local destroyButton = Instance.new("TextButton")
+destroyButton.Parent = frame
+destroyButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+destroyButton.Size = UDim2.new(0, 160, 0, 30)
+destroyButton.Position = UDim2.new(0, 20, 0, 60)
+destroyButton.Text = "Destroy"
+destroyButton.TextScaled = true
+
+-- Create Status Indicator
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Parent = frame
+statusLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+statusLabel.Size = UDim2.new(0, 200, 0, 30)
+statusLabel.Position = UDim2.new(0, 0, 0, -30)
+statusLabel.Text = "Status: Off"
+statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+statusLabel.TextScaled = true
+
+-- Variables
+local checkpoint = nil
+local checkpointEnabled = false
+local player = game.Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+local initialCheckpointY = humanoidRootPart.Position.Y - character.Humanoid.HipHeight - 1 -- Initial vertical position of checkpoint
+
+-- Function to create checkpoint
+local function createCheckpoint()
+    if checkpoint then checkpoint:Destroy() end
+    checkpoint = Instance.new("Part")
+    checkpoint.Size = Vector3.new(6, 1, 6)
+    checkpoint.Anchored = true
+    checkpoint.CanCollide = false -- Ensure the character can't stand on it
+    checkpoint.Transparency = 0.5
+    checkpoint.BrickColor = BrickColor.new("Bright yellow")
+    checkpoint.Position = Vector3.new(humanoidRootPart.Position.X, initialCheckpointY, humanoidRootPart.Position.Z)
+    checkpoint.Parent = workspace
+end
+
+-- Function to update checkpoint position horizontally
+local function updateCheckpointPosition()
+    if checkpointEnabled and checkpoint then
+        checkpoint.Position = Vector3.new(humanoidRootPart.Position.X, initialCheckpointY, humanoidRootPart.Position.Z)
+    end
+end
+
+-- Function to teleport character to checkpoint
+local function teleportToCheckpoint(newCharacter)
+    if checkpointEnabled and checkpoint then
+        -- Wait until the character's HumanoidRootPart is available
+        local newHumanoidRootPart = newCharacter:WaitForChild("HumanoidRootPart")
+        newHumanoidRootPart.CFrame = CFrame.new(checkpoint.Position + Vector3.new(0, 3, 0))
+    end
+end
+
+-- Button Functions
+onButton.MouseButton1Click:Connect(function()
+    checkpointEnabled = true
+    initialCheckpointY = humanoidRootPart.Position.Y - character.Humanoid.HipHeight - 1 -- Update initial Y position
+    createCheckpoint()
+    statusLabel.Text = "Status: On"
+    statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+end)
+
+offButton.MouseButton1Click:Connect(function()
+    checkpointEnabled = false
+    if checkpoint then checkpoint:Destroy() end
+    statusLabel.Text = "Status: Off"
+    statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+end)
+
+destroyButton.MouseButton1Click:Connect(function()
+    screenGui:Destroy()
+end)
+
+-- Listen for character movement to update checkpoint position
+game:GetService("RunService").Heartbeat:Connect(updateCheckpointPosition)
+
+-- Listen for character respawn
+player.CharacterAdded:Connect(function(newCharacter)
+    character = newCharacter
+    humanoidRootPart = newCharacter:WaitForChild("HumanoidRootPart")
+    teleportToCheckpoint(newCharacter)
+end)
+
+
+-- Create ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+screenGui.ResetOnSpawn = false
+
+-- Create Frame
+local frame = Instance.new("Frame")
+frame.Parent = screenGui
+frame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+frame.Size = UDim2.new(0, 200, 0, 150)  -- Adjusted height to accommodate the TextBox
+frame.Position = UDim2.new(0.5, -100, 0.5, -75)
+frame.Active = true
+frame.Draggable = true
+
+-- Create TextBox for player input
+local playerInput = Instance.new("TextBox")
+playerInput.Parent = frame
+playerInput.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+playerInput.Size = UDim2.new(0, 160, 0, 30)
+playerInput.Position = UDim2.new(0, 20, 0, 20)
+playerInput.PlaceholderText = "Enter Player Name"
+playerInput.TextScaled = true
+
+-- Create On Button
+local onButton = Instance.new("TextButton")
+onButton.Parent = frame
+onButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+onButton.Size = UDim2.new(0, 60, 0, 30)
+onButton.Position = UDim2.new(0, 20, 0, 60)
+onButton.Text = "On"
+onButton.TextScaled = true
+
+-- Create Off Button
+local offButton = Instance.new("TextButton")
+offButton.Parent = frame
+offButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+offButton.Size = UDim2.new(0, 60, 0, 30)
+offButton.Position = UDim2.new(0, 120, 0, 60)
+offButton.Text = "Off"
+offButton.TextScaled = true
+
+-- Create Destroy Button
+local destroyButton = Instance.new("TextButton")
+destroyButton.Parent = frame
+destroyButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+destroyButton.Size = UDim2.new(0, 160, 0, 30)
+destroyButton.Position = UDim2.new(0, 20, 0, 100)
+destroyButton.Text = "Destroy"
+destroyButton.TextScaled = true
+
+-- Create Status Indicator
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Parent = frame
+statusLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+statusLabel.Size = UDim2.new(0, 200, 0, 30)
+statusLabel.Position = UDim2.new(0, 0, 0, -30)
+statusLabel.Text = "Status: Off"
+statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+statusLabel.TextScaled = true
+
+local teleportEnabled = false
+local originalPositions = {} -- Table to store original positions
+
+-- Function to find a player by partial name match
+local function findPlayerByName(partialName)
+    for _, player in pairs(game.Players:GetPlayers()) do
+        if string.find(string.lower(player.Name), string.lower(partialName)) or string.find(string.lower(player.DisplayName), string.lower(partialName)) then
+            return player
+        end
+    end
+    return nil
+end
+
+-- Teleport function for a specific player by partial name
+local function teleportPlayerByName(partialName)
+    local localPlayer = game.Players.LocalPlayer
+    local character = localPlayer.Character
+    if character then
+        local rootPart = character:FindFirstChild("HumanoidRootPart")
+        if rootPart then
+            local targetPlayer = findPlayerByName(partialName)
+            if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                local playerRootPart = targetPlayer.Character.HumanoidRootPart
+                
+                -- Save the original position if not already saved
+                if not originalPositions[targetPlayer] then
+                    originalPositions[targetPlayer] = playerRootPart.CFrame
+                end
+
+                local direction = (playerRootPart.Position - rootPart.Position).unit
+                local targetPosition = rootPart.Position + direction * 2
+                playerRootPart.CFrame = CFrame.new(targetPosition, rootPart.Position) * CFrame.Angles(0, math.rad(180), 0)
+            end
+        end
+    end
+end
+
+-- Reset function to teleport the player back to their original position
+local function resetPlayerByName(partialName)
+    local targetPlayer = findPlayerByName(partialName)
+    if targetPlayer and originalPositions[targetPlayer] then
+        if targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            targetPlayer.Character.HumanoidRootPart.CFrame = originalPositions[targetPlayer]
+        end
+    end
+end
+
+-- Loop for continuous teleportation
+spawn(function()
+    while true do
+        if teleportEnabled then
+            teleportPlayerByName(playerInput.Text)
+        end
+        wait(0.1) -- Adjust the loop speed if necessary
+    end
+end)
+
+-- Button Functions
+onButton.MouseButton1Click:Connect(function()
+    teleportEnabled = true
+    statusLabel.Text = "Status: On"
+    statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+end)
+
+offButton.MouseButton1Click:Connect(function()
+    teleportEnabled = false
+    statusLabel.Text = "Status: Off"
+    statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+    resetPlayerByName(playerInput.Text) -- Teleport the player back to their original position
+end)
+
+destroyButton.MouseButton1Click:Connect(function()
+    screenGui:Destroy()
+end)
