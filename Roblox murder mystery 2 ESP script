@@ -125,6 +125,13 @@ offButton.MouseButton1Click:Connect(function()
     highlightEnabled = false
     statusLabel.Text = "Status: Off"
     statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+	
+	-- Remove all highlights when turned off
+	for _, v in pairs(Players:GetChildren()) do
+		if v.Character and v.Character:FindFirstChild("Highlight") then
+			v.Character:FindFirstChild("Highlight"):Destroy()
+		end
+	end
 end)
 
 destroyButton.MouseButton1Click:Connect(function()
@@ -134,16 +141,18 @@ end)
 -- > Loops < --
 
 RunService.RenderStepped:connect(function()
-	roles = ReplicatedStorage:FindFirstChild("GetPlayerData", true):InvokeServer()
-	for i, v in pairs(roles) do
-		if v.Role == "Murderer" then
-			Murder = i
-		elseif v.Role == 'Sheriff'then
-			Sheriff = i
-		elseif v.Role == 'Hero'then
-			Hero = i
+	if highlightEnabled then
+		roles = ReplicatedStorage:FindFirstChild("GetPlayerData", true):InvokeServer()
+		for i, v in pairs(roles) do
+			if v.Role == "Murderer" then
+				Murder = i
+			elseif v.Role == 'Sheriff'then
+				Sheriff = i
+			elseif v.Role == 'Hero'then
+				Hero = i
+			end
 		end
+		CreateHighlight()
+		UpdateHighlights()
 	end
-	CreateHighlight()
-	UpdateHighlights()
 end)
