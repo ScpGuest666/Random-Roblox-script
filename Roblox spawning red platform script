@@ -55,7 +55,8 @@ local followConnection
 
 -- Function to create platform
 local function createPlatform()
-    local character = game.Players.LocalPlayer.Character
+    if platform then return end  -- Prevent multiple platforms from being created
+    local character = game.Players.LocalPlayer.Character or game.Players.LocalPlayer.CharacterAdded:Wait()
     local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
     
     -- Create a new part
@@ -67,7 +68,9 @@ local function createPlatform()
     
     -- Follow the character
     followConnection = game:GetService("RunService").Heartbeat:Connect(function()
-        platform.Position = humanoidRootPart.Position - Vector3.new(0, 3.5, 0)
+        if humanoidRootPart then
+            platform.Position = humanoidRootPart.Position - Vector3.new(0, 3.5, 0)
+        end
     end)
 end
 
@@ -83,11 +86,22 @@ local function removePlatform()
     end
 end
 
+-- Recreate platform when the player respawns
+local function onCharacterRespawned()
+    if statusLabel.Text == "Status: On" then
+        createPlatform()
+    end
+end
+
+game.Players.LocalPlayer.CharacterAdded:Connect(onCharacterRespawned)
+
 -- Button Functions
 onButton.MouseButton1Click:Connect(function()
-    statusLabel.Text = "Status: On"
-    statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
-    createPlatform()
+    if not platform then
+        statusLabel.Text = "Status: On"
+        statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+        createPlatform()
+    end
 end)
 
 offButton.MouseButton1Click:Connect(function()
