@@ -1,0 +1,788 @@
+-- Create ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+screenGui.ResetOnSpawn = false
+
+-- Create Frame
+local frame = Instance.new("Frame")
+frame.Parent = screenGui
+frame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+frame.Size = UDim2.new(0, 200, 0, 100)
+frame.Position = UDim2.new(0.5, -100, 0.5, -50)
+frame.Active = true
+frame.Draggable = true
+
+-- Create On Button
+local onButton = Instance.new("TextButton")
+onButton.Parent = frame
+onButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+onButton.Size = UDim2.new(0, 60, 0, 30)
+onButton.Position = UDim2.new(0, 20, 0, 20)
+onButton.Text = "On"
+onButton.TextScaled = true
+
+-- Create Off Button
+local offButton = Instance.new("TextButton")
+offButton.Parent = frame
+offButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+offButton.Size = UDim2.new(0, 60, 0, 30)
+offButton.Position = UDim2.new(0, 120, 0, 20)
+offButton.Text = "Off"
+offButton.TextScaled = true
+
+-- Create Destroy Button
+local destroyButton = Instance.new("TextButton")
+destroyButton.Parent = frame
+destroyButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+destroyButton.Size = UDim2.new(0, 160, 0, 30)
+destroyButton.Position = UDim2.new(0, 20, 0, 60)
+destroyButton.Text = "Destroy"
+destroyButton.TextScaled = true
+
+-- Create Status Indicator
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Parent = frame
+statusLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+statusLabel.Size = UDim2.new(0, 200, 0, 30)
+statusLabel.Position = UDim2.new(0, 0, 0, -30)
+statusLabel.Text = "Status: Off"
+statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+statusLabel.TextScaled = true
+
+-- List of phrases and cooldown tracker
+local phrases = {
+    "I told my computer I needed a break, and now it won’t stop freezing.",
+    "I wanted to lose weight, but it found me again.",
+    "Why don’t skeletons fight each other? They don’t have the guts.",
+    "I would tell you a construction joke, but I’m still working on it.",
+    "I have a fear of speed bumps, but I’m slowly getting over it.",
+    "I’m reading a book about anti-gravity, and it’s impossible to put down.",
+    "I asked the librarian if the library had any books on paranoia. She whispered, 'They’re right behind you.'",
+    "I didn’t like my beard at first, but it grew on me.",
+    "I used to play piano by ear, but now I use my hands.",
+    "I was going to tell you a time-traveling joke, but you didn’t like it.",
+    "I told my dog to play dead, and now he won't move unless there's food involved.",
+    "I’m on a seafood diet. I see food, and I eat it.",
+    "I’m no good at math, but I know that a square meal makes me round.",
+    "I’m terrified of elevators, so I’m going to start taking steps to avoid them.",
+    "I’m reading a book on the history of glue. I can’t put it down.",
+    "I wanted to be a baker, but I couldn’t make enough dough.",
+    "I told my friend 10 jokes to get a laugh. Sadly, no pun in ten did.",
+    "Why don’t some couples go to the gym? Because some relationships don’t work out.",
+    "My doctor told me I have type A blood, but it was a type-O.",
+    "I named my dog 'Five Miles' so I can tell people I walk Five Miles every day.",
+    "I have a few jokes about unemployed people, but none of them work.",
+    "I wasn’t originally going to get a brain transplant, but then I changed my mind.",
+    "I told my wife she was drawing her eyebrows too high. She looked surprised.",
+    "I wanted to be a magician, but everyone knew I was pulling their leg.",
+    "I tried to be normal once. Worst two minutes of my life.",
+    "I’m not great at the advice. Can I interest you in a sarcastic comment?",
+    "My therapist says I have a preoccupation with revenge. We’ll see about that.",
+    "I don’t have a bucket list, but my fucket list is a mile long.",
+    "My wife told me to stop impersonating a flamingo. I had to put my foot down.",
+    "I told my wife she should embrace her mistakes. She gave me a hug.",
+    "I tried to make a belt out of watches, but it was a waist of time.",
+    "I have a split personality, said Tom, being Frank.",
+    "I used to have a handle on life, but then it broke.",
+    "I tried to start a revolution, but I couldn’t get it to revolve.",
+    "I used to be indecisive. Now I’m not so sure.",
+    "I told my computer I needed a break, and now it won’t stop freezing.",
+    "I didn’t like my beard at first, but it grew on me.",
+    "I was going to tell a time-traveling joke, but you didn’t like it.",
+    "I’m on a whiskey diet. I’ve lost three days already.",
+    "I’m reading a book about anti-gravity. It’s impossible to put down.",
+    "I asked the librarian if the library had any books on paranoia. She whispered, 'They’re right behind you.'",
+    "I told my dog to play dead, and now he won't move unless there's food involved.",
+    "I was wondering why the frisbee kept getting bigger, then it hit me.",
+    "I was addicted to the hokey pokey, but I turned myself around.",
+    "I can’t believe I got fired from the calendar factory. All I did was take a day off.",
+    "I’m writing a book on reverse psychology—don’t read it.",
+    "I wanted to be a baker, but I couldn’t make enough dough.",
+    "I told my friend 10 jokes to get a laugh. Sadly, no pun in ten did.",
+    "Why don’t some couples go to the gym? Because some relationships don’t work out.",
+    "My doctor told me I have type A blood, but it was a type-O.",
+    "I named my dog 'Five Miles' so I can tell people I walk Five Miles every day.",
+    "I was going to get a job at a bakery, but I just couldn’t make enough dough.",
+    "I used to be a baker, but I couldn’t make enough bread.",
+    "I told my therapist I was afraid of success, and she said, 'Don’t worry, you’re not alone.'",
+    "I told my friend I didn’t understand cloning. He said, 'That makes two of us.'",
+    "I told my wife she was overreacting. She said, 'It’s not the first time.'",
+    "I told my wife she was overreacting. She said, 'I’m not overreacting, I’m just reacting.'",
+    "I asked my wife what she wanted for Christmas. She said, 'Nothing would make me happier than a diamond necklace.' So I got her nothing.",
+    "I told my wife she was drawing her eyebrows too high. She looked surprised.",
+    "I told my wife she should embrace her mistakes. She gave me a hug.",
+    "I was going to tell a joke about an elevator, but it’s an uplifting experience.",
+    "I was going to tell a joke about an elevator, but it’s an up-and-down experience.",
+    "I told my wife she was drawing her eyebrows too high. She looked surprised.",
+    "I told my wife she was overreacting. She said, 'It’s not the first time.'",
+    "I told my wife she was drawing her eyebrows too high. She looked surprised.",
+    "I was going to tell a joke about an elevator, but it’s an uplifting experience.",
+    "I told my wife she was overreacting. She said, 'It’s not the first time.'",
+    "I told my wife she should embrace her mistakes. She gave me a hug.",
+    "I was going to tell a joke about an elevator, but it’s an up-and-down experience.",
+    "I told my wife she was drawing her eyebrows too high. She looked surprised.",
+    "I told my wife she was overreacting. She said, 'It’s not the first time.'",
+    "I was going to tell a joke about an elevator, but it’s an uplifting experience.",
+    "I told my wife she was drawing her eyebrows too high. She looked surprised.",
+    "I was going to tell a joke about an elevator, but it’s an up-and-down experience.",
+    "I told my wife she was drawing her eyebrows too high. She looked surprised.",
+    "I was going to tell a joke about an elevator, but it’s an uplifting experience.",
+    "I told my wife she was drawing her eyebrows too high. She looked surprised.",
+    "I was going to tell a joke about an elevator, but it’s an up-and-down experience.",
+    "I told my wife she was drawing her eyebrows too high. She looked surprised.",
+    "I was going to tell a joke about an elevator, but it’s an uplifting experience.",
+    "I told my wife she was drawing her eyebrows too high. She looked surprised.",
+    "I was going to tell a joke about an elevator, but it’s an up-and-down experience.",
+    "I told my wife she was drawing her eyebrows too high. She looked surprised.",
+    "I was going to tell a joke about an elevator, but it’s an uplifting experience.",
+    "I told my wife she was drawing her eyebrows too high. She looked surprised.",
+    "I was going to tell a joke about an elevator, but it’s an up-and-down experience.",
+    "I told my house plant I couldn’t water it this week; now it’s on a diet too.",
+    "I ordered a chicken and an egg online. I’ll let you know which comes first.",
+    "I’m so good at sleeping, I can do it with my eyes closed.",
+    "My bed and I have a special relationship—it’s no strings attached.",
+    "I used to be addicted to soap, but I’m clean now.",
+    "I tried to catch some fog, but I mist.",
+    "I gave all my dead batteries away today—free of charge.",
+    "I asked the elevator operator for a raise, but he let me down.",
+    "I used to be a banker, but I lost interest.",
+    "I’m not arguing, I’m just explaining why I’m right.",
+    "I’d tell you a chemistry joke, but I know I wouldn’t get a reaction.",
+    "I told my wife I’d never let her go, but then the leash broke.",
+    "I lost my mood ring, and I don’t know how I feel about it.",
+    "I don’t trust stairs—they’re always up to something.",
+    "I bought a wooden whistle, but it wooden whistle.",
+    "I was going to tell a joke about an elevator, but it’s an uplifting experience.",
+    "I wanted to learn how to drive a stick, but I couldn’t find a teacher.",
+    "I asked the librarian if the library had any books on building boats. She said, 'Yes, we keep them in the non-float-tion section.'",
+    "I told my computer I needed a break, and now it won’t stop freezing.",
+    "I tried to make a belt out of watches, but it was a waist of time.",
+    "I don’t play soccer because I enjoy the sport—I’m just doing it for kicks.",
+    "I’m not a vegetarian because I love animals; I’m a vegetarian because I hate plants.",
+    "I’m trying to see things from your point of view, but I can’t get my head that far up my own.",
+    "I’m not lazy, I’m on energy-saving mode.",
+    "I have a great joke about construction, but I’m still working on it.",
+    "I bought a pen that can write underwater. It can write other words, too.",
+    "I’m not arguing, I’m just explaining why I’m right.",
+    "I bought some shoes from a drug dealer. I don’t know what he laced them with, but I’ve been tripping all day.",
+    "I’m reading a book on anti-gravity. It’s impossible to put down.",
+    "I used to be a baker, but I couldn’t make enough dough.",
+    "I used to be a train conductor, but I couldn’t keep track.",
+    "I was going to tell you a time-travel joke, but you didn’t like it.",
+    "I have a few jokes about unemployed people, but none of them work.",
+    "I told my wife she was drawing her eyebrows too high. She looked surprised.",
+    "I told my therapist I was afraid of success, and she said, 'Don’t worry, you’re not alone.'",
+    "I’m not great at the advice. Can I interest you in a sarcastic comment?",
+    "I told my friend I didn’t understand cloning. He said, 'That makes two of us.'",
+    "I told my wife she was overreacting. She said, 'It’s not the first time.'",
+    "I told my wife she was overreacting. She said, 'I’m not overreacting, I’m just reacting.'",
+    "I asked my wife what she wanted for Christmas. She said, 'Nothing would make me happier than a diamond necklace.' So I got her nothing.",
+    "I used to be a baker, but I couldn’t make enough bread.",
+    "I wanted to learn how to juggle, but I didn’t have the balls.",
+    "I bought some shoes from a drug dealer. I don’t know what he laced them with, but I’ve been tripping all day.",
+    "I was going to tell you a joke about boxing, but I can’t find the punchline.",
+    "I told my wife she should embrace her mistakes. She gave me a hug.",
+    "I’m not arguing, I’m just explaining why I’m right.",
+    "I bought a wooden whistle, but it wooden whistle.",
+    "I lost my mood ring, and I don’t know how I feel about it.",
+    "I’m so good at sleeping, I can do it with my eyes closed.",
+    "I wanted to be a doctor, but I didn’t have the patients.",
+    "I’m reading a book on anti-gravity. It’s impossible to put down.",
+    "I used to be addicted to soap, but I’m clean now.",
+    "I tried to catch some fog, but I mist.",
+    "I’m not lazy, I’m on energy-saving mode.",
+    "I used to be a baker, but I couldn’t make enough dough.",
+    "I’m trying to see things from your point of view, but I can’t get my head that far up my own.",
+    "I bought a pen that can write underwater. It can write other words, too.",
+    "I’m not a vegetarian because I love animals; I’m a vegetarian because I hate plants.",
+    "I don’t trust stairs—they’re always up to something.",
+    "I was going to tell you a time-travel joke, but you didn’t like it.",
+    "I used to be a banker, but I lost interest.",
+    "I’d tell you a chemistry joke, but I know I wouldn’t get a reaction.",
+    "I tried to make a belt out of watches, but it was a waist of time.",
+    "I told my wife she should embrace her mistakes. She gave me a hug.",
+    "I bought a wooden whistle, but it wooden whistle.",
+    "I’m not arguing, I’m just explaining why I’m right.",
+    "I was going to tell you a joke about boxing, but I can’t find the punchline.",
+    "I wanted to be a doctor, but I didn’t have the patients.",
+    "I told my therapist I was afraid of success, and she said, 'Don’t worry, you’re not alone.'",
+    "I’m so good at sleeping, I can do it with my eyes closed.",
+    "I’m not lazy, I’m on energy-saving mode.",
+    "I used to be addicted to soap, but I’m clean now.",
+    "I lost my mood ring, and I don’t know how I feel about it.",
+    "I bought some shoes from a drug dealer. I don’t know what he laced them with, but I’ve been tripping all day.",
+    "I’m reading a book on anti-gravity. It’s impossible to put down.",
+    "I tried to catch some fog, but I mist.",
+    "I’m not arguing, I’m just explaining why I’m right.",
+    "I’m not great at the advice. Can I interest you in a sarcastic comment?",
+    "I used to be a train conductor, but I couldn’t keep track.",
+    "I have a few jokes about unemployed people, but none of them work.",
+    "I used to be a banker, but I lost interest.",
+    "I’m not a vegetarian because I love animals; I’m a vegetarian because I hate plants.",
+    "I’d tell you a joke about an elevator, but it’s an uplifting experience.",
+    "I was wondering why the baseball was getting bigger, then it hit me.",
+    "I told my wife she should embrace her mistakes, so she gave me a hug.",
+    "I tried to be normal once. Worst two minutes of my life.",
+    "I used to be a baker, but I couldn’t make enough dough.",
+    "I told my wife she was drawing her eyebrows too high. She looked surprised.",
+    "I wanted to make a belt out of watches, but it was a waist of time.",
+    "I used to have a handle on life, but then it broke.",
+    "I’m not lazy, I’m on energy-saving mode.",
+    "I used to be addicted to the hokey pokey, but I turned myself around.",
+    "I wanted to learn how to drive a stick, but I couldn’t find a teacher.",
+    "I’m on a whiskey diet. I’ve lost three days already.",
+    "I told my wife she was overreacting. She said, 'It’s not the first time.'",
+    "I used to be a train conductor, but I couldn’t keep track.",
+    "I bought a pen that can write underwater. It can write other words, too.",
+    "I was going to tell you a time-travel joke, but you didn’t like it.",
+    "I have a split personality, said Tom, being Frank.",
+    "I’m not arguing, I’m just explaining why I’m right.",
+    "I asked the elevator operator for a raise, but he let me down.",
+    "I’m not a vegetarian because I love animals; I’m a vegetarian because I hate plants.",
+    "I lost my mood ring, and I don’t know how I feel about it.",
+    "I’m not great at the advice. Can I interest you in a sarcastic comment?",
+    "I wanted to be a doctor, but I didn’t have the patients.",
+    "I bought some shoes from a drug dealer. I don’t know what he laced them with, but I’ve been tripping all day.",
+    "I told my wife she should embrace her mistakes. She gave me a hug.",
+    "I wanted to learn how to juggle, but I didn’t have the balls.",
+    "I used to be addicted to soap, but I’m clean now.",
+    "I told my therapist I was afraid of success, and she said, 'Don’t worry, you’re not alone.'",
+    "I tried to catch some fog, but I mist.",
+    "I told my wife she was drawing her eyebrows too high. She looked surprised.",
+    "I’m so good at sleeping, I can do it with my eyes closed.",
+    "I told my wife she was overreacting. She said, 'I’m not overreacting, I’m just reacting.'",
+    "I’m reading a book on anti-gravity. It’s impossible to put down.",
+    "I wanted to be a magician, but everyone knew I was pulling their leg.",
+    "I told my wife she should embrace her mistakes. She gave me a hug.",
+    "I bought a wooden whistle, but it wooden whistle.",
+    "I’m not lazy, I’m on energy-saving mode.",
+    "I’m trying to see things from your point of view, but I can’t get my head that far up my own.",
+    "I used to be a banker, but I lost interest.",
+    "I bought a wooden whistle, but it wooden whistle.",
+    "I told my wife she was drawing her eyebrows too high. She looked surprised.",
+    "I used to play piano by ear, but now I use my hands.",
+    "I wanted to be a baker, but I couldn’t make enough dough.",
+    "I told my wife she was drawing her eyebrows too high. She looked surprised.",
+    "I used to be a train conductor, but I couldn’t keep track.",
+    "I’m not arguing, I’m just explaining why I’m right.",
+    "I told my wife she was overreacting. She said, 'It’s not the first time.'",
+    "I bought a pen that can write underwater. It can write other words, too.",
+    "I lost my mood ring, and I don’t know how I feel about it.",
+    "I’m on a seafood diet. I see food, and I eat it.",
+    "I wanted to make a belt out of watches, but it was a waist of time.",
+    "I told my wife she should embrace her mistakes. She gave me a hug.",
+    "I used to be a baker, but I couldn’t make enough dough.",
+    "I told my wife she was drawing her eyebrows too high. She looked surprised.",
+    "I’m not great at the advice. Can I interest you in a sarcastic comment?",
+    "I wanted to learn how to juggle, but I didn’t have the balls.",
+    "I wanted to learn how to drive a stick, but I couldn’t find a teacher.",
+    "I’m not a vegetarian because I love animals; I’m a vegetarian because I hate plants.",
+    "I told my wife she was overreacting. She said, 'I’m not overreacting, I’m just reacting.'",
+    "I bought some shoes from a drug dealer. I don’t know what he laced them with, but I’ve been tripping all day.",
+    "I told my wife she was drawing her eyebrows too high. She looked surprised.",
+    "I’m reading a book on anti-gravity. It’s impossible to put down.",
+    "I’m not lazy, I’m on energy-saving mode.",
+    "I used to have a handle on life, but then it broke.",
+    "I wanted to learn how to drive a stick, but I couldn’t find a teacher.",
+    "I told my wife she was drawing her eyebrows too high. She looked surprised.",
+    "I’m not arguing, I’m just explaining why I’m right.",
+    "I wanted to learn how to juggle, but I didn’t have the balls.",
+    "I bought a wooden whistle, but it wooden whistle.",
+    "I’m so good at sleeping, I can do it with my eyes closed.",
+    "I used to be addicted to the hokey pokey, but I turned myself around.",
+    "I wanted to be a magician, but everyone knew I was pulling their leg.",
+    "I tried to catch some fog, but I mist.",
+    "I told my wife she should embrace her mistakes. She gave me a hug.",
+    "I used to be a banker, but I lost interest.",
+    "I’m not lazy, I’m on energy-saving mode.",
+    "I used to be addicted to soap, but I’m clean now.",
+    "I lost my mood ring, and I don’t know how I feel about it.",
+    "I wanted to be a doctor, but I didn’t have the patients.",
+    "Why don’t skeletons fight each other? They don’t have the guts.",
+    "I told my dog to play dead, and he went and got a job as an actor.",
+    "Parallel lines have so much in common. It’s a shame they’ll never meet.",
+    "I told my wife she was overreacting, and now she’s in a comedy show.",
+    "Why did the scarecrow win an award? Because he was outstanding in his field.",
+    "Did you hear about the mathematician who’s afraid of negative numbers? He’ll stop at nothing to avoid them.",
+    "Why don’t some couples go to the gym? Because some relationships don’t work out.",
+    "I was wondering why the frisbee kept getting bigger, then it hit me.",
+    "Why did the golfer bring extra pants? In case he got a hole in one.",
+    "Did you hear about the guy who invented Lifesavers? He made a mint.",
+    "I’m reading a book about anti-gravity. It’s impossible to put down.",
+    "What do you call fake spaghetti? An impasta.",
+    "Why don’t eggs tell jokes? They’d crack each other up.",
+    "Why did the bicycle fall over? It was two-tired.",
+    "I’m on a whiskey diet. I’ve lost three days already.",
+    "I used to play piano by ear, but now I use my hands.",
+    "Why was the math book sad? It had too many problems.",
+    "What do you call cheese that isn’t yours? Nacho cheese.",
+    "Why don’t scientists trust atoms? Because they make up everything.",
+    "I told my therapist that I feel like a light bulb that’s about to burn out. She said, 'Hang in there, you’ll be switched off soon.'",
+    "I bought a coffin for my living room. It’s the last piece of furniture I’ll ever need.",
+    "My calendar is filled with deadlines. Mostly because I’m terrible at time management.",
+    "They say money can’t buy happiness, but it can buy a lot of therapy.",
+    "I named my Wi-Fi ‘The Titanic’ because it goes down at the worst times.",
+    "I have a great job in a mirror factory. I can really see myself doing it for a long time.",
+    "I used to be addicted to the hokey pokey, but I turned myself around… and then I fell apart.",
+    "I told my doctor I broke my arm in two places. He told me to stop going to those places.",
+    "I’m not afraid of dying. I just don’t want to be there when it happens.",
+    "I was going to tell you a time-travel joke, but you didn’t like it.",
+    "I’m reading a book on anti-gravity. It’s impossible to put down.",
+    "I told my wife I wanted to be cremated. She made an appointment for next Tuesday.",
+    "They say laughter is the best medicine. That’s why I’m dying of a joke overdose.",
+    "I told my friend that he drew his eyebrows too high. He seemed surprised.",
+    "I put my grandma on speed dial. Now I call that Instagram.",
+    "My wife asked me to stop impersonating a flamingo. I had to put my foot down.",
+    "I wanted to lose weight, so I went on a diet. It’s the most frustrating 10 minutes of my life.",
+    "They say money talks. Mine just waves goodbye.",
+    "I have an inferiority complex, but it’s not a very good one.",
+    "My funeral’s going to be great. People will be dying to get in.",
+    "I told my wife she should embrace her mistakes. She gave me a hug.",
+    "I was going to tell you a joke about an elevator, but it’s an uplifting experience.",
+    "I told my friend that I’m terrified of elevators, so I’m going to start taking steps to avoid them.",
+    "My therapist says I have a preoccupation with vengeance. We’ll see about that.",
+    "I told my wife I wanted to be cremated. She made an appointment for next Tuesday.",
+    "I have a few skeletons in my closet. But they’re just my Halloween decorations.",
+    "I told my doctor I broke my arm in two places. He told me to stop going to those places.",
+    "I have a great job in a mirror factory. I can really see myself doing it for a long time.",
+    "They say money can’t buy happiness, but it can buy a lot of therapy.",
+    "I told my wife I’d lost my mind. She said, 'Don’t worry, you don’t use it much anyway.'",
+    "I wanted to lose weight, so I went on a diet. It’s the most frustrating 10 minutes of my life.",
+    "I told my friend that he drew his eyebrows too high. He seemed surprised.",
+    "I’m reading a book about anti-gravity. It’s impossible to put down.",
+    "I told my wife I wanted to be cremated. She made an appointment for next Tuesday.",
+    "I have an inferiority complex, but it’s not a very good one.",
+    "My calendar is filled with deadlines. Mostly because I’m terrible at time management.",
+    "They say money talks. Mine just waves goodbye.",
+    "I put my grandma on speed dial. Now I call that Instagram.",
+    "My wife asked me to stop impersonating a flamingo. I had to put my foot down.",
+    "I have a few skeletons in my closet. But they’re just my Halloween decorations.",
+    "My funeral’s going to be great. People will be dying to get in.",
+    "I’m not afraid of dying. I just don’t want to be there when it happens.",
+    "I wanted to lose weight, so I went on a diet. It’s the most frustrating 10 minutes of my life.",
+    "I have an inferiority complex, but it’s not a very good one.",
+    "I have a great job in a mirror factory. I can really see myself doing it for a long time.",
+    "They say money can’t buy happiness, but it can buy a lot of therapy.",
+    "I was going to tell you a time-travel joke, but you didn’t like it.",
+    "I told my wife she should embrace her mistakes. She gave me a hug.",
+    "My therapist says I have a preoccupation with vengeance. We’ll see about that.",
+    "I told my friend that he drew his eyebrows too high. He seemed surprised.",
+    "I have a few skeletons in my closet. But they’re just my Halloween decorations.",
+    "They say money can’t buy happiness, but it can buy a lot of therapy.",
+    "I told my wife I’d lost my mind. She said, 'Don’t worry, you don’t use it much anyway.'",
+    "My wife asked me to stop impersonating a flamingo. I had to put my foot down.",
+    "My funeral’s going to be great. People will be dying to get in.",
+    "I told my therapist that I feel like a light bulb that’s about to burn out. She said, 'Hang in there, you’ll be switched off soon.'",
+    "I’m reading a book about anti-gravity. It’s impossible to put down.",
+    "My calendar is filled with deadlines. Mostly because I’m terrible at time management.",
+    "I wanted to lose weight, so I went on a diet. It’s the most frustrating 10 minutes of my life.",
+    "They say money talks. Mine just waves goodbye.",
+    "I told my wife she should embrace her mistakes. She gave me a hug.",
+    "I told my friend that I’m terrified of elevators, so I’m going to start taking steps to avoid them.",
+    "My therapist says I have a preoccupation with vengeance. We’ll see about that.",
+    "I told my wife I’d lost my mind. She said, 'Don’t worry, you don’t use it much anyway.'",
+    "I put my grandma on speed dial. Now I call that Instagram.",
+    "I was going to tell you a joke about an elevator, but it’s an uplifting experience.",
+    "I have an inferiority complex, but it’s not a very good one.",
+    "They say money can’t buy happiness, but it can buy a lot of therapy.",
+    "My funeral’s going to be great. People will be dying to get in.",
+    "My wife asked me to stop impersonating a flamingo. I had to put my foot down.",
+    "I told my wife I’d lost my mind. She said, 'Don’t worry, you don’t use it much anyway.'",
+    "My therapist says I have a preoccupation with vengeance. We’ll see about that.",
+    "I told my friend that I’m terrified of elevators, so I’m going to start taking steps to avoid them.",
+    "I told my wife she should embrace her mistakes. She gave me a hug.",
+    "I have an inferiority complex, but it’s not a very good one.",
+    "They say money talks. Mine just waves goodbye.",
+    "I’m reading a book about anti-gravity. It’s impossible to put down.",
+    "I told my wife I wanted to be cremated. She made an appointment for next Tuesday.",
+    "I was going to tell you a time-travel joke, but you didn’t like it.",
+    "I’m not afraid of dying. I just don’t want to be there when it happens.",
+    "I have a few skeletons in my closet. But they’re just my Halloween decorations.",
+    "I told my doctor I broke my arm in two places. He told me to stop going to those places.",
+    "They say laughter is the best medicine. That’s why I’m dying of a joke overdose.",
+    "I wanted to lose weight, so I went on a diet. It’s the most frustrating 10 minutes of my life.",
+    "I put my grandma on speed dial. Now I call that Instagram.",
+    "I have a great job in a mirror factory. I can really see myself doing it for a long time.",
+    "My funeral’s going to be great. People will be dying to get in.",
+    "My calendar is filled with deadlines. Mostly because I’m terrible at time management.",
+    "They say money talks. Mine just waves goodbye.",
+    "My therapist says I have a preoccupation with vengeance. We’ll see about that.",
+    "I told my wife I’d lost my mind. She said, 'Don’t worry, you don’t use it much anyway.'",
+    "I was going to tell you a joke about an elevator, but it’s an uplifting experience.",
+    "My wife asked me to stop impersonating a flamingo. I had to put my foot down.",
+    "I told my therapist that I feel like a light bulb that’s about to burn out. She said, 'Hang in there, you’ll be switched off soon.'",
+    "I told my friend that he drew his eyebrows too high. He seemed surprised.",
+    "I have an inferiority complex, but it’s not a very good one.",
+    "I wanted to lose weight, so I went on a diet. It’s the most frustrating 10 minutes of my life.",
+    "I used to have a handle on life, but then it broke.",
+    "The past, present, and future walked into a bar. It was tense.",
+    "I told my wife I wanted to be cremated. She made an appointment for next Tuesday.",
+    "I tried to catch some fog, but I mist.",
+    "Why don’t skeletons fight each other? They don’t have the guts.",
+    "I’m not arguing, I’m just explaining why I’m right.",
+    "I’m reading a book on anti-gravity. It’s impossible to put down.",
+    "My favorite exercise is a cross between a lunge and a crunch. I call it lunch.",
+    "They say money talks, but mine just waves goodbye.",
+    "I have a fear of speed bumps, but I’m slowly getting over it.",
+    "I’m not a complete idiot—some parts are missing.",
+    "I told my doctor I broke my arm in two places. He told me to stop going to those places.",
+    "I wanted to be a barber, but I just couldn’t cut it.",
+    "Why don’t some couples go to the gym? Because some relationships don’t work out.",
+    "I named my dog '5 Miles' so I can tell people I walk 5 miles every day.",
+    "I told my wife she should embrace her mistakes. She gave me a hug.",
+    "I put my grandma on speed dial. Now I call that Instagram.",
+    "I have an inferiority complex, but it’s not a very good one.",
+    "I was going to tell you a time-travel joke, but you didn’t like it.",
+    "Why do they put gates around cemeteries? Because people are dying to get in.",
+    "I’m on a whiskey diet. I’ve lost three days already.",
+    "I wanted to lose weight, so I went on a diet. It’s the most frustrating 10 minutes of my life.",
+    "I told my wife I wanted to be cremated. She made an appointment for next Tuesday.",
+    "I told my therapist I’m having trouble with self-esteem. She said, 'You have no one to blame but yourself.'",
+    "I told my wife I’d lost my mind. She said, 'Don’t worry, you don’t use it much anyway.'",
+    "I named my Wi-Fi 'The Titanic' because it goes down at the worst times.",
+    "I told my doctor I broke my arm in two places. He told me to stop going to those places.",
+    "I’m reading a book about anti-gravity. It’s impossible to put down.",
+    "Why don’t skeletons fight each other? They don’t have the guts.",
+    "They say money talks. Mine just waves goodbye.",
+    "I wanted to lose weight, so I went on a diet. It’s the most frustrating 10 minutes of my life.",
+    "I’m not afraid of dying. I just don’t want to be there when it happens.",
+    "My wife asked me to stop impersonating a flamingo. I had to put my foot down.",
+    "My therapist says I have a preoccupation with vengeance. We’ll see about that.",
+    "I told my wife she should embrace her mistakes. She gave me a hug.",
+    "I wanted to be a barber, but I just couldn’t cut it.",
+    "Why don’t some couples go to the gym? Because some relationships don’t work out.",
+    "I told my wife I’d lost my mind. She said, 'Don’t worry, you don’t use it much anyway.'",
+    "My funeral’s going to be great. People will be dying to get in.",
+    "I have an inferiority complex, but it’s not a very good one.",
+    "Why do they put gates around cemeteries? Because people are dying to get in.",
+    "I put my grandma on speed dial. Now I call that Instagram.",
+    "I’m not arguing, I’m just explaining why I’m right.",
+    "My therapist says I have a preoccupation with vengeance. We’ll see about that.",
+    "I was going to tell you a time-travel joke, but you didn’t like it.",
+    "I’m on a whiskey diet. I’ve lost three days already.",
+    "I told my friend that I’m terrified of elevators, so I’m going to start taking steps to avoid them.",
+    "My calendar is filled with deadlines. Mostly because I’m terrible at time management.",
+    "I told my wife I’d lost my mind. She said, 'Don’t worry, you don’t use it much anyway.'",
+    "I’m not a complete idiot—some parts are missing.",
+    "I told my wife I wanted to be cremated. She made an appointment for next Tuesday.",
+    "I have a great job in a mirror factory. I can really see myself doing it for a long time.",
+    "I named my Wi-Fi 'The Titanic' because it goes down at the worst times.",
+    "My favorite exercise is a cross between a lunge and a crunch. I call it lunch.",
+    "I tried to catch some fog, but I mist.",
+    "I’m reading a book about anti-gravity. It’s impossible to put down.",
+    "I told my doctor I broke my arm in two places. He told me to stop going to those places.",
+    "I named my dog '5 Miles' so I can tell people I walk 5 miles every day.",
+    "My therapist says I have a preoccupation with vengeance. We’ll see about that.",
+    "I put my grandma on speed dial. Now I call that Instagram.",
+    "My wife asked me to stop impersonating a flamingo. I had to put my foot down.",
+    "I have a fear of speed bumps, but I’m slowly getting over it.",
+    "Why don’t skeletons fight each other? They don’t have the guts.",
+    "I’m not arguing, I’m just explaining why I’m right.",
+    "I wanted to lose weight, so I went on a diet. It’s the most frustrating 10 minutes of my life.",
+    "I wanted to be a barber, but I just couldn’t cut it.",
+    "Why do they put gates around cemeteries? Because people are dying to get in.",
+    "I’m on a whiskey diet. I’ve lost three days already.",
+    "I told my wife I wanted to be cremated. She made an appointment for next Tuesday.",
+    "My therapist says I have a preoccupation with vengeance. We’ll see about that.",
+    "I have an inferiority complex, but it’s not a very good one.",
+    "I was going to tell you a time-travel joke, but you didn’t like it.",
+    "My funeral’s going to be great. People will be dying to get in.",
+    "I’m not afraid of dying. I just don’t want to be there when it happens.",
+    "I have a great job in a mirror factory. I can really see myself doing it for a long time.",
+    "My calendar is filled with deadlines. Mostly because I’m terrible at time management.",
+    "They say money can’t buy happiness, but it can buy a lot of therapy.",
+    "My wife asked me to stop impersonating a flamingo. I had to put my foot down.",
+    "My favorite exercise is a cross between a lunge and a crunch. I call it lunch.",
+    "I’m reading a book on anti-gravity. It’s impossible to put down.",
+    "I’m not a complete idiot—some parts are missing.",
+    "I have an inferiority complex, but it’s not a very good one.",
+    "My therapist says I have a preoccupation with vengeance. We’ll see about that.",
+    "I told my wife I’d lost my mind. She said, 'Don’t worry, you don’t use it much anyway.'",
+    "I named my Wi-Fi 'The Titanic' because it goes down at the worst times.",
+    "My calendar is filled with deadlines. Mostly because I’m terrible at time management.",
+    "I’m not arguing, I’m just explaining why I’m right.",
+    "I told my doctor I broke my arm in two places. He told me to stop going to those places.",
+    "I have a fear of speed bumps, but I’m slowly getting over it.",
+    "Why don’t skeletons fight each other? They don’t have the guts.",
+    "My funeral’s going to be great. People will be dying to get in.",
+    "They say money can’t buy happiness, but it can buy a lot of therapy.",
+    "My wife asked me to stop impersonating a flamingo. I had to put my foot down.",
+    "I’m on a whiskey diet. I’ve lost three days already.",
+    "I have a great job in a mirror factory. I can really see myself doing it for a long time.",
+    "I told my wife she should embrace her mistakes. She gave me a hug.",
+    "I’m reading a book on anti-gravity. It’s impossible to put down.",
+    "My wife asked me to stop impersonating a flamingo. I had to put my foot down.",
+    "I tried to catch some fog, but I mist.",
+    "I wanted to lose weight, so I went on a diet. It’s the most frustrating 10 minutes of my life.",
+}
+
+local cooldowns = {}
+local sentMessages = {} -- Track sent messages and their timestamps
+
+-- Initialize cooldown tracker
+for i = 1, #phrases do
+    cooldowns[i] = 0
+end
+
+-- Variables to control chat loop and timing
+local isChatting = false
+local lastChatTime = 0
+local chatInterval = 10
+
+-- Function to get the closest player within a specified distance
+local function getClosestPlayer(distance)
+    local closestPlayer = nil
+    local shortestDistance = distance
+    local localPlayer = game.Players.LocalPlayer
+    local character = localPlayer.Character
+    local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
+
+    if not humanoidRootPart then
+        return nil
+    end
+
+    for _, player in pairs(game.Players:GetPlayers()) do
+        if player ~= localPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local otherHumanoidRootPart = player.Character.HumanoidRootPart
+            local dist = (humanoidRootPart.Position - otherHumanoidRootPart.Position).magnitude
+            if dist < shortestDistance then
+                closestPlayer = player
+                shortestDistance = dist
+            end
+        end
+    end
+    return closestPlayer
+end
+
+-- Function to check if the local player is staring at the target player
+local function isStaringAt(targetPlayer)
+    local localPlayer = game.Players.LocalPlayer
+    local character = localPlayer.Character
+    local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
+    local targetHumanoidRootPart = targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+
+    if not humanoidRootPart or not targetHumanoidRootPart then
+        return false
+    end
+
+    local directionToTarget = (targetHumanoidRootPart.Position - humanoidRootPart.Position).unit
+    local lookAtDirection = humanoidRootPart.CFrame.LookVector.unit
+    return directionToTarget:Dot(lookAtDirection) > 0.9 -- Adjust threshold as needed
+end
+
+-- Function to select a random phrase that's not on cooldown and not recently sent
+local function getRandomPhrase()
+    local availablePhrases = {}
+
+    -- Get the current time
+    local currentTime = tick()
+
+    -- Gather all phrases that are not on cooldown
+    for i = 1, #phrases do
+        if currentTime - cooldowns[i] >= 600 then -- 600 seconds cooldown
+            if not sentMessages[phrases[i]] or currentTime - sentMessages[phrases[i]] >= 600 then
+                table.insert(availablePhrases, i)
+            end
+        end
+    end
+
+    -- If no phrases are available, return nil
+    if #availablePhrases == 0 then return nil end
+
+    -- Select a random index from the available phrases
+    local randomIndex = availablePhrases[math.random(1, #availablePhrases)]
+
+    -- Update the cooldown for the selected phrase
+    cooldowns[randomIndex] = currentTime
+    -- Update the sent messages tracker
+    sentMessages[phrases[randomIndex]] = currentTime
+
+    -- Return the selected phrase
+    return phrases[randomIndex]
+end
+
+-- Function to start chatting
+local function startChatting()
+    isChatting = true
+    spawn(function()
+        while isChatting do
+            local currentTime = tick()
+            if currentTime - lastChatTime >= chatInterval then
+                local closestPlayer = getClosestPlayer(10)
+                if closestPlayer and isStaringAt(closestPlayer) then
+                    -- Get a random phrase that's not on cooldown
+                    local randomPhrase = getRandomPhrase()
+                    if randomPhrase then
+                        -- Make the character say the selected phrase
+                        game.ReplicatedStorage.DefaultChatSystemChatEvents.SayMessageRequest:FireServer(randomPhrase, "All")
+                        -- Update the last chat time
+                        lastChatTime = currentTime
+                    end
+                end
+            end
+            wait(1) -- Adjust the wait time to reduce loop frequency
+        end
+    end)
+end
+
+-- Button Functions
+onButton.MouseButton1Click:Connect(function()
+    statusLabel.Text = "Status: On"
+    statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+    if not isChatting then
+        startChatting()
+    end
+end)
+
+offButton.MouseButton1Click:Connect(function()
+    statusLabel.Text = "Status: Off"
+    statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+    isChatting = false
+end)
+
+destroyButton.MouseButton1Click:Connect(function()
+    screenGui:Destroy()
+end)
+
+-- Event listener for chat messages
+game.ReplicatedStorage.DefaultChatSystemChatEvents.OnMessageDoneFiltering.OnClientEvent:Connect(function(messageData)
+    if messageData.FromSpeaker == game.Players.LocalPlayer.Name then
+        -- Check if the message has tags
+        if string.find(messageData.Message, "###") then
+            -- Message was tagged, choose a new phrase and resend it
+            local newPhrase = getRandomPhrase()
+            if newPhrase then
+                -- Resend the new phrase
+                game.ReplicatedStorage.DefaultChatSystemChatEvents.SayMessageRequest:FireServer(newPhrase, "All")
+            end
+        end
+    end
+end)
+
+-- Function to get the closest player within a specified distance
+local function getClosestPlayer(distance)
+    local success, result = pcall(function()
+        local closestPlayer = nil
+        local shortestDistance = distance
+        local localPlayer = game.Players.LocalPlayer
+        local character = localPlayer.Character
+        local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
+
+        if not humanoidRootPart then
+            warn("HumanoidRootPart not found for the local player.")
+            return nil
+        end
+
+        for _, player in pairs(game.Players:GetPlayers()) do
+            if player ~= localPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                local otherHumanoidRootPart = player.Character.HumanoidRootPart
+                local dist = (humanoidRootPart.Position - otherHumanoidRootPart.Position).magnitude
+                if dist < shortestDistance then
+                    closestPlayer = player
+                    shortestDistance = dist
+                end
+            end
+        end
+        return closestPlayer
+    end)
+
+    if not success then
+        warn("Error in getClosestPlayer: " .. result)
+    end
+
+    return result
+end
+
+-- Function to check if the local player is staring at the target player
+local function isStaringAt(targetPlayer)
+    local success, result = pcall(function()
+        local localPlayer = game.Players.LocalPlayer
+        local character = localPlayer.Character
+        local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
+        local targetHumanoidRootPart = targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+
+        if not humanoidRootPart or not targetHumanoidRootPart then
+            warn("HumanoidRootPart not found for one of the players.")
+            return false
+        end
+
+        local directionToTarget = (targetHumanoidRootPart.Position - humanoidRootPart.Position).unit
+        local lookAtDirection = humanoidRootPart.CFrame.LookVector.unit
+        return directionToTarget:Dot(lookAtDirection) > 0.8 -- Adjust threshold as needed
+    end)
+
+    if not success then
+        warn("Error in isStaringAt: " .. result)
+    end
+
+    return result
+end
+
+-- Function to select a random phrase that's not on cooldown and not recently sent
+local function getRandomPhrase()
+    local success, result = pcall(function()
+        local availablePhrases = {}
+
+        -- Get the current time
+        local currentTime = tick()
+
+        -- Gather all phrases that are not on cooldown
+        for i = 1, #phrases do
+            if currentTime - cooldowns[i] >= 600 then -- 600 seconds cooldown
+                if not sentMessages[phrases[i]] or currentTime - sentMessages[phrases[i]] >= 600 then
+                    table.insert(availablePhrases, i)
+                end
+            end
+        end
+
+        -- If no phrases are available, return nil
+        if #availablePhrases == 0 then return nil end
+
+        -- Select a random index from the available phrases
+        local randomIndex = availablePhrases[math.random(1, #availablePhrases)]
+
+        -- Update the cooldown for the selected phrase
+        cooldowns[randomIndex] = currentTime
+        -- Update the sent messages tracker
+        sentMessages[phrases[randomIndex]] = currentTime
+
+        -- Return the selected phrase
+        return phrases[randomIndex]
+    end)
+
+    if not success then
+        warn("Error in getRandomPhrase: " .. result)
+    end
+
+    return result
+end
+
+-- Button Functions
+onButton.MouseButton1Click:Connect(function()
+    statusLabel.Text = "Status: On"
+    statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+    if not isChatting then
+        startChatting()
+    end
+end)
+
+offButton.MouseButton1Click:Connect(function()
+    statusLabel.Text = "Status: Off"
+    statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+    isChatting = false
+end)
+
+destroyButton.MouseButton1Click:Connect(function()
+    screenGui:Destroy()
+end)
+
+-- Event listener for chat messages
+game.ReplicatedStorage.DefaultChatSystemChatEvents.OnMessageDoneFiltering.OnClientEvent:Connect(function(messageData)
+    if messageData.FromSpeaker == game.Players.LocalPlayer.Name then
+        -- Check if the message has tags
+        if hasTags(messageData.Message) then
+            -- Remove the tagged message and send a new one
+            sendMessageWithoutTags()
+        end
+    end
+end)
