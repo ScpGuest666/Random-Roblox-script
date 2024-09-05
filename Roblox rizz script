@@ -1,7 +1,6 @@
 -- Create ScreenGui
 local screenGui = Instance.new("ScreenGui")
-screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
-screenGui.ResetOnSpawn = false
+screenGui.Parent = game:GetService("CoreGui") -- Parent to CoreGui to make it independent
 
 -- Create Frame
 local frame = Instance.new("Frame")
