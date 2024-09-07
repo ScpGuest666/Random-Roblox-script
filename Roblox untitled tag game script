@@ -1,0 +1,156 @@
+-- Create ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+screenGui.ResetOnSpawn = false
+
+-- Create Frame
+local frame = Instance.new("Frame")
+frame.Parent = screenGui
+frame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+frame.Size = UDim2.new(0, 200, 0, 150)
+frame.Position = UDim2.new(0.5, -100, 0.5, -75)
+frame.Active = true
+frame.Draggable = true
+
+-- Create TextBox for player input
+local playerInput = Instance.new("TextBox")
+playerInput.Parent = frame
+playerInput.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+playerInput.Size = UDim2.new(0, 160, 0, 30)
+playerInput.Position = UDim2.new(0, 20, 0, 20)
+playerInput.PlaceholderText = "Enter Player Name"
+playerInput.TextScaled = true
+
+-- Create On Button
+local onButton = Instance.new("TextButton")
+onButton.Parent = frame
+onButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+onButton.Size = UDim2.new(0, 60, 0, 30)
+onButton.Position = UDim2.new(0, 20, 0, 60)
+onButton.Text = "On"
+onButton.TextScaled = true
+
+-- Create Off Button
+local offButton = Instance.new("TextButton")
+offButton.Parent = frame
+offButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+offButton.Size = UDim2.new(0, 60, 0, 30)
+offButton.Position = UDim2.new(0, 120, 0, 60)
+offButton.Text = "Off"
+offButton.TextScaled = true
+
+-- Create Destroy Button
+local destroyButton = Instance.new("TextButton")
+destroyButton.Parent = frame
+destroyButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+destroyButton.Size = UDim2.new(0, 160, 0, 30)
+destroyButton.Position = UDim2.new(0, 20, 0, 100)
+destroyButton.Text = "Destroy"
+destroyButton.TextScaled = true
+
+-- Create Status Indicator
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Parent = frame
+statusLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+statusLabel.Size = UDim2.new(0, 200, 0, 30)
+statusLabel.Position = UDim2.new(0, 0, 0, -30)
+statusLabel.Text = "Status: Off"
+statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+statusLabel.TextScaled = true
+
+local teleportEnabled = false
+local originalPosition -- Variable to store original position of the local player
+
+-- Function to find a player by partial name match
+local function findPlayerByName(partialName)
+    for _, player in pairs(game.Players:GetPlayers()) do
+        if string.find(string.lower(player.Name), string.lower(partialName)) or string.find(string.lower(player.DisplayName), string.lower(partialName)) then
+            return player
+        end
+    end
+    return nil
+end
+
+-- Function to make the camera look at the target player
+local function lookAtTargetPlayer(targetPlayer)
+    local camera = workspace.CurrentCamera
+    local localPlayer = game.Players.LocalPlayer
+    local character = localPlayer.Character
+
+    if character and targetPlayer and targetPlayer.Character then
+        local rootPart = character:FindFirstChild("HumanoidRootPart")
+        local targetRootPart = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+        
+        if rootPart and targetRootPart then
+            -- Set the camera to look at the target player
+            camera.CFrame = CFrame.new(camera.CFrame.Position, targetRootPart.Position)
+        end
+    end
+end
+
+-- Teleport function to teleport the local player to a specific player by partial name
+local function teleportToPlayerByName(partialName)
+    local localPlayer = game.Players.LocalPlayer
+    local character = localPlayer.Character
+    if character then
+        local rootPart = character:FindFirstChild("HumanoidRootPart")
+        if rootPart then
+            local targetPlayer = findPlayerByName(partialName)
+            if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                local targetRootPart = targetPlayer.Character.HumanoidRootPart
+                
+                -- Save the original position if not already saved
+                if not originalPosition then
+                    originalPosition = rootPart.CFrame
+                end
+                
+                -- Teleport the local player's character to the target player
+                rootPart.CFrame = targetRootPart.CFrame * CFrame.new(0, 0, 3)
+                
+                -- Make the camera look at the target player
+                lookAtTargetPlayer(targetPlayer)
+            end
+        end
+    end
+end
+
+-- Reset function to teleport the local player back to the original position
+local function resetPlayerToOriginalPosition()
+    local localPlayer = game.Players.LocalPlayer
+    local character = localPlayer.Character
+    if character and originalPosition then
+        local rootPart = character:FindFirstChild("HumanoidRootPart")
+        if rootPart then
+            rootPart.CFrame = originalPosition
+            originalPosition = nil -- Clear the original position after teleporting back
+        end
+    end
+end
+
+-- Loop for continuous teleportation
+spawn(function()
+    while true do
+        if teleportEnabled then
+            teleportToPlayerByName(playerInput.Text)
+        end
+        wait(0.1) -- Adjust the loop speed if necessary
+    end
+end)
+
+-- Button Functions
+onButton.MouseButton1Click:Connect(function()
+    teleportEnabled = true
+    statusLabel.Text = "Status: On"
+    statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+end)
+
+offButton.MouseButton1Click:Connect(function()
+    teleportEnabled = false
+    statusLabel.Text = "Status: Off"
+    statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+    resetPlayerToOriginalPosition() -- Teleport the local player back to their original position
+end)
+
+destroyButton.MouseButton1Click:Connect(function()
+    screenGui:Destroy()
+end)
