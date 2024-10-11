@@ -1,0 +1,167 @@
+-- Create ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+screenGui.ResetOnSpawn = false
+
+-- Create Frame
+local frame = Instance.new("Frame")
+frame.Parent = screenGui
+frame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+frame.Size = UDim2.new(0, 200, 0, 150)
+frame.Position = UDim2.new(0.5, -100, 0.5, -75)
+frame.Active = true
+frame.Draggable = true
+
+-- Create TextBox for player input
+local playerInput = Instance.new("TextBox")
+playerInput.Parent = frame
+playerInput.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+playerInput.Size = UDim2.new(0, 160, 0, 30)
+playerInput.Position = UDim2.new(0, 20, 0, 20)
+playerInput.PlaceholderText = "Enter Player Name"
+playerInput.TextScaled = true
+
+-- Create On Button
+local onButton = Instance.new("TextButton")
+onButton.Parent = frame
+onButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+onButton.Size = UDim2.new(0, 60, 0, 30)
+onButton.Position = UDim2.new(0, 20, 0, 60)
+onButton.Text = "On"
+onButton.TextScaled = true
+
+-- Create Off Button
+local offButton = Instance.new("TextButton")
+offButton.Parent = frame
+offButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+offButton.Size = UDim2.new(0, 60, 0, 30)
+offButton.Position = UDim2.new(0, 120, 0, 60)
+offButton.Text = "Off"
+offButton.TextScaled = true
+
+-- Create Destroy Button
+local destroyButton = Instance.new("TextButton")
+destroyButton.Parent = frame
+destroyButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+destroyButton.Size = UDim2.new(0, 160, 0, 30)
+destroyButton.Position = UDim2.new(0, 20, 0, 100)
+destroyButton.Text = "Destroy"
+destroyButton.TextScaled = true
+
+-- Create Status Indicator
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Parent = frame
+statusLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+statusLabel.Size = UDim2.new(0, 200, 0, 30)
+statusLabel.Position = UDim2.new(0, 0, 0, -30)
+statusLabel.Text = "Status: Off"
+statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+statusLabel.TextScaled = true
+
+local followDistance = 10 -- Default follow distance
+local dodgeDistance = 9.9 -- Default dodge distance
+local lookAtEnabled = false
+
+-- Create + and - Buttons for adjusting distance
+local plusButton = Instance.new("TextButton")
+plusButton.Parent = frame
+plusButton.BackgroundColor3 = Color3.fromRGB(0, 255, 255)
+plusButton.Size = UDim2.new(0, 40, 0, 30)
+plusButton.Position = UDim2.new(0, 20, 0, 140)
+plusButton.Text = "+"
+plusButton.TextScaled = true
+
+local minusButton = Instance.new("TextButton")
+minusButton.Parent = frame
+minusButton.BackgroundColor3 = Color3.fromRGB(255, 165, 0)
+minusButton.Size = UDim2.new(0, 40, 0, 30)
+minusButton.Position = UDim2.new(0, 140, 0, 140)
+minusButton.Text = "-"
+minusButton.TextScaled = true
+
+-- Function to find a player by partial name match
+local function findPlayerByName(partialName)
+    for _, player in pairs(game.Players:GetPlayers()) do
+        if string.find(string.lower(player.Name), string.lower(partialName)) or string.find(string.lower(player.DisplayName), string.lower(partialName)) then
+            return player
+        end
+    end
+    return nil
+end
+
+-- Function to move the character towards the target while keeping distance
+local function moveToPlayer(targetPlayer)
+    local localPlayer = game.Players.LocalPlayer
+    local localRootPart = localPlayer.Character and localPlayer.Character:FindFirstChild("HumanoidRootPart")
+    local targetRootPart = targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+
+    if localRootPart and targetRootPart then
+        local distance = (localRootPart.Position - targetRootPart.Position).Magnitude
+
+        -- If player is farther than follow distance, move closer
+        if distance > followDistance then
+            -- Move towards the target player, maintaining a fixed distance without using LookVector
+            local direction = (targetRootPart.Position - localRootPart.Position).unit
+            local newPosition = targetRootPart.Position - (direction * followDistance)
+            localPlayer.Character.Humanoid:MoveTo(newPosition)
+        
+        -- If player is too close, dodge by moving away
+        elseif distance < dodgeDistance then
+            -- Move away from the player while maintaining a dodge distance
+            local direction = (localRootPart.Position - targetRootPart.Position).unit
+            local newPosition = localRootPart.Position + (direction * dodgeDistance)
+            localPlayer.Character.Humanoid:MoveTo(newPosition)
+        end
+    end
+end
+
+-- Loop to continuously follow and dodge the player
+local followLoop = spawn(function()
+    while true do
+        if lookAtEnabled then
+            local targetPlayer = findPlayerByName(playerInput.Text)
+            if targetPlayer then
+                moveToPlayer(targetPlayer)
+            end
+        end
+        wait(0.00001) -- Small delay for smoother movement
+    end
+end)
+
+-- Update status label with follow and dodge distances
+local function updateStatusLabel()
+    statusLabel.Text = "Status: On (Follow: " .. tostring(followDistance) .. " studs, Dodge: " .. tostring(dodgeDistance) .. " studs)"
+end
+
+-- Adjust the follow and dodge distance, making sure it's at least 1
+plusButton.MouseButton1Click:Connect(function()
+    followDistance = math.max(1, followDistance + 1)
+    dodgeDistance = math.max(1, dodgeDistance + 1)
+    updateStatusLabel()
+end)
+
+minusButton.MouseButton1Click:Connect(function()
+    followDistance = math.max(1, followDistance - 1)
+    dodgeDistance = math.max(1, dodgeDistance - 1)
+    updateStatusLabel()
+end)
+
+-- On Button: Enable following and dodging
+onButton.MouseButton1Click:Connect(function()
+    lookAtEnabled = true
+    updateStatusLabel()
+    statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+end)
+
+-- Off Button: Disable following and dodging
+offButton.MouseButton1Click:Connect(function()
+    lookAtEnabled = false
+    statusLabel.Text = "Status: Off"
+    statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+end)
+
+-- Destroy Button: Reset and destroy GUI
+destroyButton.MouseButton1Click:Connect(function()
+    lookAtEnabled = false -- Disable the feature
+    screenGui:Destroy() -- Destroy the GUI
+end)
