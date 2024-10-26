@@ -533,6 +533,24 @@ for i = 1, #phrases do
     cooldowns[i] = 0
 end
 
+-- Function to remove duplicate phrases
+local function removeDuplicates()
+    local uniquePhrases = {}
+    local found = {}
+    
+    for _, phrase in ipairs(phrases) do
+        if not found[phrase] then
+            table.insert(uniquePhrases, phrase)
+            found[phrase] = true
+        end
+    end
+
+    phrases = uniquePhrases
+end
+
+-- Call removeDuplicates once at the start
+removeDuplicates()
+
 -- Variables to control chat loop and timing
 local isChatting = false
 local lastChatTime = 0
@@ -547,10 +565,10 @@ local function getRandomPhrase()
         local currentTime = tick()
 
         -- Gather all phrases that are not on cooldown
-        for i = 1, #phrases do
+        for i, phrase in ipairs(phrases) do
             if currentTime - cooldowns[i] >= 600 then -- 600 seconds cooldown
-                if not sentMessages[phrases[i]] or currentTime - sentMessages[phrases[i]] >= 600 then
-                    table.insert(availablePhrases, i)
+                if not sentMessages[phrase] or currentTime - sentMessages[phrase] >= 600 then
+                    table.insert(availablePhrases, {index = i, phrase = phrase})
                 end
             end
         end
@@ -558,16 +576,16 @@ local function getRandomPhrase()
         -- If no phrases are available, return nil
         if #availablePhrases == 0 then return nil end
 
-        -- Select a random index from the available phrases
-        local randomIndex = availablePhrases[math.random(1, #availablePhrases)]
+        -- Select a random available phrase
+        local selected = availablePhrases[math.random(1, #availablePhrases)]
+        local index = selected.index
 
-        -- Update the cooldown for the selected phrase
-        cooldowns[randomIndex] = currentTime
-        -- Update the sent messages tracker
-        sentMessages[phrases[randomIndex]] = currentTime
+        -- Update the cooldown and sent message tracker
+        cooldowns[index] = currentTime
+        sentMessages[selected.phrase] = currentTime
 
         -- Return the selected phrase
-        return phrases[randomIndex]
+        return selected.phrase
     end)
 
     if not success then
