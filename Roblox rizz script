@@ -1,12 +1,13 @@
 -- Create ScreenGui
 local screenGui = Instance.new("ScreenGui")
-screenGui.Parent = game:GetService("CoreGui") -- Parent to CoreGui to make it independent
+screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+screenGui.ResetOnSpawn = false
 
 -- Create Frame
 local frame = Instance.new("Frame")
 frame.Parent = screenGui
 frame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-frame.Size = UDim2.new(0, 200, 0, 100)
+frame.Size = UDim2.new(0, 200, 0, 130)
 frame.Position = UDim2.new(0.5, -100, 0.5, -50)
 frame.Active = true
 frame.Draggable = true
@@ -29,12 +30,21 @@ offButton.Position = UDim2.new(0, 120, 0, 20)
 offButton.Text = "Off"
 offButton.TextScaled = true
 
+-- Create Speak Button
+local speakButton = Instance.new("TextButton")
+speakButton.Parent = frame
+speakButton.BackgroundColor3 = Color3.fromRGB(0, 0, 255)
+speakButton.Size = UDim2.new(0, 160, 0, 30)
+speakButton.Position = UDim2.new(0, 20, 0, 60)
+speakButton.Text = "Speak"
+speakButton.TextScaled = true
+
 -- Create Destroy Button
 local destroyButton = Instance.new("TextButton")
 destroyButton.Parent = frame
 destroyButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 destroyButton.Size = UDim2.new(0, 160, 0, 30)
-destroyButton.Position = UDim2.new(0, 20, 0, 60)
+destroyButton.Position = UDim2.new(0, 20, 0, 100)
 destroyButton.Text = "Destroy"
 destroyButton.TextScaled = true
 
@@ -868,201 +878,30 @@ for i = 1, #phrases do
     cooldowns[i] = 0
 end
 
+-- Function to remove duplicate phrases
+local function removeDuplicates()
+    local uniquePhrases = {}
+    local found = {}
+    
+    for _, phrase in ipairs(phrases) do
+        if not found[phrase] then
+            table.insert(uniquePhrases, phrase)
+            found[phrase] = true
+        end
+    end
+
+    phrases = uniquePhrases
+end
+
+-- Call removeDuplicates once at the start
+removeDuplicates()
+
 -- Variables to control chat loop and timing
 local isChatting = false
 local lastChatTime = 0
 local chatInterval = 10
 
--- Function to get the closest player within a specified distance
-local function getClosestPlayer(distance)
-    local closestPlayer = nil
-    local shortestDistance = distance
-    local localPlayer = game.Players.LocalPlayer
-    local character = localPlayer.Character
-    local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
-
-    if not humanoidRootPart then
-        return nil
-    end
-
-    for _, player in pairs(game.Players:GetPlayers()) do
-        if player ~= localPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-            local otherHumanoidRootPart = player.Character.HumanoidRootPart
-            local dist = (humanoidRootPart.Position - otherHumanoidRootPart.Position).magnitude
-            if dist < shortestDistance then
-                closestPlayer = player
-                shortestDistance = dist
-            end
-        end
-    end
-    return closestPlayer
-end
-
--- Function to check if the local player is staring at the target player
-local function isStaringAt(targetPlayer)
-    local localPlayer = game.Players.LocalPlayer
-    local character = localPlayer.Character
-    local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
-    local targetHumanoidRootPart = targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart")
-
-    if not humanoidRootPart or not targetHumanoidRootPart then
-        return false
-    end
-
-    local directionToTarget = (targetHumanoidRootPart.Position - humanoidRootPart.Position).unit
-    local lookAtDirection = humanoidRootPart.CFrame.LookVector.unit
-    return directionToTarget:Dot(lookAtDirection) > 0.9 -- Adjust threshold as needed
-end
-
--- Function to select a random phrase that's not on cooldown and not recently sent
-local function getRandomPhrase()
-    local availablePhrases = {}
-
-    -- Get the current time
-    local currentTime = tick()
-
-    -- Gather all phrases that are not on cooldown
-    for i = 1, #phrases do
-        if currentTime - cooldowns[i] >= 600 then -- 600 seconds cooldown
-            if not sentMessages[phrases[i]] or currentTime - sentMessages[phrases[i]] >= 600 then
-                table.insert(availablePhrases, i)
-            end
-        end
-    end
-
-    -- If no phrases are available, return nil
-    if #availablePhrases == 0 then return nil end
-
-    -- Select a random index from the available phrases
-    local randomIndex = availablePhrases[math.random(1, #availablePhrases)]
-
-    -- Update the cooldown for the selected phrase
-    cooldowns[randomIndex] = currentTime
-    -- Update the sent messages tracker
-    sentMessages[phrases[randomIndex]] = currentTime
-
-    -- Return the selected phrase
-    return phrases[randomIndex]
-end
-
--- Function to start chatting
-local function startChatting()
-    isChatting = true
-    spawn(function()
-        while isChatting do
-            local currentTime = tick()
-            if currentTime - lastChatTime >= chatInterval then
-                local closestPlayer = getClosestPlayer(10)
-                if closestPlayer and isStaringAt(closestPlayer) then
-                    -- Get a random phrase that's not on cooldown
-                    local randomPhrase = getRandomPhrase()
-                    if randomPhrase then
-                        -- Make the character say the selected phrase
-                        game.ReplicatedStorage.DefaultChatSystemChatEvents.SayMessageRequest:FireServer(randomPhrase, "All")
-                        -- Update the last chat time
-                        lastChatTime = currentTime
-                    end
-                end
-            end
-            wait(1) -- Adjust the wait time to reduce loop frequency
-        end
-    end)
-end
-
--- Button Functions
-onButton.MouseButton1Click:Connect(function()
-    statusLabel.Text = "Status: On"
-    statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
-    if not isChatting then
-        startChatting()
-    end
-end)
-
-offButton.MouseButton1Click:Connect(function()
-    statusLabel.Text = "Status: Off"
-    statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
-    isChatting = false
-end)
-
-destroyButton.MouseButton1Click:Connect(function()
-    screenGui:Destroy()
-end)
-
--- Event listener for chat messages
-game.ReplicatedStorage.DefaultChatSystemChatEvents.OnMessageDoneFiltering.OnClientEvent:Connect(function(messageData)
-    if messageData.FromSpeaker == game.Players.LocalPlayer.Name then
-        -- Check if the message has tags
-        if string.find(messageData.Message, "###") then
-            -- Message was tagged, choose a new phrase and resend it
-            local newPhrase = getRandomPhrase()
-            if newPhrase then
-                -- Resend the new phrase
-                game.ReplicatedStorage.DefaultChatSystemChatEvents.SayMessageRequest:FireServer(newPhrase, "All")
-            end
-        end
-    end
-end)
-
--- Function to get the closest player within a specified distance
-local function getClosestPlayer(distance)
-    local success, result = pcall(function()
-        local closestPlayer = nil
-        local shortestDistance = distance
-        local localPlayer = game.Players.LocalPlayer
-        local character = localPlayer.Character
-        local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
-
-        if not humanoidRootPart then
-            warn("HumanoidRootPart not found for the local player.")
-            return nil
-        end
-
-        for _, player in pairs(game.Players:GetPlayers()) do
-            if player ~= localPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-                local otherHumanoidRootPart = player.Character.HumanoidRootPart
-                local dist = (humanoidRootPart.Position - otherHumanoidRootPart.Position).magnitude
-                if dist < shortestDistance then
-                    closestPlayer = player
-                    shortestDistance = dist
-                end
-            end
-        end
-        return closestPlayer
-    end)
-
-    if not success then
-        warn("Error in getClosestPlayer: " .. result)
-    end
-
-    return result
-end
-
--- Function to check if the local player is staring at the target player
-local function isStaringAt(targetPlayer)
-    local success, result = pcall(function()
-        local localPlayer = game.Players.LocalPlayer
-        local character = localPlayer.Character
-        local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
-        local targetHumanoidRootPart = targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart")
-
-        if not humanoidRootPart or not targetHumanoidRootPart then
-            warn("HumanoidRootPart not found for one of the players.")
-            return false
-        end
-
-        local directionToTarget = (targetHumanoidRootPart.Position - humanoidRootPart.Position).unit
-        local lookAtDirection = humanoidRootPart.CFrame.LookVector.unit
-        return directionToTarget:Dot(lookAtDirection) > 0.8 -- Adjust threshold as needed
-    end)
-
-    if not success then
-        warn("Error in isStaringAt: " .. result)
-    end
-
-    return result
-end
-
--- Function to select a random phrase that's not on cooldown and not recently sent
+-- Function to get a random phrase that's not on cooldown and not recently sent
 local function getRandomPhrase()
     local success, result = pcall(function()
         local availablePhrases = {}
@@ -1071,10 +910,10 @@ local function getRandomPhrase()
         local currentTime = tick()
 
         -- Gather all phrases that are not on cooldown
-        for i = 1, #phrases do
+        for i, phrase in ipairs(phrases) do
             if currentTime - cooldowns[i] >= 600 then -- 600 seconds cooldown
-                if not sentMessages[phrases[i]] or currentTime - sentMessages[phrases[i]] >= 600 then
-                    table.insert(availablePhrases, i)
+                if not sentMessages[phrase] or currentTime - sentMessages[phrase] >= 600 then
+                    table.insert(availablePhrases, {index = i, phrase = phrase})
                 end
             end
         end
@@ -1082,16 +921,16 @@ local function getRandomPhrase()
         -- If no phrases are available, return nil
         if #availablePhrases == 0 then return nil end
 
-        -- Select a random index from the available phrases
-        local randomIndex = availablePhrases[math.random(1, #availablePhrases)]
+        -- Select a random available phrase
+        local selected = availablePhrases[math.random(1, #availablePhrases)]
+        local index = selected.index
 
-        -- Update the cooldown for the selected phrase
-        cooldowns[randomIndex] = currentTime
-        -- Update the sent messages tracker
-        sentMessages[phrases[randomIndex]] = currentTime
+        -- Update the cooldown and sent message tracker
+        cooldowns[index] = currentTime
+        sentMessages[selected.phrase] = currentTime
 
         -- Return the selected phrase
-        return phrases[randomIndex]
+        return selected.phrase
     end)
 
     if not success then
@@ -1101,6 +940,49 @@ local function getRandomPhrase()
     return result
 end
 
+-- Function to start chatting
+local function startChatting()
+    isChatting = true
+    while isChatting do
+        local success = pcall(function()
+            local currentTime = tick()
+            if currentTime - lastChatTime >= chatInterval then
+                -- Get a random phrase that's not on cooldown
+                local randomPhrase = getRandomPhrase()
+                if randomPhrase then
+                    -- Make the character say the selected phrase
+                    game.ReplicatedStorage.DefaultChatSystemChatEvents.SayMessageRequest:FireServer(randomPhrase, "All")
+                    -- Wait for a brief moment to check if the phrase got tagged
+                    wait(0.5)
+
+                    -- Check if the last message was tagged
+                    local playerChatLog = game.Players.LocalPlayer.PlayerGui.Chat.Frame.ChatChannelParentFrame.Frame_MessageLogDisplay.Scroller
+                    local lastMessage = playerChatLog:FindFirstChildOfClass("TextLabel")
+                    if lastMessage and string.find(lastMessage.Text, "#") then
+                        -- If the message is tagged, remove it from the phrases list
+                        for i = #phrases, 1, -1 do
+                            if phrases[i] == randomPhrase then
+                                table.remove(phrases, i)
+                                cooldowns[i] = nil
+                                sentMessages[randomPhrase] = nil
+                                break
+                            end
+                        end
+                    end
+
+                    -- Update the last chat time
+                    lastChatTime = currentTime
+                end
+            end
+            wait(0.1) -- Small wait to prevent excessive loop iterations
+        end)
+
+        if not success then
+            warn("Error in startChatting loop.")
+        end
+    end
+end
+
 -- Button Functions
 onButton.MouseButton1Click:Connect(function()
     statusLabel.Text = "Status: On"
@@ -1120,13 +1002,9 @@ destroyButton.MouseButton1Click:Connect(function()
     screenGui:Destroy()
 end)
 
--- Event listener for chat messages
-game.ReplicatedStorage.DefaultChatSystemChatEvents.OnMessageDoneFiltering.OnClientEvent:Connect(function(messageData)
-    if messageData.FromSpeaker == game.Players.LocalPlayer.Name then
-        -- Check if the message has tags
-        if hasTags(messageData.Message) then
-            -- Remove the tagged message and send a new one
-            sendMessageWithoutTags()
-        end
+speakButton.MouseButton1Click:Connect(function()
+    local phrase = getRandomPhrase()
+    if phrase then
+        game.ReplicatedStorage.DefaultChatSystemChatEvents.SayMessageRequest:FireServer(phrase, "All")
     end
 end)
