@@ -8,7 +8,7 @@ local frame = Instance.new("Frame")
 frame.Parent = screenGui
 frame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 frame.Size = UDim2.new(0, 200, 0, 130)
-frame.Position = UDim2.new(0.5, -100, 0.5, -50)
+frame.Position = UDim2.new(0.5, -100, 0.5, -65)
 frame.Active = true
 frame.Draggable = true
 
@@ -34,10 +34,19 @@ offButton.TextScaled = true
 local speakButton = Instance.new("TextButton")
 speakButton.Parent = frame
 speakButton.BackgroundColor3 = Color3.fromRGB(0, 0, 255)
-speakButton.Size = UDim2.new(0, 160, 0, 30)
+speakButton.Size = UDim2.new(0, 60, 0, 30)
 speakButton.Position = UDim2.new(0, 20, 0, 60)
 speakButton.Text = "Speak"
 speakButton.TextScaled = true
+
+-- Create Copy Button
+local copyButton = Instance.new("TextButton")
+copyButton.Parent = frame
+copyButton.BackgroundColor3 = Color3.fromRGB(255, 255, 0)
+copyButton.Size = UDim2.new(0, 60, 0, 30)
+copyButton.Position = UDim2.new(0, 120, 0, 60)
+copyButton.Text = "Copy"
+copyButton.TextScaled = true
 
 -- Create Destroy Button
 local destroyButton = Instance.new("TextButton")
@@ -533,109 +542,30 @@ for i = 1, #phrases do
     cooldowns[i] = 0
 end
 
--- Function to remove duplicate phrases
-local function removeDuplicates()
-    local uniquePhrases = {}
-    local found = {}
-    
-    for _, phrase in ipairs(phrases) do
-        if not found[phrase] then
-            table.insert(uniquePhrases, phrase)
-            found[phrase] = true
-        end
-    end
-
-    phrases = uniquePhrases
-end
-
--- Call removeDuplicates once at the start
-removeDuplicates()
-
 -- Variables to control chat loop and timing
 local isChatting = false
 local lastChatTime = 0
 local chatInterval = 10
 
--- Function to get a random phrase that's not on cooldown and not recently sent
+-- Function to select a random phrase
 local function getRandomPhrase()
-    local success, result = pcall(function()
-        local availablePhrases = {}
+    local availablePhrases = {}
+    local currentTime = tick()
 
-        -- Get the current time
-        local currentTime = tick()
-
-        -- Gather all phrases that are not on cooldown
-        for i, phrase in ipairs(phrases) do
-            if currentTime - cooldowns[i] >= 600 then -- 600 seconds cooldown
-                if not sentMessages[phrase] or currentTime - sentMessages[phrase] >= 600 then
-                    table.insert(availablePhrases, {index = i, phrase = phrase})
-                end
+    for i, phrase in ipairs(phrases) do
+        if currentTime - cooldowns[i] >= 600 then
+            if not sentMessages[phrase] or currentTime - sentMessages[phrase] >= 600 then
+                table.insert(availablePhrases, {index = i, text = phrase})
             end
         end
-
-        -- If no phrases are available, return nil
-        if #availablePhrases == 0 then return nil end
-
-        -- Select a random available phrase
-        local selected = availablePhrases[math.random(1, #availablePhrases)]
-        local index = selected.index
-
-        -- Update the cooldown and sent message tracker
-        cooldowns[index] = currentTime
-        sentMessages[selected.phrase] = currentTime
-
-        -- Return the selected phrase
-        return selected.phrase
-    end)
-
-    if not success then
-        warn("Error in getRandomPhrase: " .. result)
     end
 
-    return result
-end
+    if #availablePhrases == 0 then return nil end
 
--- Function to start chatting
-local function startChatting()
-    isChatting = true
-    while isChatting do
-        local success = pcall(function()
-            local currentTime = tick()
-            if currentTime - lastChatTime >= chatInterval then
-                -- Get a random phrase that's not on cooldown
-                local randomPhrase = getRandomPhrase()
-                if randomPhrase then
-                    -- Make the character say the selected phrase
-                    game.ReplicatedStorage.DefaultChatSystemChatEvents.SayMessageRequest:FireServer(randomPhrase, "All")
-                    -- Wait for a brief moment to check if the phrase got tagged
-                    wait(0.5)
-
-                    -- Check if the last message was tagged
-                    local playerChatLog = game.Players.LocalPlayer.PlayerGui.Chat.Frame.ChatChannelParentFrame.Frame_MessageLogDisplay.Scroller
-                    local lastMessage = playerChatLog:FindFirstChildOfClass("TextLabel")
-                    if lastMessage and string.find(lastMessage.Text, "#") then
-                        -- If the message is tagged, remove it from the phrases list
-                        for i = #phrases, 1, -1 do
-                            if phrases[i] == randomPhrase then
-                                table.remove(phrases, i)
-                                cooldowns[i] = nil
-                                sentMessages[randomPhrase] = nil
-                                break
-                            end
-                        end
-                    end
-
-                    -- Update the last chat time
-                    lastChatTime = currentTime
-                end
-            end
-            wait(0.1) -- Small wait to prevent excessive loop iterations
-        end)
-
-        if not success then
-            warn("Error in startChatting loop.")
-        end
-    end
+    local selected = availablePhrases[math.random(1, #availablePhrases)]
+    cooldowns[selected.index] = currentTime
+    sentMessages[selected.text] = currentTime
+    return selected.text
 end
 
 -- Button Functions
@@ -643,7 +573,18 @@ onButton.MouseButton1Click:Connect(function()
     statusLabel.Text = "Status: On"
     statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
     if not isChatting then
-        startChatting()
+        isChatting = true
+        while isChatting do
+            local currentTime = tick()
+            if currentTime - lastChatTime >= chatInterval then
+                local randomPhrase = getRandomPhrase()
+                if randomPhrase then
+                    game.ReplicatedStorage.DefaultChatSystemChatEvents.SayMessageRequest:FireServer(randomPhrase, "All")
+                    lastChatTime = currentTime
+                end
+            end
+            wait(0.1)
+        end
     end
 end)
 
@@ -653,13 +594,20 @@ offButton.MouseButton1Click:Connect(function()
     isChatting = false
 end)
 
-destroyButton.MouseButton1Click:Connect(function()
-    screenGui:Destroy()
+speakButton.MouseButton1Click:Connect(function()
+    local randomPhrase = getRandomPhrase()
+    if randomPhrase then
+        game.ReplicatedStorage.DefaultChatSystemChatEvents.SayMessageRequest:FireServer(randomPhrase, "All")
+    end
 end)
 
-speakButton.MouseButton1Click:Connect(function()
-    local phrase = getRandomPhrase()
-    if phrase then
-        game.ReplicatedStorage.DefaultChatSystemChatEvents.SayMessageRequest:FireServer(phrase, "All")
+copyButton.MouseButton1Click:Connect(function()
+    local randomPhrase = getRandomPhrase()
+    if randomPhrase then
+        setclipboard(randomPhrase) -- Copies the phrase to the clipboard
     end
+end)
+
+destroyButton.MouseButton1Click:Connect(function()
+    screenGui:Destroy()
 end)
