@@ -1,0 +1,578 @@
+-- Create ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+screenGui.ResetOnSpawn = false
+
+-- Create Frame
+local frame = Instance.new("Frame")
+frame.Parent = screenGui
+frame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+frame.Size = UDim2.new(0, 200, 0, 130)
+frame.Position = UDim2.new(0.5, -100, 0.5, -65)
+frame.Active = true
+frame.Draggable = true
+
+-- Create On Button
+local onButton = Instance.new("TextButton")
+onButton.Parent = frame
+onButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+onButton.Size = UDim2.new(0, 60, 0, 30)
+onButton.Position = UDim2.new(0, 20, 0, 20)
+onButton.Text = "On"
+onButton.TextScaled = true
+
+-- Create Off Button
+local offButton = Instance.new("TextButton")
+offButton.Parent = frame
+offButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+offButton.Size = UDim2.new(0, 60, 0, 30)
+offButton.Position = UDim2.new(0, 120, 0, 20)
+offButton.Text = "Off"
+offButton.TextScaled = true
+
+-- Create Speak Button
+local speakButton = Instance.new("TextButton")
+speakButton.Parent = frame
+speakButton.BackgroundColor3 = Color3.fromRGB(0, 0, 255)
+speakButton.Size = UDim2.new(0, 60, 0, 30)
+speakButton.Position = UDim2.new(0, 20, 0, 60)
+speakButton.Text = "Speak"
+speakButton.TextScaled = true
+
+-- Create Copy Button
+local copyButton = Instance.new("TextButton")
+copyButton.Parent = frame
+copyButton.BackgroundColor3 = Color3.fromRGB(255, 255, 0)
+copyButton.Size = UDim2.new(0, 60, 0, 30)
+copyButton.Position = UDim2.new(0, 120, 0, 60)
+copyButton.Text = "Copy"
+copyButton.TextScaled = true
+
+-- Create Destroy Button
+local destroyButton = Instance.new("TextButton")
+destroyButton.Parent = frame
+destroyButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+destroyButton.Size = UDim2.new(0, 160, 0, 30)
+destroyButton.Position = UDim2.new(0, 20, 0, 100)
+destroyButton.Text = "Destroy"
+destroyButton.TextScaled = true
+
+-- Create Status Indicator
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Parent = frame
+statusLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+statusLabel.Size = UDim2.new(0, 200, 0, 30)
+statusLabel.Position = UDim2.new(0, 0, 0, -30)
+statusLabel.Text = "Status: Off"
+statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+statusLabel.TextScaled = true
+
+-- List of phrases and cooldown tracker
+local phrases = {
+    "Are you Wi-Fi? 'Cause when you're near, I'm feelin' the vibe, like we're synced, no fear.",
+    "Like a lyric in my mind, can't get you out, your name's got the rhyme, no doubt.",
+    "If life’s a beat, you’re my melody, together we make the perfect harmony.",
+    "You’re the bass to my track, keepin' me steady, this rhythm we got, oh yeah, it’s ready.",
+    "You and me, that's the vibe, syncin' up like tracks collide.",
+    "You’re the beat in my life, got me feelin’ alive, every time I see you, it’s a whole new vibe.",
+    "If you were a song, you’d be my favorite track, playin’ on repeat, bringin’ me right back.",
+    "I’m the verse, you’re the hook, together we’re a jam, can’t help but feel it, this is who I am.",
+    "Are you the bassline? 'Cause you keep me grounded, every word you say, got my heart surrounded.",
+    "Got my mind on shuffle, but it always finds you, every thought, every rhyme, all so true.",
+    "Like a playlist on repeat, you’re the song in my soul, with every beat, you’re makin’ me whole.",
+    "Feelin’ like a remix when you walk in the room, bringin’ color to my life, like a fresh cartoon.",
+    "Your style’s got that rhythm, like a melody divine, you’re the chorus in my heart, perfectly aligned.",
+    "You’re the one who keeps me spinnin’, like a DJ on the beat, every time we talk, it’s feelin’ so sweet.",
+    "In the soundtrack of my life, you’re the top track playin’, every moment with you, no words need sayin'.",
+    "You’re my sunrise verse, my midnight tune, got my heart hummin’ to a rizz-type tune.",
+    "If you were a mic, I’d sing to you all day, ‘cause you got that vibe in every word you say.",
+    "I’m the beat, you’re the melody, together we’re a song, playin’ in harmony, all day long.",
+    "If love was a track, we’d be a hit, spinnin’ on the radio, never gonna quit.",
+    "You’re like the hook that I can’t get enough of, every lyric, every line, all about love.",
+    "If we were a song, we’d be a classic hit, everybody feelin’ it, can’t help but admit.",
+    "Like a rhyme in my mind, you’re stuck on replay, every line, every beat, you make my day.",
+    "I’m the bass, you’re the treble, we’re makin’ a tune, got me feelin’ like we’re flyin’ to the moon.",
+    "Life’s a mixtape and you’re my favorite track, always bringin’ me back, never losin’ that knack.",
+    "Got my heartbeat syncin’ to the rhythm of your soul, every second with you, makin’ me feel whole.",
+    "If you’re the verse, then I’m the rhyme, perfect sync, perfect time.",
+    "Got me feelin’ like a song that’s been stuck in my mind, playin’ over and over, can’t leave you behind.",
+    "Are you the beat? ‘Cause you got my heart dancin’, every time we meet, it’s a new romancin’.",
+    "If love had a playlist, you’d be my top track, every moment with you, got me comin' right back.",
+    "We’re like lyrics and beats, perfectly combined, makin' every moment feel one-of-a-kind.",
+    "Are you the hook? 'Cause I'm stuck on you, every line, every beat, feels so true.",
+    "Your smile’s got that rhythm, that makes my heart sway, like a song on the radio, I could play all day.",
+    "You’re the high note in my song, the beat in my heart, together we’re the music that’ll never part.",
+    "You’re the lyrics to my beat, makin’ life feel complete.",
+    "Got that harmony with you, like a tune stuck on repeat.",
+    "If love was a rhythm, we’d be a flawless groove, you bring the vibe, I bring the move.",
+    "You’re the spark to my sound, makin’ every moment profound.",
+    "Every time you’re near, it’s like a melody clear, playin' in my heart, no room for fear.",
+    "If I’m the beat, you’re the rhyme, got me feelin’ so in time.",
+    "Are you my anthem? ‘Cause you’re stuck in my mind, playin' over and over, perfectly designed.",
+    "Like a melody sweet, you got me movin' my feet.",
+    "With you, every day’s like my favorite song playin’, good vibes all around, no delayin’.",
+    "You’re the harmony to my flow, together we’re a vibe that’s bound to glow.",
+    "Life’s got a rhythm, and you’re my favorite beat, dancin’ to your tune, feelin’ the heat.",
+    "You’re the echo to my sound, turnin’ my world around.",
+    "If love was a playlist, you’d be my number one, with every word and beat, it’s all in fun.",
+    "You’re my favorite line in every song, the part that makes me sing along.",
+    "Feelin’ the beat of my heart when you’re near, like a song that I hold dear.",
+    "You’re the bridge in my song, the part that makes the track strong.",
+    "You’re the verse to my chorus, got my heart in a trance, every moment with you, it’s a sweet romance.",
+    "If love had a rhythm, we’d be right on beat, makin’ every second feel so sweet.",
+    "Like the hook of a song, you’re the part I remember, playin’ in my head, January to December.",
+    "You’re the high note in my tune, the sunshine to my afternoon.",
+    "Every word you say is like poetry to my ears, got me lost in the rhythm, forgettin’ my fears.",
+    "We’re a duet, harmonizin’ perfectly in tune, like a song I could sing from night until noon.",
+    "Your smile’s the intro to my favorite beat, makin’ life feel complete.",
+    "If life was a song, you’d be the best part, the rhythm that keeps on beatin’ in my heart.",
+    "Got my head noddin’ to your vibe, like a song I can’t describe.",
+    "If you’re the beat, I’ll be the rhyme, together makin’ music that’s timeless in time.",
+    "You’re the groove to my melody, makin’ life feel heavenly.",
+    "Are you the bassline? ‘Cause you got me grounded, feelin’ that vibe, it’s all well-rounded.",
+    "Feelin' like a mixtape when you’re around, every track with you, it’s the perfect sound.",
+    "Your vibe’s like the drop in a song, the part that makes me move along.",
+    "You’re the bridge in my melody, takin’ me higher, like a verse that inspires.",
+    "If I had a playlist of smiles, yours would be track one, playin’ every day, never done.",
+    "Every look you give is like a verse I can’t forget, stuck in my mind like a rhythm set.",
+    "We’re like a rhythm and rhyme, perfectly aligned, makin’ life feel like a one-of-a-kind find.",
+    "Like a chorus that repeats, you’re the part that’s always sweet.",
+    "You got that vibe, like the bridge in my song, the part that makes everything feel so strong.",
+    "Life’s got a playlist, and you’re my favorite tune, singin’ in my mind from morning to noon.",
+    "You’re the beat in my heart, the chorus in my soul, makin’ every moment feel perfectly whole.",
+    "If we were a beat, we’d be a classic hit, rhymin’ together, every part legit.",
+    "Got me feelin’ like a DJ, spinnin’ just for you, every moment we share feels so true.",
+    "You’re the rhythm in my song, the beat that keeps me goin’ strong.",
+    "Like a symphony in tune, you make my heart swoon, dancin’ to the beat from night until noon.",
+    "If you’re the melody, I’ll be the beat, together makin’ music so sweet.",
+    "Got me feelin’ like I’m in a song, every time you come along.",
+    "Your vibe’s like a hook, catchy and true, got me singin’ every line about you.",
+    "Like the best verse in my favorite tune, I’d replay you from morning ‘til noon.",
+    "You’re the rhythm in my rhyme, keepin’ me in line, feelin’ like we’re perfectly in time.",
+    "If you’re the track, then I’m the DJ, playin’ you on loop every single day.",
+    "You got that beat that makes my heart dance, every look is like a second chance.",
+    "Are you a lyric? ‘Cause I’d memorize you, singin’ every line like it’s all so true.",
+    "If life had a soundtrack, you’d be the top song, playin’ on repeat all day long.",
+    "Like the bass to my treble, you balance me out, got me feelin’ this vibe, no doubt.",
+    "You’re the chorus to my verse, the line I rehearse, bringin’ out my best and takin’ away the worst.",
+    "Feelin’ like a remix with you by my side, makin’ new memories with every stride.",
+    "If love was a beat, we’d be a timeless groove, dancin’ through life, smooth and true.",
+    "You’re the harmony to my solo, makin’ life feel like an endless flow.",
+    "Got that melody that lingers in my mind, sweet and steady, one of a kind.",
+    "If you’re the song, then I’m the fan, listenin’ to you like no one else can.",
+    "Are you the tempo? ‘Cause you set my pace, every beat takin’ me to a new place.",
+    "With you, life’s like a symphony, every note where it’s meant to be.",
+    "You’re the hook that I can’t get enough, like my favorite jam, it’s more than a crush.",
+    "Life’s a playlist, and you’re my favorite song, the one I can listen to all day long.",
+    "You’re the rhythm in my life, the beat in my day, makin’ every second feel some kinda way.",
+    "Like the bridge in my tune, you take me higher, every line with you is pure fire.",
+    "If you’re the verse, then I’m the rhyme, flowin’ together, every moment in time.",
+    "You’re the high note in my melody, always bringin’ out the best of me.",
+    "Are you the harmony? ‘Cause you complete my tune, brightenin’ my world like the light of the moon.",
+    "With you, it’s like a song that never fades, every word, every beat, perfectly made.",
+    "You’re the beat in my heart, the note in my song, makin’ me feel like I belong.",
+    "If you’re the verse, then I’m the line, together flowin’ like the finest rhyme.",
+    "Got me feelin’ like a track on repeat, you’re the rhythm I just can’t beat.",
+    "Are you my favorite song? ‘Cause I could sing you all day, in every possible way.",
+    "You’re the bass to my beat, the verse to my tune, makin’ my world feel like a sunny afternoon.",
+    "If we were a song, we’d be a perfect blend, playin’ on and on, with no end.",
+    "Like the perfect track, you stay in my head, playin’ every moment, enough said.",
+    "You’re the beat that keeps me grounded, makin’ every moment feel well-rounded.",
+    "You’re the vibe in my playlist, playin’ on cue, the song I could listen to all night through.",
+    "If love was a mixtape, you’d be track one, the melody that plays when my day’s begun.",
+    "You’re the high note in my song, the rhythm in my rhyme, the beat that keeps me goin’ all the time.",
+    "You’re the echo in my heart, the verse I recite, keepin’ me goin’ from day until night.",
+    "Feelin’ like a remix, spinnin’ ‘round with you, every beat and rhyme feelin’ so true.",
+    "Got my heart playin’ to your tune, like my favorite jam under the moon.",
+    "You’re the tempo in my song, keepin’ me in line, the one that makes my world feel fine.",
+    "If you’re the rhythm, then I’m the flow, together we’re a track that’s always on go.",
+    "You’re the chorus in my soul, singin’ every day, makin’ every moment feel some kinda way.",
+    "Are you a verse? ‘Cause you got me hooked from the first line.",
+    "If you were a beat, you’d be my favorite drop, unforgettable and nonstop.",
+    "You’re the smooth harmony to my tune, keepin’ life steady morning to noon.",
+    "Got my heart singin’ on repeat, like a song I never want to delete.",
+    "If you’re the beat, then I’m the rhyme, together we’re perfect, every single time.",
+    "Are you a symphony? Because with you, everything feels in harmony.",
+    "You’re the rhythm to my rhyme, makin’ my life feel prime.",
+    "Every moment with you feels like a new chorus, unforgettable and flawless.",
+    "If love was a melody, you’d be my muse, every note, a line I can’t refuse.",
+    "You got that rhythm that moves my soul, makin’ me feel like I’m whole.",
+    "You’re the beat in my day, the tune in my night, makin’ everything feel just right.",
+    "With you, every moment’s a song, one that I could play all day long.",
+    "You got me vibin’ like a track on repeat, every look from you, so sweet.",
+    "Are you a remix? ‘Cause with you, life feels brand new.",
+    "If you were a note, you’d be the high, the one that lifts me up to the sky.",
+    "You got me playin’ in tune, dancin’ to a song under the moon.",
+    "If we were a song, we’d be a hit, every beat together just fits.",
+    "You’re the verse I keep comin’ back to, the one that always feels so true.",
+    "You got me vibin’ like my favorite beat, life’s better with you on repeat.",
+    "If you were a lyric, I’d memorize every word, singin’ them louder than ever heard.",
+    "You got that tune I can’t resist, like a melody I never wanna miss.",
+    "If you’re the tempo, I’m keepin’ pace, dancin’ through life, no need to race.",
+    "You’re the high note in my melody, liftin’ my spirits endlessly.",
+    "If we were a duet, we’d be the perfect blend, a song with no end.",
+    "You’re the rhythm to my heart’s beat, the verse that makes life feel complete.",
+    "Life with you is like a perfect rhyme, dancin’ through every moment in time.",
+    "You got my heart on the beat, singin’ along, feelin’ the rhythm all day long.",
+    "Are you a tune? ‘Cause you’re stuck in my mind, playin’ every day like a perfect find.",
+    "With you, every day’s a new song, one that I just keep hummin’ along.",
+    "You’re the beat I can’t skip, the song I play on every trip.",
+    "If you’re the chorus, I’m the verse, together makin’ music like the universe.",
+    "Got my heart dancin’ to your song, feels like where I belong.",
+    "You got that vibe that keeps me in line, makin’ every moment feel just fine.",
+    "If you’re the tempo, I’m right on beat, flowin’ with you feels so sweet.",
+    "You’re the bassline to my tune, keepin’ me steady like the shine of the moon.",
+    "Are you a soundtrack? ‘Cause you make every moment epic and back.",
+    "If love was a song, you’d be the melody, bringin’ out the best of me.",
+    "With you, life feels like a playlist that never stops, full of bops.",
+    "You’re the track I wanna play on repeat, makin’ my heart feel complete.",
+    "Like a hit song, you’re always in my head, playin’ from morning until I’m in bed.",
+    "If you’re the harmony, then I’m the lead, together we’re the perfect breed.",
+    "Life with you feels like a tune, makin’ my world sing from dawn to noon.",
+    "Are you a beat? ‘Cause my heart skips when you’re near, feelin’ the rhythm crystal clear.",
+    "With you, life’s a dance, a tune I’d take every chance.",
+    "You’re the beat that’s got my heart in sync, like a melody in perfect link.",
+    "If you’re the tempo, I’ll keep up all night, dancin’ with you feels so right.",
+    "Every moment with you is like a new song, one that I’ll sing all along.",
+    "You’re the hook that caught my soul, got me feelin’ totally whole.",
+    "You’re the chorus I’ll never forget, singin’ along with no regret.",
+    "If we’re a song, we’re one of a kind, the perfect tune in every line.",
+    "You’re the melody in my rhyme, makin’ life feel in perfect time.",
+    "If you were a lyric, you'd be the one I can't get out of my head.",
+    "You’re the chorus to my song, the one that makes everything feel so strong.",
+    "Are you a remix? ‘Cause you keep bringin’ new energy every time.",
+    "You’re like the best verse in my favorite song, the one I’d listen to all day long.",
+    "With you, life’s got a whole new beat, makin’ every moment feel complete.",
+    "If I had a soundtrack, you’d be the highlight track, every note so right.",
+    "Are you my playlist? Because I want you on repeat.",
+    "You're the harmony to my melody, together, we make the perfect song.",
+    "Like a hook, you got me coming back, can’t help but feel the track.",
+    "If you’re the beat, then I’m the groove, together, we’re in the perfect mood.",
+    "You got my heart dancin’ like it's never danced before.",
+    "Are you a melody? ‘Cause you play in my mind all the time.",
+    "If you’re a song, then I’m your lyrics, flowing in perfect sync.",
+    "Are you a track on repeat? Because I can’t seem to get enough.",
+    "You’re the drop in my favorite beat, making everything feel complete.",
+    "If you were a song, you’d be my favorite part of every day.",
+    "Are you the verse? ‘Cause with you, everything just flows.",
+    "You got that rhythm that lights up my vibe, making my day feel so alive.",
+    "If you’re a song, you’re the one I’d play nonstop.",
+    "Are you a note in my tune? ‘Cause you complete my melody.",
+    "You got me feelin’ like a record spin, can’t wait to play this all over again.",
+    "You’re like a high note, lifting my spirits every time.",
+    "If love was a track, you’d be the best remix.",
+    "Are you a beat? ‘Cause you got my heart in perfect time.",
+    "You’re the verse that keeps my heart singin’ all day.",
+    "If you’re the tempo, I’d follow every step, makin’ sure I never miss a rep.",
+    "You got that vibe that fits every rhyme, making every line feel prime.",
+    "If I was a record, you’d be my groove, together we just move.",
+    "Every moment with you feels like my favorite song on repeat.",
+    "If you were a sound, you’d be music to my soul.",
+    "Are you a chord? ‘Cause you’re the harmony I needed all along.",
+    "If life is a song, you’re the best beat in the mix.",
+    "You’re the tune I’d never skip, a perfect harmony to keep.",
+    "You’re the beat that makes my heart feel alive, like I’m dancing on a new high.",
+    "If you’re the chorus, then I’m all in, singing this song over again.",
+    "You’re like my favorite verse, the one I can’t rehearse but always flows right.",
+    "If we were a song, we’d be number one on every chart.",
+    "You’re the track I wanna hear every day, the song that makes my worries go away.",
+    "If you’re the beat, I’m the rhythm, together we make the perfect system.",
+    "With you, life feels like a song that keeps getting better.",
+    "You’re like the harmony in my song, completing every note perfectly strong.",
+    "You’re the melody that makes my day feel brighter.",
+    "If you were a genre, you’d be my favorite style.",
+    "Are you a song? Because I can’t stop playing you in my head.",
+    "You’re the chorus to my verse, the perfect blend in every line.",
+    "If we were a band, we’d be the perfect duo.",
+    "You’re like a love song I can’t get enough of.",
+    "With you, life’s got the perfect rhythm and rhyme.",
+    "If you’re a note, then I’m the chord, together creating something adored.",
+    "You’re the sound that makes my heart beat in perfect time.",
+    "You got me humming your tune all day, making life feel like a ballet.",
+    "If life’s a dance, then you’re my song, the one that makes me feel so strong.",
+    "Are you my favorite record? Because I can’t stop replaying you.",
+    "You're like the perfect bridge, connecting every beat in my life.",
+    "Are you a melody? Because I feel harmony whenever you’re near.",
+    "You bring a rhythm to my life I never knew I needed.",
+    "If you’re the song, I’m the lyrics – together, we’re unforgettable.",
+    "You’re the bass to my treble, making everything sound just right.",
+    "Are you my mixtape? Because you have all my favorite parts.",
+    "You’re the remix I didn’t know I needed, but now I can’t live without.",
+    "Are you my favorite tune? ‘Cause you keep playing on my mind.",
+    "If love was a song, we’d be the perfect harmony.",
+    "You’ve got the kind of vibe that makes every moment feel like a hit.",
+    "If my life was a concert, you’d be the headliner.",
+    "Are you a soundwave? Because you’ve got me vibing all day long.",
+    "If we were a duet, we'd be the perfect harmony.",
+    "You're the lyric to my melody, making every moment feel like a song.",
+    "Are you my encore? Because I just want to keep coming back for more.",
+    "You’re the beat that makes my heart skip in all the best ways.",
+    "If we were music, we’d be that song everyone loves.",
+    "Are you the bassline? ‘Cause with you, everything feels deep and real.",
+    "You’re the note that completes my symphony.",
+    "Every time I see you, it's like hearing my favorite song.",
+    "If life is a song, you’re the hook I can’t forget.",
+    "Are you my favorite beat? ‘Cause with you, everything feels on time.",
+    "You’re the rhythm that keeps my heart steady and strong.",
+    "With you, every day feels like the start of a new song.",
+    "You’re the high note in my melody, hitting all the right spots.",
+    "Are you a track? Because I just can’t skip you.",
+    "You’ve got that rhythm that syncs perfectly with mine.",
+    "Are you my song of the day? Because I can't get you out of my head.",
+    "With you, life’s got that perfect mix of highs and lows.",
+    "You’re the key change that makes my life feel exciting.",
+    "If love was a playlist, you’d be the one on repeat.",
+    "Are you a soundbite? ‘Cause you’re stuck in my head all day.",
+    "If you’re the tune, I’m the beat – together, we’re unstoppable.",
+    "You’re like a symphony that fills my heart with joy.",
+    "With you, it’s like hitting the best part of my favorite song.",
+    "You’re the hook in my song, the part I wait for every time.",
+    "Are you the final verse? Because you complete my story.",
+    "If we’re a melody, you’re the perfect harmony.",
+    "You’re the highlight in my mixtape, the track I’d play all night.",
+    "You’re like that beat drop that makes everything feel right.",
+    "If you were a music genre, you’d be my favorite vibe.",
+    "Are you the outro? Because you’re the perfect ending.",
+    "You’re the soundtrack to my day, making every moment sing.",
+    "If you’re the tune, I’m the lyrics – together, we’re one hit.",
+    "You’re the perfect cadence that brings peace to my mind.",
+    "If we were a playlist, we’d be the perfect shuffle.",
+    "Are you a harmony? Because with you, everything feels right.",
+    "If love was a song, you’d be the beat in my heart.",
+    "You’re like a melody I can’t forget, always playing in my head.",
+    "You’re the sound that brings life to my silence.",
+    "If we were notes, we’d be the perfect chord.",
+    "Are you the beat? Because my heart skips with you.",
+    "You’re like the song that makes every moment feel alive.",
+    "If love was a melody, you’d be the one that plays in my heart.",
+    "You’re the harmony that completes my song.",
+    "Every time I see you, it feels like my favorite beat drop.",
+    "You’re the note that brings life to my silence.",
+    "If we’re a song, you’re the rhythm that keeps it all together.",
+    "You’re like the perfect beat in a track, making everything feel right.",
+    "If you were a lyric, you’d be the one I never forget.",
+    "Are you the chorus? Because I keep coming back to you.",
+    "With you, every moment feels like a symphony.",
+    "If life is a song, you’re the highlight everyone waits for.",
+    "You’re the hook that makes my heart race.",
+    "You’re the bass that brings my world to life.",
+    "If you were a song, you’d be the one I’d always replay.",
+    "Are you my verse? Because you bring meaning to my melody.",
+    "With you, everything sounds better, like the perfect remix.",
+    "You’re the beat that makes my soul dance.",
+    "Are you a tempo? Because I can’t help but match my rhythm to you.",
+    "If love had a soundtrack, you’d be my favorite song.",
+    "You’re the high note in my day, lifting me up every time.",
+    "Are you my harmony? Because with you, everything feels complete.",
+    "You’re the perfect beat that keeps my heart in time.",
+    "If you’re the melody, I’m the lyrics – together, we make music.",
+    "Are you a song? Because I can’t get you out of my mind.",
+    "With you, it’s like my life has found its perfect rhythm.",
+    "You’re like the bassline that grounds every note in my life.",
+    "If we’re music, we’d be a timeless classic.",
+    "Are you the rhythm? Because you make everything feel right.",
+    "You’re the lyric that makes my day feel like a hit song.",
+    "If love had a beat, it’d be the one we create together.",
+    "With you, every second feels like the best part of my favorite song.",
+    "Are you my harmony? Because with you, my life just sounds better.",
+    "You’re the vibe that makes my world spin in perfect time.",
+    "If we were a song, we’d be the one that everyone loves.",
+    "Are you a verse? Because I keep playing you over and over.",
+    "You’re the beat drop that makes my heart race.",
+    "If life was a track, you’d be the highlight I wait for.",
+    "You’re the harmony that makes my heart sing.",
+    "If you were a note, you’d be the one that hits just right.",
+    "Are you the beat in my life? Because I keep moving with you.",
+    "You’re the hook that makes my day unforgettable.",
+    "If you were a sound, you’d be my favorite track.",
+    "You’re the melody that brings my heart to life.",
+    "If love was a song, we’d be the perfect mix.",
+    "Are you my beat? Because my heart matches yours perfectly.",
+    "With you, every moment feels like a love song.",
+    "You’re the harmony that makes my life sound complete.",
+    "If we were lyrics, we’d rhyme every time.",
+    "Are you the drop? Because you’ve got my heart in freefall.",
+    "With you, every day feels like my favorite tune.",
+    "If love had a rhythm, it’d be the one we’re making.",
+    "You’re the sound that makes my world feel alive.",
+    "If we’re a duet, you’re the voice I never get tired of hearing.",
+    "Are you the bridge in my song? Because you take me to new heights.",
+    "You’re the harmony I didn’t know my heart needed.",
+    "If life was a beat, you’d be the one that syncs perfectly with mine.",
+    "Are you a love song? Because every time I see you, I feel the lyrics.",
+    "You’re like the best song on repeat in my mind.",
+    "If love was a tempo, you’d be the steady rhythm in my heart.",
+    "You’re the melody that turns my day into a masterpiece.",
+    "Are you my encore? Because I can’t get enough of you.",
+    "You’re like the bass drop that makes everything feel complete.",
+    "If we’re a track, you’re the vibe that everyone feels.",
+    "Are you the key to my harmony? Because with you, life just sounds better.",
+    "You’re like the song that sticks, the one I can’t forget.",
+    "If you’re the rhythm, I’m the beat – together, we’re unstoppable.",
+    "With you, every moment sounds like the start of something amazing.",
+    "Are you the chorus? Because I could replay you forever.",
+    "You’re the verse that keeps my heart in time.",
+    "If we were a song, we’d be the one people can’t get out of their heads.",
+    "Are you my favorite note? Because you resonate with me perfectly.",
+    "With you, it’s like every beat lands just right.",
+    "You’re the track that brings color to my silence.",
+    "If love had a soundtrack, you’d be my favorite part.",
+    "You’re the kind of melody that stays with you, even in the quiet moments.",
+    "Are you a playlist? Because you have all my favorite vibes.",
+    "You’re the harmony that fills my world with sound.",
+    "If you’re the tune, I’m the dance that follows.",
+    "Are you a song? Because every time I see you, I feel the beat.",
+    "With you, every second feels like a timeless rhythm.",
+    "You’re the chorus that makes my life sing.",
+    "If we’re music, you’re the part everyone waits for.",
+    "Are you my rhythm? Because my world moves with you.",
+    "You’re the kind of beat that keeps everything steady.",
+    "If you were a lyric, you’d be the one I sing every day.",
+    "Are you my vibe? Because I feel in sync with you.",
+    "With you, life feels like a song on a perfect loop.",
+    "You’re the sound that makes my heart skip in the best way.",
+    "If love was a music note, you’d be the one that resonates with me.",
+    "Are you my remix? Because you make everything feel fresh.",
+    "You’re the harmony that gives life to my melody.",
+    "If you were a tempo, you’d be the one that feels just right.",
+    "You’re the beat that keeps my heart in time.",
+    "If you’re the song, I’m the chorus that follows.",
+    "Are you the bridge? Because you connect everything in my life.",
+    "With you, it’s like hitting my favorite part over and over.",
+    "You’re the part of the song I wait for every time.",
+    "If love was a dance, we’d be the perfect match.",
+    "You’re the melody that brings life to my lyrics.",
+    "Are you the tune in my head? Because I can’t shake you.",
+    "If you were a rhythm, you’d be the one that keeps me steady.",
+    "You’re the kind of sound that makes my day feel complete.",
+    "With you, every beat feels like it has purpose.",
+    "Are you a dream? Because I don’t want to wake up.",
+    "You’re like the stars—just one look and I’m lost.",
+    "If love was a game, I’d be on your team every time.",
+    "You’re the spark that lights up my day.",
+    "If smiles were currency, you’d make me a millionaire.",
+    "Are you a rare gem? Because I can’t find anyone like you.",
+    "You’re like my favorite song; I never get tired of you.",
+    "If I had a rose for every time you crossed my mind, I’d have a garden.",
+    "Are you a puzzle? Because I feel like you complete me.",
+    "You’re like the moon, lighting up my darkest nights.",
+    "If beauty was a crime, you’d be guilty as charged.",
+    "You’re the peace in my world of chaos.",
+    "Are you my wish? Because you’re everything I’ve been looking for.",
+    "If you were art, you’d be a masterpiece.",
+    "You’re like magic; I can’t explain it, but I feel it.",
+    "Are you the sunrise? Because you brighten up my mornings.",
+    "You’re the kind of person people write love songs about.",
+    "If happiness was a person, it’d look just like you.",
+    "Are you gravity? Because I keep falling for you.",
+    "You’re the calm in my storm.",
+    "If love had a face, it’d look just like yours.",
+    "You’re like the sun on a winter’s day, warming my heart.",
+    "Are you a light in the dark? Because you’re guiding me.",
+    "You’re the smile that keeps my day going.",
+    "If you were a season, you’d be my favorite one.",
+    "You’re like the ocean, drawing me in with every wave.",
+    "If you were a canvas, you’d be painted with love.",
+    "You’re like a book I never want to put down.",
+    "If feelings had words, they’d spell out your name.",
+    "You’re the calm that soothes my soul.",
+    "If I could paint my dreams, you’d be the star of every one.",
+    "You’re the wish that came true.",
+    "If you were a melody, I’d play you on repeat.",
+    "You’re the story I want to tell over and over.",
+    "Are you a poet? Because every word you say is beautiful.",
+    "If I had a penny for every time you made me smile, I’d be rich.",
+    "You’re like my favorite place, comforting and unforgettable.",
+    "If you were a star, you’d outshine them all.",
+    "You’re the thought that makes me smile without reason.",
+    "If love had a rhythm, it’d be the beat of my heart for you.",
+    "Are you a song? Because you’re stuck in my head.",
+    "You’re the calm before the beautiful storm.",
+    "If love was a dance, we’d have the perfect rhythm.",
+    "You’re the warm breeze on a cool day.",
+    "If you were a sunset, I’d watch every second.",
+    "You’re the answer to a question I didn’t know I had.",
+    "If happiness was a scent, it’d be you.",
+    "You’re like a good book I can’t put down.",
+    "If you were a fire, you’d be burning bright in my heart.",
+    "You’re the favorite chapter of my story.",
+    "If love had a voice, it’d sound like yours."
+}
+
+local cooldowns = {}
+local sentMessages = {} -- Track sent messages and their timestamps
+
+-- Initialize cooldown tracker
+for i = 1, #phrases do
+    cooldowns[i] = 0
+end
+
+-- Variables to control chat loop and timing
+local isChatting = false
+local lastChatTime = 0
+local chatInterval = 10
+
+-- Function to select a random phrase
+local function getRandomPhrase()
+    local availablePhrases = {}
+    local currentTime = tick()
+
+    for i, phrase in ipairs(phrases) do
+        if currentTime - cooldowns[i] >= 600 then
+            if not sentMessages[phrase] or currentTime - sentMessages[phrase] >= 600 then
+                table.insert(availablePhrases, {index = i, text = phrase})
+            end
+        end
+    end
+
+    if #availablePhrases == 0 then return nil end
+
+    local selected = availablePhrases[math.random(1, #availablePhrases)]
+    cooldowns[selected.index] = currentTime
+    sentMessages[selected.text] = currentTime
+    return selected.text
+end
+
+-- Button Functions
+onButton.MouseButton1Click:Connect(function()
+    statusLabel.Text = "Status: On"
+    statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+    if not isChatting then
+        isChatting = true
+        while isChatting do
+            local currentTime = tick()
+            if currentTime - lastChatTime >= chatInterval then
+                local randomPhrase = getRandomPhrase()
+                if randomPhrase then
+                    game.ReplicatedStorage.DefaultChatSystemChatEvents.SayMessageRequest:FireServer(randomPhrase, "All")
+                    lastChatTime = currentTime
+                end
+            end
+            wait(0.1)
+        end
+    end
+end)
+
+offButton.MouseButton1Click:Connect(function()
+    statusLabel.Text = "Status: Off"
+    statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+    isChatting = false
+end)
+
+speakButton.MouseButton1Click:Connect(function()
+    local randomPhrase = getRandomPhrase()
+    if randomPhrase then
+        game.ReplicatedStorage.DefaultChatSystemChatEvents.SayMessageRequest:FireServer(randomPhrase, "All")
+    end
+end)
+
+copyButton.MouseButton1Click:Connect(function()
+    local randomPhrase = getRandomPhrase()
+    if randomPhrase then
+        setclipboard(randomPhrase) -- Copies the phrase to the clipboard
+    end
+end)
+
+destroyButton.MouseButton1Click:Connect(function()
+    screenGui:Destroy()
+end)
