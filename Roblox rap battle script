@@ -1,0 +1,707 @@
+-- Create ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+screenGui.ResetOnSpawn = false
+
+-- Create Frame
+local frame = Instance.new("Frame")
+frame.Parent = screenGui
+frame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+frame.Size = UDim2.new(0, 200, 0, 130)
+frame.Position = UDim2.new(0.5, -100, 0.5, -65)
+frame.Active = true
+frame.Draggable = true
+
+-- Create On Button
+local onButton = Instance.new("TextButton")
+onButton.Parent = frame
+onButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+onButton.Size = UDim2.new(0, 60, 0, 30)
+onButton.Position = UDim2.new(0, 20, 0, 20)
+onButton.Text = "On"
+onButton.TextScaled = true
+
+-- Create Off Button
+local offButton = Instance.new("TextButton")
+offButton.Parent = frame
+offButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+offButton.Size = UDim2.new(0, 60, 0, 30)
+offButton.Position = UDim2.new(0, 120, 0, 20)
+offButton.Text = "Off"
+offButton.TextScaled = true
+
+-- Create Speak Button
+local speakButton = Instance.new("TextButton")
+speakButton.Parent = frame
+speakButton.BackgroundColor3 = Color3.fromRGB(0, 0, 255)
+speakButton.Size = UDim2.new(0, 60, 0, 30)
+speakButton.Position = UDim2.new(0, 20, 0, 60)
+speakButton.Text = "Speak"
+speakButton.TextScaled = true
+
+-- Create Copy Button
+local copyButton = Instance.new("TextButton")
+copyButton.Parent = frame
+copyButton.BackgroundColor3 = Color3.fromRGB(255, 255, 0)
+copyButton.Size = UDim2.new(0, 60, 0, 30)
+copyButton.Position = UDim2.new(0, 120, 0, 60)
+copyButton.Text = "Copy"
+copyButton.TextScaled = true
+
+-- Create Destroy Button
+local destroyButton = Instance.new("TextButton")
+destroyButton.Parent = frame
+destroyButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+destroyButton.Size = UDim2.new(0, 160, 0, 30)
+destroyButton.Position = UDim2.new(0, 20, 0, 100)
+destroyButton.Text = "Destroy"
+destroyButton.TextScaled = true
+
+-- Create Status Indicator
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Parent = frame
+statusLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+statusLabel.Size = UDim2.new(0, 200, 0, 30)
+statusLabel.Position = UDim2.new(0, 0, 0, -30)
+statusLabel.Text = "Status: Off"
+statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+statusLabel.TextScaled = true
+
+-- List of phrases and cooldown tracker
+local phrases = {
+    "You talk big, but your moves are slow, like a dial-up modem from years ago.",
+    "Your style’s outdated, like last year's tech, I'm the new wave you gotta respect.",
+    "I'm the storm, you're just the drizzle, keep trying to burn but only fizzle.",
+    "You're reaching for greatness, but you're far from the zone. I'm the king here, sitting on the throne.",
+    "I’m the main event, you're just a side show, I bring the heat while you barely glow.",
+    "You spit lines, I spit fire. Step back now, or feel the pyre.",
+    "You’re the copycat version, I'm the trend. When I start, that’s where you end.",
+    "Your words are empty, mine are gold. Better step up before you get old.",
+    "I'm the equation you can’t compute, you’re a basic rhyme, I’m the absolute.",
+    "You’re the cloudy day, I’m the full-on sun. Shine so bright, make everyone run.",
+    "Your words fall flat, like a pancake flip, I'm the whole meal, you’re just a chip.",
+    "You’re the warm-up, I’m the show, step aside, let the real one flow.",
+    "I’m the lightning, you’re the spark, step out the way before you’re left in the dark.",
+    "You’re like a puzzle missing a piece, while I’m the masterpiece with endless ease.",
+    "I’m the chef, you’re just the snack, my lines cook, yours fall flat.",
+    "Your rhymes are stale, like yesterday’s bread. I bring the flavor, way over your head.",
+    "I'm the thunder, you're the drizzle, got you rattled, mind in a fizzle.",
+    "I got the spotlight, you’re just background noise, I’m the main event bringing poise.",
+    "You try to step up, but you trip on the way. I’m the clear winner, call it today.",
+    "I bring the punchlines, you just mumble, in this rap game, watch you crumble.",
+    "I’m the wave, you’re the puddle, time to step back before you’re in trouble.",
+    "You’re playing checkers, I’m playing chess, at every move, I’m the best.",
+    "I’m the champ, you’re the crowd, watch me take this win loud.",
+    "I’m a lion, you’re a mouse, this is my domain, you’re just in the house.",
+    "You’re out here stalling while I take flight, I’m the brightest star in the night.",
+    "You’re the practice round, I’m the real fight, standing tall while you’re out of sight.",
+    "You’re a drizzle, I’m a flood, I rise high while you’re stuck in the mud.",
+    "You rhyme like a beginner, I’m the pro. Step aside, watch the master flow.",
+    "You’re the whisper, I’m the shout, I’m the voice everyone talks about.",
+    "I’m the beat drop, you’re the skip, bring the fire while you slip.",
+    "You’re the warm-up act, I’m the star, this rap game is mine by far.",
+    "You bring a spark, I bring the flames, we’re in different leagues, different games.",
+    "You might be loud, but I’m intense, in the rap game, I’m immense.",
+    "I'm the ocean, you're a splash, bring the energy while you crash.",
+    "I'm the alpha, you’re the trial, got you beat by miles and miles.",
+    "I’m the headline, you’re just the byline, outshine you every time.",
+    "I’m the verse that drops jaws, you're just a pause.",
+    "I'm the legend, you're a fad, my lines sharp while yours are sad.",
+    "You’re the echo, I’m the sound, this rap crown? I wear it proud.",
+    "You’re a preview, I’m the main show, in my lane, you’re too slow.",
+    "I’m the ruler, you’re just the tool, I’m the fire, and you’re the fuel.",
+    "I’m the answer, you’re the question, in this session, I’m impressin'.",
+    "I’m the truth, you’re just pretend, in this rap game, I’m the end.",
+    "I’m the upgrade, you’re outdated, I’m celebrated, you’re debated.",
+    "You’re the stepping stone, I’m the throne, this rap game is mine alone.",
+    "You’re a rumor, I’m the fact, watch as I put you on the track.",
+    "I’m the headline, you’re just the back page, I take center stage.",
+    "I’m the earthquake, you’re a breeze, got the crowd begging 'more, please!'",
+    "You’re the warm-up, I’m the heat, you can’t handle this beat.",
+    "You’re a flicker, I’m the flame, got you calling out my name.",
+    "I’m the front page, you’re the footnote, I’m the ship, you’re the rowboat.",
+    "You’re a whisper, I’m the shout, when it’s over, no doubt.",
+    "I’m the fire, you’re the match, every word leaves a scratch.",
+    "I’m the beat that makes the crowd jump, you're just the static bump.",
+    "I'm the tune, you're just the echo, I rise high, you stay low.",
+    "I’m the gold, you’re the rust, in this game, you lost my trust.",
+    "I’m the blueprint, you’re the draft, I’m the star, watch me craft.",
+    "You’re the question, I’m the reply, in this game, I’m way too high.",
+    "I’m the main course, you’re the crumb, in this battle, you’re done.",
+    "I'm the picture, you're the frame, in this league, you're just the same.",
+    "I’m the riddle, you’re the guess, I’m the success.",
+    "I’m the book, you’re the line, I’m the prime.",
+    "I'm the thunder, you're a sound, this game is where I'm crowned.",
+    "I’m the heat, you’re the breeze, I’m the king of these degrees.",
+    "I'm the melody, you're a tone, in this game, I’m in the zone.",
+    "I’m the answer, you’re the guess, in this game, I’m blessed.",
+    "You’re a step, I’m the stair, in this game, beware.",
+    "I’m the real deal, you’re the trial, in this rap style.",
+    "I’m the sunlight, you’re a shade, this game is mine, you fade.",
+    "I'm the spark, you're the smoke, in this rap, you’re broke.",
+    "I’m the voice, you’re the echo, in this flow, I’m the pro.",
+    "You’re the question, I’m the call, in this game, I’m tall.",
+    "I’m the storm, you’re the cloud, watch as I get loud.",
+    "I’m the fire, you’re the matchstick, in this game, I’m slick.",
+    "You’re the shadow, I’m the light, in this battle, I shine bright.",
+    "I’m the flame, you’re the spark, in this game, you’re the mark.",
+    "I’m the roar, you’re the squeak, in this game, I peak.",
+    "I’m the mountain, you’re the hill, in this thrill.",
+    "I’m the power, you’re the fuse, in this game, I refuse.",
+    "I’m the source, you’re the stream, in this game, I beam.",
+    "You’re a step, I’m the journey, in this game, no attorney.",
+    "I’m the spark, you’re the flame, I bring the name.",
+    "You’re the whisper, I’m the yell, in this tale, I excel.",
+    "I’m the diamond, you’re the glass, in this game, I’m the class.",
+    "You’re the second, I’m the first, in this verse.",
+    "I’m the sun, you’re the shade, this game is made.",
+    "I’m the paint, you’re the frame, in this name, I claim.",
+    "I’m the flame, you’re the ember, in this game, remember.",
+    "I’m the book, you’re a word, in this flow, I'm heard.",
+    "You’re a phase, I’m the trend, in this game, you’re the end.",
+    "I’m the star, you’re the background, in this game, I’m profound.",
+    "You're like a broken clock, always off the beat, trying to step up, but you can’t take the heat.",
+    "I’m the king of the castle, you’re just the jester, making weak moves, I’m the real investor.",
+    "You think you’re a player, but you’re riding the bench, in this rap game, you’re just a wrench.",
+    "You call that a rhyme? I call it a fail, I’m the shark in the water, you’re the fish in the pale.",
+    "Your rhymes are so weak, they need a vitamin, I’m the heavyweight champ, you’re a lightweight min.",
+    "I’m the blueprint, you’re just the sketch, in this game of rap, I’m the perfect fetch.",
+    "You’re a light breeze, I’m a hurricane, when I drop bars, you’re feeling the pain.",
+    "You think you're a boss, but you’re just a clerk, I’m the mastermind, I put in the work.",
+    "You’re just a pit stop, I’m the main route, step aside, this is what it’s about.",
+    "You’re a short story, I’m a novel, in this rap battle, you’re bound to grovel.",
+    "I’m the marathon, you’re just a sprint, in this rap game, you can’t leave a print.",
+    "You’re the dessert, I’m the whole meal, when I hit the stage, you’re the one who kneels.",
+    "You’re the footnote in a bestseller, while I’m the plot twist, call me the storyteller.",
+    "You bring a spoon, I’m serving the feast, when I’m done cooking, you’ll be the least.",
+    "You’re just a pawn, I’m the king in this game, step back now, I’ll put you to shame.",
+    "You’re an extra in a film, I’m the leading role, I’m the fire, you’re just a coal.",
+    "I’m the storm, you’re the drizzle, try to step up, but you’re lost in the fizzle.",
+    "You’re a backup singer, I’m the star on the stage, I’m the sage, you’re just a page.",
+    "You think you’re clever, but you’re just a mess, I’m the riddle, you’re the stress.",
+    "You’re the shadow, I’m the light, in this rap battle, I’m ready to fight.",
+    "You’re the background noise, I’m the hit song, step aside, you don’t belong.",
+    "I’m the road trip, you’re just the detour, in this rap battle, I’m the hardcore.",
+    "You’re the hiccup, I’m the flow, in this rap game, you’re too slow.",
+    "You’re the undercard, I’m the main fight, step into the ring, I’m taking flight.",
+    "I’m the sniper, you’re the target, in this rap game, I’m the hardest.",
+    "You’re a whisper, I’m the shout, watch your step, you’re about to be out.",
+    "You’re a rusty hinge, I’m the slick door, in this game of rap, I’ll leave you sore.",
+    "You’re the knock-off, I’m the brand, in this rap battle, I’m taking a stand.",
+    "I’m the headline, you’re just the news, in this rap game, I refuse to lose.",
+    "You’re a knock on the door, I’m the grand entrance, this rap game? I’m the essence.",
+    "You think you're tough, but you're just a bluff, I’m the diamond, you’re just rough.",
+    "You’re a band-aid, I’m the cure, in this rap game, I’m the pure.",
+    "You’re the pawn, I’m the queen, in this game of chess, you’ve never seen.",
+    "I’m the heartbeat, you’re the faint pulse, in this rap battle, I’m the true impulse.",
+    "You’re a pebble, I’m the mountain, I’m the flow, you’re just a fountain.",
+    "I’m the chef, you’re the leftovers, when I hit the stage, it’s game over.",
+    "You’re a rumor, I’m the truth, in this rap game, I’m the sleuth.",
+    "I’m the bullet, you’re the target, step into the ring, but you can’t guard it.",
+    "You’re the maze, I’m the exit, I’m the truth, you’re the neglect.",
+    "You’re a giggle, I’m the laugh, in this rap game, I’m the math.",
+    "I’m the trophy, you’re the consolation, in this rap game, I’m the sensation.",
+    "You’re a sprint, I’m the marathon, I’m the torch, you’re just a pawn.",
+    "You’re the storm cloud, I’m the sun ray, step back now, you’re in my way.",
+    "I’m the fire, you’re the smoke, in this rap battle, I’m the bloke.",
+    "You’re the background, I’m the scene, I’m the shine, you’re the glean.",
+    "I’m the trophy, you’re the dust, in this rap game, it’s a must.",
+    "You’re the echo, I’m the sound, in this rap battle, I’m renowned.",
+    "I’m the ace, you’re the joker, in this rap game, I’m the poker.",
+    "You’re the end, I’m the start, I’m the masterpiece, you’re just art.",
+    "I’m the summit, you’re the hill, in this rap battle, I’m the thrill.",
+    "You’re the quiet, I’m the loud, in this rap game, I’m the proud.",
+    "You’re the misstep, I’m the dance, step back now, I’m taking a chance.",
+    "I’m the spotlight, you’re the shadow, in this rap game, I’m the meadow.",
+    "You’re the glitch, I’m the game, in this rap battle, I’m the fame.",
+    "I’m the thunder, you’re the rain, in this rap game, I’m the gain.",
+    "You’re a whisper, I’m the roar, step back now, I’m the score.",
+    "I’m the lead, you’re the backup, in this rap game, I’m the hiccup.",
+    "You’re a draft, I’m the final, in this rap battle, I’m the vinyl.",
+    "I’m the harvest, you’re the seed, in this rap game, I’m the breed.",
+    "You’re the afterthought, I’m the plan, in this rap battle, I’m the man.",
+    "You’re the hiccup, I’m the song, in this rap game, I’m where you belong.",
+    "I’m the finish line, you’re the race, in this rap game, I’m the ace.",
+    "You’re the fluke, I’m the champ, in this rap battle, I’m the stamp.",
+    "You’re the light bulb, I’m the sun, in this rap game, I’ve already won.",
+    "You’re the hiccup, I’m the flow, in this rap game, you’re too slow.",
+    "I’m the diamond, you’re the rock, in this rap battle, I’m the clock.",
+    "You’re a light flicker, I’m the blaze, in this rap game, I’m the craze.",
+    "I’m the pitch, you’re the catch, in this rap battle, I’m the match.",
+    "You’re a drop in the ocean, I’m the wave, in this rap game, I’m the brave.",
+    "I’m the spotlight, you’re the blur, in this rap battle, I’m the stir.",
+    "You’re the trailer, I’m the film, in this rap game, I’m the thrill.",
+    "I’m the spotlight, you’re the dim, in this rap game, I’m the win.",
+    "You’re a page, I’m the book, in this rap battle, take a look.",
+    "You’re the dull blade, I’m the knife, in this rap game, I’m the life.",
+    "I’m the melody, you’re the noise, in this rap battle, I’m the poise.",
+    "You’re the summer rain, I’m the storm, in this rap game, I’m the norm.",
+    "I’m the step up, you’re the fall, in this rap game, I’ll take it all.",
+    "You’re the whisper, I’m the shout, in this rap battle, you’re out.",
+    "You’re like a bad Wi-Fi signal, always dropping, I’m the connection that’s never stopping.",
+    "You think you're a puzzle, but you’re missing pieces, I’m the whole picture, your rhyme just ceases.",
+    "I’m a shooting star, you’re just a flicker, when I’m on the mic, you know I’m the kicker.",
+    "You call that a punchline? I call it a whiff, I’m the gift in this rap, you’re just the rift.",
+    "I’m the sun, you’re just a shadow, when I drop bars, you know it’s a battle.",
+    "You’re a hiccup in my flow, I’m the river, in this rap game, I’m the giver.",
+    "You’re the traffic jam, I’m the open road, when I spit rhymes, you know I’m in mode.",
+    "You’re the background chatter, I’m the main event, in this rap game, I’m heaven-sent.",
+    "I’m the mountain peak, you’re the hill, in this rap battle, I bring the thrill.",
+    "You’re a typo, I’m the perfect text, in this rap game, you’re just perplexed.",
+    "You’re the pause, I’m the play, in this rap battle, I slay all day.",
+    "I’m the ace in the deck, you’re just a joker, when I step to the mic, I’m the real smoker.",
+    "You’re the fog, I’m the clear skies, in this rap battle, I’m the prize.",
+    "I’m the thunder, you’re the drizzle, in this rap game, I’m the sizzle.",
+    "You’re the missed call, I’m the reply, in this rap battle, I’m that guy.",
+    "You’re a dull knife, I’m the sword, when I drop bars, I’m never ignored.",
+    "You’re the bumpy road, I’m the smooth ride, in this rap battle, I’m the pride.",
+    "I’m the chef, you’re the leftovers, in this rap game, I’m the real maverick.",
+    "You’re the whisper, I’m the roar, in this rap battle, you can’t ignore.",
+    "I’m the masterpiece, you’re the sketch, in this rap game, I’m the fetch.",
+    "You’re the coffee stain, I’m the fresh brew, when I step to the mic, it’s all brand new.",
+    "You’re a detour, I’m the freeway, in this rap battle, I’ll make you sway.",
+    "You’re the tickle, I’m the laugh, in this rap game, I’m the whole staff.",
+    "You’re the boring book, I’m the page-turner, in this rap battle, I’m the earner.",
+    "I’m the fire, you’re the smoke, when I hit the stage, you’ll be the joke.",
+    "You’re the backup plan, I’m the main scheme, in this rap game, I’m the dream.",
+    "You’re the punchline, I’m the setup, in this rap battle, I’ll never let up.",
+    "You’re a sidekick, I’m the hero, in this rap game, I’m the zero to a hero.",
+    "I’m the chef, you’re the burnt toast, in this rap battle, I’m the one who’s coast.",
+    "You’re a glitch in the system, I’m the upgrade, in this rap game, I’m the ace displayed.",
+    "You’re the backup singer, I’m the lead, in this rap battle, I’m the breed.",
+    "You’re a lullaby, I’m the anthem, in this rap game, I’m the phantom.",
+    "I’m the wave, you’re just the splash, when I hit the stage, I make a crash.",
+    "You’re the pause button, I’m the play, in this rap battle, I’ll slay all day.",
+    "I’m the spark, you’re the fade, in this rap game, I’m the parade.",
+    "You’re the second best, I’m the prime, in this rap battle, I’m the rhyme.",
+    "You’re the appetizer, I’m the main dish, when I spit bars, you know what I wish.",
+    "I’m the roar of the crowd, you’re the silent film, in this rap game, I’m the thrill.",
+    "You’re a small spark, I’m the flame, in this rap battle, I’m the name.",
+    "I’m the paint, you’re the canvas, when I drop rhymes, I’m the baddest.",
+    "You’re the mistake, I’m the fix, in this rap game, I’m the mix.",
+    "You’re a drizzle, I’m the storm, in this rap battle, I’m the norm.",
+    "I’m the headliner, you’re the filler, in this rap game, I’m the killer.",
+    "You’re the underdog, I’m the champ, when I step to the mic, I’m the camp.",
+    "I’m the shining star, you’re the fading light, in this rap battle, I’ll win this fight.",
+    "You’re the hiccup, I’m the flow, in this rap game, you’re too slow.",
+    "You’re the dust, I’m the breeze, in this rap battle, I aim to please.",
+    "I’m the bullet, you’re the target, in this rap game, I’ll never part it.",
+    "You’re the whisper, I’m the shout, in this rap battle, there’s no doubt.",
+    "I’m the glow, you’re the fade, when I drop bars, I’ll never evade.",
+    "You’re the step back, I’m the leap, in this rap battle, I’m the deep.",
+    "I’m the firework, you’re the spark, in this rap game, I’m the arc.",
+    "You’re a crumpled paper, I’m the fresh page, in this rap battle, I’m the sage.",
+    "I’m the canvas, you’re the paint, in this rap game, I’m the saint.",
+    "You’re the fog, I’m the clarity, in this rap battle, I’m the rarity.",
+    "You’re the static, I’m the signal, in this rap game, I’m the single.",
+    "I’m the showstopper, you’re the extra, when I step up, I’m the flexor.",
+    "You’re the glitch, I’m the fix, in this rap game, I’m the mix.",
+    "I’m the sun, you’re the shade, when I hit the stage, I’m never delayed.",
+    "You’re a shadow, I’m the light, in this rap battle, I’ll take flight.",
+    "You’re a bumpy road, I’m the highway, in this rap game, I’ll show the way.",
+    "I’m the wave, you’re the ripple, in this rap battle, I’m the triple.",
+    "You’re the sidekick, I’m the hero, in this rap game, I’m the zero to a hero.",
+    "You’re a whisper, I’m the scream, in this rap battle, I’m the dream.",
+    "I’m the prize, you’re the consolation, in this rap game, I’m the sensation.",
+    "You’re the rookie, I’m the pro, in this rap battle, I steal the show.",
+    "I’m the sharp blade, you’re the dull knife, in this rap game, I bring the life.",
+    "You’re a drop in the ocean, I’m the tide, when I hit the stage, I’ll take pride.",
+    "I’m the phoenix, you’re the ash, in this rap battle, I’m the splash.",
+    "You’re the step back, I’m the advance, in this rap game, I take my chance.",
+    "I’m the headline, you’re the footnote, in this rap battle, you’ll never gloat.",
+    "You’re a mistake, I’m the lesson, in this rap game, I’m the progression.",
+    "I’m the spotlight, you’re the dark, when I drop bars, you’ll lose the spark.",
+    "You’re a pebble, I’m the stone, in this rap battle, I’ve always known.",
+    "You’re the whisper, I’m the shout, in this rap game, you’re out.",
+    "You’re like a phone on silent, I can’t hear a thing, when I drop my rhymes, I’m the real king.",
+    "You think you're a rocket, but you can't even lift, in this rap game, I’m the ultimate gift.",
+    "You’re the homework I forgot, I’m the test you can’t ace, when I step to the mic, I’m in first place.",
+    "You’re a paper cut, I’m the healing balm, in this rap battle, I’m the calm.",
+    "You’re a drop of water, I’m the raging sea, when I spit my bars, you’ll be history.",
+    "I’m the headline news, you’re just a footnote, in this rap game, I’m the antidote.",
+    "You’re a broken clock, I’m always on time, in this rap battle, I’m the reason you climb.",
+    "I’m the flame, you’re the wax, when I burn bright, I’m never in the cracks.",
+    "You’re the background music, I’m the main track, in this rap game, I’m never looking back.",
+    "You’re a crumpled note, I’m the clean sheet, when I drop my bars, I can’t be beat.",
+    "You’re a solo act, I’m the whole band, in this rap battle, I take a stand.",
+    "You’re the noise complaint, I’m the party next door, when I hit the stage, they’ll always want more.",
+    "I’m the architect, you’re the broken building, in this rap game, I’m the one that’s thrilling.",
+    "You’re the step back, I’m the forward march, in this rap battle, I’m the big arch.",
+    "You’re the thorn, I’m the rose, when I drop my bars, everybody knows.",
+    "You’re the frost, I’m the summer heat, in this rap game, I can’t be beat.",
+    "You’re the sketch, I’m the masterpiece, in this rap battle, I’m the lease.",
+    "You’re a ripple, I’m the wave, when I hit the stage, I’m the one who’s brave.",
+    "You’re the season’s end, I’m the spring’s beginning, in this rap game, I’m always winning.",
+    "I’m the lion, you’re just the lamb, when I step to the mic, I’m the slam.",
+    "You’re the pause in my flow, I’m the rapid beat, in this rap battle, you can’t compete.",
+    "You’re a missed chance, I’m the lucky draw, when I drop bars, I leave you in awe.",
+    "You’re the fog, I’m the clarity, in this rap game, I’m the rarity.",
+    "You’re a shadow, I’m the light, when I step to the mic, I’m ready to fight.",
+    "I’m the chessboard, you’re just a pawn, in this rap battle, I’m the dawn.",
+    "You’re a sideline, I’m the main event, when I hit the stage, I’m heaven-sent.",
+    "I’m the thunder, you’re just a drizzle, in this rap game, I make you sizzle.",
+    "You’re a bad haircut, I’m the clean cut, when I drop my rhymes, I’ll never strut.",
+    "You’re the rumor, I’m the truth, in this rap battle, I’m the sleuth.",
+    "You’re a puppy, I’m the big dog, when I spit my bars, I clear the fog.",
+    "You’re a flicker, I’m the bright light, in this rap game, I’m ready to fight.",
+    "You’re the second chance, I’m the first shot, when I hit the mic, I’m the whole lot.",
+    "I’m the firework, you’re the sparkler, in this rap battle, I’m the heart-stopper.",
+    "You’re a hiccup, I’m the smooth ride, when I drop my bars, you can’t hide.",
+    "I’m the conductor, you’re just a note, in this rap game, I’m the antidote.",
+    "You’re the echo, I’m the voice, when I hit the stage, you have no choice.",
+    "I’m the rising sun, you’re the setting moon, in this rap battle, I’ll see you soon.",
+    "You’re a jigsaw, I’m the whole picture, when I spit my bars, I’m the scripture.",
+    "You’re the class clown, I’m the honor roll, in this rap game, I’m in control.",
+    "You’re a puzzle piece, I’m the entire box, when I hit the mic, I’m the fox.",
+    "You’re a pebble, I’m the mountain peak, in this rap battle, you can’t speak.",
+    "I’m the spotlight, you’re the dim light, when I drop my bars, I ignite.",
+    "You’re a whisper, I’m the shout, in this rap game, you’re in doubt.",
+    "You’re the seed, I’m the mighty tree, when I hit the mic, you can’t be free.",
+    "You’re the passenger, I’m the driver, in this rap battle, I’m the survivor.",
+    "You’re a glitch in the code, I’m the software update, when I drop my bars, it’s fate.",
+    "I’m the rocket, you’re the ground, when I take off, you’ll be spellbound.",
+    "You’re a broken toy, I’m the new model, in this rap game, I’m the throttle.",
+    "You’re the background noise, I’m the main theme, when I hit the mic, I’m the dream.",
+    "You’re the old news, I’m the headline, in this rap battle, I’m the best line.",
+    "You’re the side dish, I’m the main course, when I step to the mic, I’m the force.",
+    "I’m the masterpiece, you’re the doodle, in this rap game, I’m the poodle.",
+    "You’re the echo, I’m the sound, when I drop my bars, I’m profound.",
+    "You’re the flat tire, I’m the smooth ride, in this rap battle, I take pride.",
+    "I’m the potion, you’re the poison, when I hit the stage, I’m the chosen.",
+    "You’re the mist, I’m the clear sky, when I drop my bars, you know why.",
+    "You’re the t-shirt, I’m the designer suit, in this rap game, I’m the absolute.",
+    "I’m the candle, you’re the shadow, when I step to the mic, I’m the bravado.",
+    "You’re the fog, I’m the clarity, in this rap battle, I’m the rarity.",
+    "You’re a band-aid, I’m the surgery, when I drop my bars, it’s pure urgency.",
+    "I’m the wave, you’re just a ripple, in this rap game, I’m the triple.",
+    "You’re the side quest, I’m the main story, when I hit the mic, I’m the glory.",
+    "You’re the fast food, I’m the gourmet meal, in this rap battle, I’m the real deal.",
+    "You’re a hiccup, I’m the flow, when I drop my bars, it’s a show.",
+    "I’m the sunbeam, you’re the cloud, when I step to the mic, I’m the loud.",
+    "You’re a glitch, I’m the fix, in this rap game, I’m the mix.",
+    "You’re a tiny spark, I’m the raging fire, when I hit the stage, I take you higher.",
+    "I’m the mountain, you’re the molehill, in this rap battle, I bring the thrill.",
+    "You’re the hiccup, I’m the cheer, when I drop my bars, it’s crystal clear.",
+    "You’re the riddle, I’m the answer, in this rap game, I’m the enhancer.",
+    "You’re out here claiming you're the best, but I see you struggling like a bad test, while I’m scoring straight A’s in this lyrical quest.",
+    "You think you're a heavyweight in this ring, but I’m the champion who makes the crowd sing, while you’re just another wannabe trying to cling.",
+    "You call yourself a star, but you’re more like a black hole, sucking up the energy, losing all control, while I shine brighter than a diamond soul.",
+    "You step up to me with your weak little bars, thinking you're clever like you’ve traveled to Mars, but I’ll send you back home with your hopes in jars.",
+    "You’re just a hiccup in my flow, a minor distraction, while I’m the full-on concert, the main attraction, and you’re left behind with no satisfaction.",
+    "You think you’re the cream of the crop, but in reality, you’re just a bad crop top, always falling short while I’m rising to the top.",
+    "You claim to be the king, but I don’t see a crown, just a jester in a suit that’s made to drown, while I’m the one holding the throne in this town.",
+    "You’re the footnote in a novel, barely worth a glance, while I’m the epic story that’s making crowds dance, and in this rap battle, you don’t stand a chance.",
+    "You’re just a broken clock, always wrong twice a day, while I’m the timekeeper, guiding the way, and you’ll never keep up with what I say.",
+    "You think you’re a lion, but you’re really a sheep, while I’m the wolf howling, prowling for keeps, and in this rap game, you’re in too deep.",
+    "You’re the punchline of a joke, and I’m the comedian’s muse, while you’re lost in the crowd, I’m the one they choose, so face it, buddy, you’re destined to lose.",
+    "You’re the rust on a bike that can’t go fast, while I’m the turbo engine that’s built to last, and when I drop my bars, you’ll be blown past.",
+    "You’re a little lost puppy, and I’m the big dog, when I step to the mic, I’ll clear out the fog, while you stumble over words like you’re stuck in a bog.",
+    "You think you’re a puzzle, but you’re missing some pieces, while I’m the whole picture that never ceases, in this rap game, it’s me who increases.",
+    "You think you’re a legend, but your story’s a bore, while I’m the epic saga that’s hard to ignore, and in this rap battle, I’m the one they adore.",
+    "You’re like a light switch that keeps flickering out, while I’m the spotlight that’s casting a route, and in this rap game, I’ll make you pout.",
+    "You think you’re a treasure, but you’re really just trash, while I’m the gold that’s here to make a splash, and when I hit the mic, you’ll feel the clash.",
+    "You’re the trailer of a movie, not worth my time, while I’m the full feature that’s truly sublime, so when I spit my rhymes, just know it’s a crime.",
+    "You’re just a pebble on the road, I’m the boulder that rolls, while you try to keep up, I’m hitting my goals, and in this rap battle, I’m taking the tolls.",
+    "You think you’re a genius, but you’re just a fool, while I’m the one breaking all the rules, so step aside, kid, and watch the real duel.",
+    "You’re the cliché in a world of fresh lines, while I’m the original that truly shines, and when I spit my fire, it’s like sipping fine wines.",
+    "You’re the hiccup in my flow, but I’m the steady stream, while you’re just a dream that’s too far to beam, so bow down now, I’m the supreme.",
+    "You think you’re the pilot, but you can’t even fly, while I’m the soaring eagle that’s reaching the sky, and in this rap game, you’ll never get by.",
+    "You’re the footnote in my novel, just a passing thought, while I’m the entire chapter, giving lessons you sought, so when I drop my bars, you’ll wish you fought.",
+    "You think you’re the ice, but you’re melting away, while I’m the fire that’s here to stay, and in this rap battle, I’m the one who’ll slay.",
+    "You’re a cheap imitation, and I’m the real deal, while you’re just a wannabe struggling to steal, in this rap game, I’m the one who’ll appeal.",
+    "You’re just a weak trend, I’m a classic old school, while I’m dropping wisdom, you’re just acting the fool, so step aside now, I’m the one who’ll rule.",
+    "You’re a bad pun, I’m the clever wordplay, while you’re stumbling over lines, I’m here to slay, and in this rap battle, I’m the one who’ll stay.",
+    "You think you’re the rain, but you’re really just mist, while I’m the thunderstorm that cannot be dismissed, and in this rap game, I’m the one you missed.",
+    "You’re the leftover scraps, I’m the gourmet feast, while I’m taking over, you’re barely a beast, so when I hit the mic, it’s a lyrical feast.",
+    "You’re just the echo in an empty hall, while I’m the voice that’s making the call, and in this rap battle, I’m towering tall.",
+    "You think you’re the sunshine, but you’re only a cloud, while I’m the bright light that’s drawing a crowd, so face it, buddy, you’re just not allowed.",
+    "You’re a cheap knockoff, I’m the genuine article, while you’re struggling hard, I’m making it magical, and in this rap game, it’s practically mythical.",
+    "You’re just the background noise, I’m the main theme, while you’re stuck in your head, I’m living the dream, and in this rap battle, I’m the one with esteem.",
+    "You think you’re the main course, but you’re just the side, while I’m the chef cooking up with pride, and in this rap game, you’ve got nowhere to hide.",
+    "You’re just a flicker, I’m the blazing flame, while you’re trying to keep up, you’re lost in the game, so when I drop my bars, you’ll remember my name.",
+    "You think you’re the ace, but you’re just a joker, while I’m the high card that makes you a smoker, and in this rap battle, I’m the ultimate choker.",
+    "You’re just a shadow, I’m the light that shines bright, while you’re lost in the darkness, I’m ready to fight, and when I step to the mic, it’s pure dynamite.",
+    "You think you’re a king, but you’re just a peasant, while I’m the ruler that’s bringing the pleasant, so step back now, I’m the one who’s crescent.",
+    "You’re a weak excuse, I’m the strong foundation, while you’re falling apart, I’m building a nation, and in this rap battle, I’m the true sensation.",
+    "You think you’re a fighter, but you’re more like a tease, while I’m the heavyweight champion that aims to please, so bow down now, I’ll bring you to your knees.",
+    "You’re just a hiccup in my flow, an annoying distraction, while I’m the whole performance, gaining traction, and in this rap battle, you’re facing a fraction.",
+    "You think you’re the melody, but you’re offbeat and lost, while I’m the symphony that’s worth any cost, so when I drop my bars, you’ll know who’s the boss.",
+    "You’re a fade-out, I’m the ending theme, while you’re stuck in your head, I’m living the dream, and in this rap battle, I’m the supreme beam.",
+    "You're like a diamond in the rough, shining bright, but I’m the polished gem that’s stealing the spotlight.",
+    "You bring a spark, but I’m the full-blown flame, while you’re just warming up, I’m raising the game.",
+    "You’ve got potential, no doubt, that’s true, but I’m the finished product that’s inspiring the crew.",
+    "You’re the opening act, and I’m the headline show, while you’re still finding your rhythm, I’m stealing the flow.",
+    "You’ve got heart, and I admire your grind, but I’m the seasoned pro leaving you far behind.",
+    "You bring your passion, and that’s a great trait, but I’m the masterpiece, and you’re still on the slate.",
+    "You’ve got flair, it’s clear you’ve got style, but I’m the one bringing the depth that’ll make the crowd smile.",
+    "You’re the sunrise, brightening the dawn, but I’m the midday sun, and I’m here to carry on.",
+    "You’ve got a vision, and that’s quite profound, but I’m the one executing, making waves all around.",
+    "You’re a breath of fresh air, that’s hard to deny, but I’m the gentle breeze that’s lifting you high.",
+    "You’ve got ambition, and that’s a great start, but I’m the full orchestra, and you’re just one part.",
+    "You’ve got the drive, and I see it’s sincere, but I’m the finishing touch that’s making it clear.",
+    "You’re the sketch of a dream, and that’s quite the feat, but I’m the full canvas that’s bringing the heat.",
+    "You’ve got a spark of genius, and that’s hard to find, but I’m the blazing comet that’s blowing your mind.",
+    "You bring the laughter, and that’s always nice, but I’m the master of wit, and I’m rolling the dice.",
+    "You’re the flavor of the month, and that’s quite sweet, but I’m the classic dish that can’t be beat.",
+    "You’ve got the courage, that’s something I admire, but I’m the roaring lion, igniting the fire.",
+    "You bring a smile, and that’s always a plus, but I’m the positive vibe that’s lifting us up.",
+    "You’re the melody, and I love how you sing, but I’m the symphony that makes the heartstrings ring.",
+    "You’re the whisper of hope in a world full of doubt, but I’m the loud cheer that’s making you shout.",
+    "You’ve got the talent, I can clearly see, but I’m the diamond shining, so let’s just agree.",
+    "You bring the sunshine, brightening the day, but I’m the rainbow that colors the way.",
+    "You’re the seed of potential, and that’s worth the praise, but I’m the full garden, blooming in so many ways.",
+    "You’ve got the energy, it’s contagious for sure, but I’m the full powerhouse, that’s hard to ignore.",
+    "You bring the fun, and I appreciate the jest, but I’m the celebration, and I’m simply the best.",
+    "You’ve got your dreams, and they’re soaring high, but I’m the wings beneath you, helping you fly.",
+    "You’re the first step taken, and that’s a great thing, but I’m the journey ahead that makes your heart sing.",
+    "You’ve got the spark, and that’s always a win, but I’m the inferno that’s burning within.",
+    "You bring the laughter, and I love the good cheer, but I’m the rhythm of joy that’s ringing so clear.",
+    "You’re the light in the tunnel, showing the way, but I’m the train rolling through, here to stay.",
+    "You’ve got the vision, and I admire your sight, but I’m the reality, bringing dreams to light.",
+    "You’re the promise of spring, and that’s lovely to see, but I’m the summer sun, wild and free.",
+    "You’ve got the hustle, and I’m all for the grind, but I’m the breakthrough that’s one of a kind.",
+    "You’re the kind of friend who’s always so real, but I’m the vibe in the room that everyone can feel.",
+    "You bring the warmth, and that’s hard to dismiss, but I’m the whole experience that you don’t want to miss.",
+    "You’re the dream in the making, and that’s a great start, but I’m the masterpiece, the work of fine art.",
+    "You’ve got the rhythm, and that’s really nice, but I’m the beat that’s bringing life to your life.",
+    "You’re the spark of the future, and that’s something to cheer, but I’m the rocket ship that’s taking you here.",
+    "You bring the positivity, and that’s always a win, but I’m the crescendo that’s pulling you in.",
+    "You’ve got the potential, and that’s hard to ignore, but I’m the execution, delivering more.",
+    "You’re the idea that’s fresh, and that’s quite grand, but I’m the full execution, the master plan.",
+    "You’ve got the heart, and I respect your drive, but I’m the catalyst, helping you thrive.",
+    "You’re the whisper of change, and that’s really profound, but I’m the roar of progress, shaking the ground.",
+    "You’ve got your dreams, and that’s something I see, but I’m the boost you need to set you free.",
+    "You’re the question in the air, and that’s quite fair, but I’m the answer that’s waiting to share.",
+    "You bring the charm, and that’s hard to contest, but I’m the entire package, the one who’s blessed.",
+    "You’re the light on the path, and I appreciate the shine, but I’m the destination, where stars align.",
+    "You bring the beat, and that’s quite a start, but I’m the whole symphony, playing the heart.",
+    "You’re the spark of a dream, igniting the fire, but I’m the whole blaze that takes you higher.",
+    "You’ve got a voice that’s pleasant, and that’s truly a gift, but I’m the whole chorus that gives you a lift.",
+    "You bring the ideas, and I see them shine bright, but I’m the execution that brings them to light.",
+    "You’re the seed of potential, planted with care, but I’m the full garden, blooming everywhere.",
+    "You’ve got a vibe that’s warm, and that’s hard to ignore, but I’m the full experience that everyone adores.",
+    "You’re the first step forward, and I love your ambition, but I’m the journey ahead that’s my own rendition.",
+    "You bring the energy, and I appreciate the spark, but I’m the full explosion that lights up the dark.",
+    "You’ve got the passion, and that’s a beautiful sight, but I’m the whole canvas, bringing it to light.",
+    "You’re the inspiration, and that’s a powerful claim, but I’m the whole movement, driving the game.",
+    "You’ve got your dreams, and they’re lofty and grand, but I’m the reality that helps you to stand.",
+    "You bring the humor, and that’s always a treat, but I’m the punchline that can’t be beat.",
+    "You’re the rising star, and I see you shine bright, but I’m the universe, giving you light.",
+    "You’ve got your style, and I admire your flair, but I’m the whole wardrobe, beyond compare.",
+    "You’re the melody playing, sweet and sincere, but I’m the harmony that everyone hears.",
+    "You bring the sunshine, warming the day, but I’m the sunset that colors the way.",
+    "You’ve got the rhythm, and that’s a sweet tune, but I’m the whole orchestra playing under the moon.",
+    "You’re the light in the room, brightening the place, but I’m the whole vibe, creating the space.",
+    "You bring the laughter, and I appreciate the fun, but I’m the whole party, second to none.",
+    "You’ve got the spark, and that’s a beautiful thing, but I’m the full ignition that makes hearts sing.",
+    "You’re the whisper of hope, and that’s a noble act, but I’m the loud cheer, keeping the pact.",
+    "You bring the flair, and that’s always divine, but I’m the full experience that’s simply sublime.",
+    "You’ve got the hustle, and I respect your grind, but I’m the diamond that’s hard to find.",
+    "You’re the canvas of dreams, and that’s a great feat, but I’m the masterpiece that can’t be beat.",
+    "You bring the inspiration, and that’s a lovely sight, but I’m the full journey that ignites the night.",
+    "You’re the vision in the dark, guiding the way, but I’m the whole light that brightens the day.",
+    "You’ve got the passion, and that’s hard to ignore, but I’m the full fire that’s opening doors.",
+    "You’re the fresh breath of air, and that’s truly rare, but I’m the whole atmosphere that we all share.",
+    "You bring the style, and that’s something to flaunt, but I’m the whole fashion that others will want.",
+    "You’ve got the talent, and I see it’s true, but I’m the full package that’s coming for you.",
+    "You’re the wish upon a star, shining so bright, but I’m the whole universe that gives you flight.",
+    "You’ve got the spirit, and that’s a wonderful vibe, but I’m the whole energy that can’t be denied.",
+    "You’re the start of the story, a tale yet to tell, but I’m the whole book that’s ringing the bell.",
+    "You bring the warmth, and that’s something I crave, but I’m the whole ocean, strong and brave.",
+    "You’ve got the heart, and that’s a beautiful place, but I’m the whole journey that sets the pace.",
+    "You’re the star of the show, and that’s hard to dispute, but I’m the entire production that can’t be refute.",
+    "You bring the light, and I appreciate the shine, but I’m the whole spectrum, intertwining with time.",
+    "You’ve got the spark, and that’s always a thrill, but I’m the full explosion that gives you the chill.",
+    "You’re the burst of laughter, brightening the room, but I’m the whole celebration, making it bloom.",
+    "You’ve got your rhythm, and it’s truly a dance, but I’m the full beat that gives it a chance.",
+    "You’re the dawn of a new day, full of hope and cheer, but I’m the full spectrum that makes it all clear.",
+    "You bring the dreams, and that’s truly profound, but I’m the full reality that’s spinning around.",
+    "You’re the reason for smiles, and that’s something to treasure, but I’m the whole happiness, beyond all measure.",
+    "You’ve got the spark of joy, and that’s hard to ignore, but I’m the whole universe, opening doors.",
+    "You’re the start of the journey, and that’s where it’s at, but I’m the entire adventure, let’s have a chat.",
+    "You bring the sweetness, like honey on toast, but I’m the full meal that you’ll want the most.",
+    "You’re the glimmer of hope in a world full of gray, but I’m the rainbow that colors the way.",
+    "You’ve got the vision, and that’s a true delight, but I’m the reality that makes it all right.",
+    "You’re the melody, and that’s a beautiful sound, but I’m the harmony that’s all around.",
+    "You bring the motivation, and that’s something to praise, but I’m the full journey that lights up the ways.",
+    "You’re the hope of the future, and that’s something to cheer, but I’m the whole picture, bringing it near.",
+    "You’ve got the drive, and I see it’s sincere, but I’m the full motion, bringing you near.",
+    "You’re the burst of creativity, and that’s always a gift, but I’m the full gallery, giving you a lift.",
+    "You bring the charm, and that’s hard to resist, but I’m the whole package that you can’t dismiss.",
+    "You’re the wave of the future, and that’s always grand, but I’m the whole ocean, with a steady hand.",
+    "You’ve got the heart, and I respect your fight, but I’m the whole force that brings the light.",
+    "You’ve got the style that turns heads and makes waves, but I’m the whole ocean, where adventure paves.",
+    "You’re the spark in the dark, lighting the way, but I’m the full sunrise that starts off the day.",
+    "You bring the rhythm, and I love your flow, but I’m the whole symphony that steals the show.",
+    "You’re the canvas of dreams, painted with flair, but I’m the masterpiece that hangs in the air.",
+    "You’ve got ambition, and that’s truly great, but I’m the full journey that opens the gate.",
+    "You’re the fire that ignites the passion within, but I’m the inferno that makes it all spin.",
+    "You bring the joy that lifts up the room, but I’m the full garden that makes flowers bloom.",
+    "You’re the whisper of hope that echoes so clear, but I’m the whole chorus that everyone hears.",
+    "You’ve got the talent, and I admire your art, but I’m the full gallery that plays the part.",
+    "You bring the laughter, and that’s a wonderful sound, but I’m the whole symphony that’s all around.",
+    "You’re the spark of innovation that lights up the night, but I’m the full revolution that takes flight.",
+    "You’ve got your dreams, and I can see them take form, but I’m the full storm that keeps you warm.",
+    "You’re the glimmer of hope in a world full of doubt, but I’m the whole beacon that’s shining out.",
+    "You bring the sunshine, and I love your rays, but I’m the whole sky, with endless displays.",
+    "You’re the melody of a song that everyone sings, but I’m the whole concert, with all of its strings.",
+    "You’ve got the flair that makes you stand out, but I’m the whole crowd that’s cheering about.",
+    "You’re the gift of laughter that brightens my day, but I’m the full comedy that’s here to stay.",
+    "You bring the spice that makes life interesting, but I’m the whole dish that keeps you guessing.",
+    "You’re the treasure that everyone seeks, but I’m the whole bounty that leaves them weak.",
+    "You’ve got the spark of genius, and that’s truly a treat, but I’m the whole system that brings the heat.",
+    "You’re the art of conversation, a true delight, but I’m the full dialogue that feels just right.",
+    "You bring the energy that makes us feel alive, but I’m the full momentum that helps us thrive.",
+    "You’re the hope in the distance, shining so bright, but I’m the whole journey that’s set for flight.",
+    "You’ve got the style that’s fresh and so bold, but I’m the whole vibe that never gets old.",
+    "You’re the melody that plays in my head, but I’m the whole symphony that’s widely spread.",
+    "You bring the happiness that’s hard to contain, but I’m the full joy that dances in rain.",
+    "You’re the charm that brightens the scene, but I’m the whole experience that’s fit for a queen.",
+    "You’ve got the drive that makes the world spin, but I’m the full machine that’s ready to win.",
+    "You’re the spark that ignites creativity’s flame, but I’m the whole fire that plays the game.",
+    "You bring the warmth that comforts the soul, but I’m the full embrace that makes you whole.",
+    "You’re the light in the tunnel, guiding the way, but I’m the whole journey that leads to the day.",
+    "You’ve got the strength that stands tall and proud, but I’m the whole army that draws in a crowd.",
+    "You’re the wish on a star, shimmering bright, but I’m the whole galaxy that brings the light.",
+    "You bring the focus that sharpens the mind, but I’m the full clarity that’s hard to find.",
+    "You’re the beacon of hope in a sea of despair, but I’m the whole lighthouse that’s always there.",
+    "You’ve got the beauty that catches the eye, but I’m the full spectrum that reaches the sky.",
+    "You’re the rhythm of life that keeps things in sync, but I’m the full melody that makes you think.",
+    "You bring the dreams that inspire the heart, but I’m the whole journey that sets you apart.",
+    "You’re the essence of grace, flowing like a stream, but I’m the full river, fulfilling the dream.",
+    "You’ve got the wit that makes the crowd cheer, but I’m the whole comedy that draws you near.",
+    "You’re the journey of life, and that’s always a thrill, but I’m the destination that’s hard to fulfill.",
+    "You bring the spark of laughter that lights up the room, but I’m the whole party that’s set to bloom.",
+    "You’re the hope that shines through the darkest of nights, but I’m the whole dawn that brings new sights.",
+    "You’ve got the flair that makes you unique, but I’m the whole vibe that everyone seeks.",
+    "You’re the heart of the team, keeping spirits alive, but I’m the full engine that helps us thrive.",
+    "You bring the passion that fuels the fire, but I’m the full blaze that lifts you higher.",
+    "You’re the force of nature, wild and free, but I’m the whole universe that’s meant to be.",
+    "You’ve got the vision that paints the world bright, but I’m the full canvas that brings it to light.",
+    "You’re the smile that brightens the day, but I’m the whole happiness that’s here to stay.",
+    "You bring the sweetness that’s hard to resist, but I’m the full flavor that you can’t miss.",
+    "You’re the sunshine that warms up the scene, but I’m the whole spectrum that’s ever so keen.",
+    "You’ve got the heart that’s so pure and true, but I’m the full love that’s waiting for you.",
+    "You’re the melody that plays in my heart, but I’m the full symphony, a work of art.",
+    "You bring the spark that ignites the flame, but I’m the whole wildfire that can’t be tamed.",
+    "You’re the laughter that fills the air with glee, but I’m the full joy that sets you free.",
+    "You’ve got the talent, and that’s truly rare, but I’m the full stage that’s ready to share.",
+    "You’re the glimmer of hope that lights up the night, but I’m the whole universe, shining so bright.",
+    "You bring the charm that makes life a dance, but I’m the full rhythm that gives you a chance.",
+    "You’re the energy that makes the world spin, but I’m the whole cosmos that’s ready to win.",
+    "You shine like a diamond in the rough, illuminating the path for those who feel lost, but I'm the whole treasure chest, filled with stories that never exhaust.",
+    "Your laughter is the sweetest melody, a true gift to everyone around, but I'm the symphony that plays on repeat, a masterpiece that's forever profound.",
+    "You’ve got the charm that captivates every room, effortlessly drawing people in with your light, but I’m the whole sun that brings warmth to the day and guides us through the night.",
+    "You’re the spark of creativity that ignites the flames of inspiration, but I’m the vast canvas that holds endless potential for every imagination.",
+    "Your kindness radiates like the morning sun, touching hearts with every smile you share, but I’m the whole sunrise that paints the sky in colors beyond compare.",
+    "You have the strength of a lion, fearless and bold, standing tall when challenges arise, but I’m the whole pride that supports you, ready to lift you to the skies.",
+    "You bring joy to the world with your vibrant energy and contagious zest, but I’m the full festival that celebrates life, a jubilant experience that’s truly blessed.",
+    "You’re the heartbeat of the group, keeping spirits alive with every word, but I’m the entire orchestra that harmonizes, making music that’s beautifully heard.",
+    "Your smile lights up the darkest days, a beacon of hope in times of strife, but I’m the full rainbow that follows the storm, a reminder of beauty in life.",
+    "You’re the kind of person who turns challenges into opportunities, making every moment a chance to grow, but I’m the whole garden that blooms in spring, showcasing the beauty that we sow.",
+    "Your passion is the fire that fuels the dreams we hold dear, inspiring everyone to reach for the stars, but I’m the entire universe that embraces those dreams, filling the sky with our shining avatars.",
+    "You’ve got the wisdom that guides like a lighthouse, keeping us safe through every storm, but I’m the whole sea of knowledge, a vast expanse where ideas are born.",
+    "You’re the laughter that dances on the breeze, making the world feel light and free, but I’m the full celebration of life that brings everyone together in harmony.",
+    "Your positivity is a breath of fresh air, uplifting spirits wherever you go, but I’m the whole environment that nurtures growth, creating the space for our dreams to flow.",
+    "You bring the energy that electrifies every gathering, setting the mood with your vibrant flair, but I’m the entire party that keeps the good times rolling, ensuring fun is always in the air.",
+    "You’ve got the heart of a champion, fighting for what’s right and just, but I’m the whole movement that stands united, together, we build a world we can trust.",
+    "Your creativity paints the world in hues of wonder, adding beauty to the ordinary, but I’m the full spectrum of colors that brightens every day, making life extraordinary.",
+    "You’re the inspiration that motivates us to chase our dreams, lighting the way with your unwavering will, but I’m the entire journey we embark on together, where every challenge becomes a thrill.",
+    "You bring the sweetness that fills the air like cotton candy at a fair, but I’m the whole carnival that celebrates life, where every moment is a reason to care.",
+    "You’ve got the determination that never backs down, pushing through every hurdle in sight, but I’m the full support system that lifts you up, reminding you that you’ll always win the fight.",
+    "Your humor is the sparkle that brightens up the room, turning frowns into smiles with ease, but I’m the whole comedy show that brings laughter to life, putting everyone’s worries at ease.",
+    "You’re the gentle breeze that calms the storm, soothing hearts with your grace, but I’m the entire landscape that welcomes you in, embracing every part of this beautiful space.",
+    "You’ve got the spark that ignites passion in others, lighting a fire in every heart, but I’m the whole inferno that fuels the dreams we share, a powerful force that sets us apart.",
+    "Your optimism is the ray of sunshine that breaks through the clouds, bringing warmth to those in need, but I’m the full garden that blossoms with hope, nurturing every beautiful seed.",
+    "You’re the rhythm that keeps the dance alive, moving gracefully through every beat, but I’m the entire choreography that tells a story, making every step feel like a treat.",
+    "You’ve got the charisma that draws people in, making friendships bloom wherever you roam, but I’m the whole community that supports and uplifts, creating a sense of belonging we can call home.",
+    "Your intelligence is a light that guides us through the darkest nights, offering clarity and insight, but I’m the full library of knowledge that holds the wisdom to illuminate our sights.",
+    "You bring the sweetness that makes life a treat, like a cherry on top of a sundae, but I’m the entire dessert buffet that offers a feast, where every flavor has something to say.",
+    "You’re the warmth that envelops us like a cozy blanket, making us feel safe and sound, but I’m the whole winter wonderland that sparkles with joy, a magical place where love can be found.",
+    "You’ve got the creativity that brings ideas to life, turning dreams into tangible things, but I’m the whole workshop where visions are made, a place where inspiration forever sings.",
+    "Your laughter is the melody that resonates in our hearts, echoing joy wherever you go, but I’m the full orchestra that plays in harmony, creating a symphony of love in every show.",
+    "You bring the sunshine that brightens every day, a beacon of light that guides the way, but I’m the entire sky that holds infinite possibilities, where dreams take flight and never sway.",
+    "You’ve got the vision that sees beyond the horizon, uncovering potential in every soul, but I’m the whole world that embraces each journey, where together we strive to reach our goal.",
+    "Your kindness is a balm that heals the wounded, restoring faith in humanity’s grace, but I’m the full embrace of community that lifts us all, creating a safer and warmer space.",
+    "You’re the adventure that brings excitement to life, leading us on journeys that inspire, but I’m the whole expedition that discovers new horizons, igniting the flames of our desire.",
+    "You’ve got the tenacity that conquers every challenge, rising stronger with each setback faced, but I’m the entire path that supports your climb, celebrating every victory embraced.",
+    "Your creativity flows like a river, shaping the world with every idea you share, but I’m the whole ocean that holds endless possibilities, where our dreams become the treasures we dare."
+}
+
+local cooldowns = {}
+local sentMessages = {} -- Track sent messages and their timestamps
+
+-- Initialize cooldown tracker
+for i = 1, #phrases do
+    cooldowns[i] = 0
+end
+
+-- Variables to control chat loop and timing
+local isChatting = false
+local lastChatTime = 0
+local chatInterval = 10
+
+-- Function to select a random phrase
+local function getRandomPhrase()
+    local availablePhrases = {}
+    local currentTime = tick()
+
+    for i, phrase in ipairs(phrases) do
+        if currentTime - cooldowns[i] >= 600 then
+            if not sentMessages[phrase] or currentTime - sentMessages[phrase] >= 600 then
+                table.insert(availablePhrases, {index = i, text = phrase})
+            end
+        end
+    end
+
+    if #availablePhrases == 0 then return nil end
+
+    local selected = availablePhrases[math.random(1, #availablePhrases)]
+    cooldowns[selected.index] = currentTime
+    sentMessages[selected.text] = currentTime
+    return selected.text
+end
+
+-- Button Functions
+onButton.MouseButton1Click:Connect(function()
+    statusLabel.Text = "Status: On"
+    statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+    if not isChatting then
+        isChatting = true
+        while isChatting do
+            local currentTime = tick()
+            if currentTime - lastChatTime >= chatInterval then
+                local randomPhrase = getRandomPhrase()
+                if randomPhrase then
+                    game.ReplicatedStorage.DefaultChatSystemChatEvents.SayMessageRequest:FireServer(randomPhrase, "All")
+                    lastChatTime = currentTime
+                end
+            end
+            wait(0.1)
+        end
+    end
+end)
+
+offButton.MouseButton1Click:Connect(function()
+    statusLabel.Text = "Status: Off"
+    statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+    isChatting = false
+end)
+
+speakButton.MouseButton1Click:Connect(function()
+    local randomPhrase = getRandomPhrase()
+    if randomPhrase then
+        game.ReplicatedStorage.DefaultChatSystemChatEvents.SayMessageRequest:FireServer(randomPhrase, "All")
+    end
+end)
+
+copyButton.MouseButton1Click:Connect(function()
+    local randomPhrase = getRandomPhrase()
+    if randomPhrase then
+        setclipboard(randomPhrase) -- Copies the phrase to the clipboard
+    end
+end)
+
+destroyButton.MouseButton1Click:Connect(function()
+    screenGui:Destroy()
+end)
