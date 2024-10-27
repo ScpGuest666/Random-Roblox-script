@@ -910,8 +910,8 @@ local function getRandomPhrase()
     local currentTime = tick()
 
     for i, phrase in ipairs(phrases) do
-        if currentTime - cooldowns[i] >= 1800 then
-            if not sentMessages[phrase] or currentTime - sentMessages[phrase] >= 1800 then
+        if currentTime - cooldowns[i] >= 3600 then
+            if not sentMessages[phrase] or currentTime - sentMessages[phrase] >= 3600 then
                 table.insert(availablePhrases, {index = i, text = phrase})
             end
         end
