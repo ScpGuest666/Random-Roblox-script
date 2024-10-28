@@ -7,12 +7,12 @@ screenGui.ResetOnSpawn = false
 local frame = Instance.new("Frame")
 frame.Parent = screenGui
 frame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-frame.Size = UDim2.new(0, 200, 0, 250)
-frame.Position = UDim2.new(0.5, -100, 0.5, -125)
+frame.Size = UDim2.new(0, 200, 0, 280)
+frame.Position = UDim2.new(0.5, -100, 0.5, -140)
 frame.Active = true
 frame.Draggable = true
 
--- Create Speak Button
+-- Create Buttons
 local speakButton = Instance.new("TextButton")
 speakButton.Parent = frame
 speakButton.BackgroundColor3 = Color3.fromRGB(0, 0, 255)
@@ -21,7 +21,6 @@ speakButton.Position = UDim2.new(0, 20, 0, 20)
 speakButton.Text = "Speak"
 speakButton.TextScaled = true
 
--- Create Copy Button
 local copyButton = Instance.new("TextButton")
 copyButton.Parent = frame
 copyButton.BackgroundColor3 = Color3.fromRGB(255, 255, 0)
@@ -30,7 +29,6 @@ copyButton.Position = UDim2.new(0, 120, 0, 20)
 copyButton.Text = "Copy"
 copyButton.TextScaled = true
 
--- Create "Be Nice" Button
 local beNiceButton = Instance.new("TextButton")
 beNiceButton.Parent = frame
 beNiceButton.BackgroundColor3 = Color3.fromRGB(255, 165, 0)
@@ -39,7 +37,6 @@ beNiceButton.Position = UDim2.new(0, 20, 0, 60)
 beNiceButton.Text = "Be Nice"
 beNiceButton.TextScaled = true
 
--- Create "Mom" Button
 local momButton = Instance.new("TextButton")
 momButton.Parent = frame
 momButton.BackgroundColor3 = Color3.fromRGB(255, 182, 193)
@@ -48,7 +45,6 @@ momButton.Position = UDim2.new(0, 120, 0, 60)
 momButton.Text = "Mom"
 momButton.TextScaled = true
 
--- Create "Dad" Button
 local dadButton = Instance.new("TextButton")
 dadButton.Parent = frame
 dadButton.BackgroundColor3 = Color3.fromRGB(135, 206, 250)
@@ -57,7 +53,6 @@ dadButton.Position = UDim2.new(0, 20, 0, 100)
 dadButton.Text = "Dad"
 dadButton.TextScaled = true
 
--- Create "Silent" Button
 local silentButton = Instance.new("TextButton")
 silentButton.Parent = frame
 silentButton.BackgroundColor3 = Color3.fromRGB(211, 211, 211)
@@ -66,7 +61,6 @@ silentButton.Position = UDim2.new(0, 120, 0, 100)
 silentButton.Text = "Silent"
 silentButton.TextScaled = true
 
--- Create "Copy and Paste" Button
 local copyPasteButton = Instance.new("TextButton")
 copyPasteButton.Parent = frame
 copyPasteButton.BackgroundColor3 = Color3.fromRGB(173, 216, 230)
@@ -75,12 +69,19 @@ copyPasteButton.Position = UDim2.new(0, 20, 0, 140)
 copyPasteButton.Text = "Copy&Paste"
 copyPasteButton.TextScaled = true
 
--- Create Destroy Button
+local languageBarrierButton = Instance.new("TextButton")
+languageBarrierButton.Parent = frame
+languageBarrierButton.BackgroundColor3 = Color3.fromRGB(240, 128, 128)
+languageBarrierButton.Size = UDim2.new(0, 160, 0, 30)
+languageBarrierButton.Position = UDim2.new(0, 20, 0, 180)
+languageBarrierButton.Text = "Language Barrier"
+languageBarrierButton.TextScaled = true
+
 local destroyButton = Instance.new("TextButton")
 destroyButton.Parent = frame
 destroyButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-destroyButton.Size = UDim2.new(0, 60, 0, 30)
-destroyButton.Position = UDim2.new(0, 120, 0, 140)
+destroyButton.Size = UDim2.new(0, 160, 0, 30)
+destroyButton.Position = UDim2.new(0, 20, 0, 220)
 destroyButton.Text = "Destroy"
 destroyButton.TextScaled = true
 
@@ -3180,6 +3181,437 @@ local copyPastePhrases = {
     "No repeats in sight, just my own game; custom-made flow, bringing the flame!",
     "Every word crafted, with care I say; pure freestyle only, paving the way!"
 }
+local languageBarrierPhrases = {
+    "You might not understand, but I’m still the best; my rhymes are a puzzle, put them to the test!",
+    "Language barrier? I’m breaking through; my flow’s universal, just for you!",
+    "You speak another tongue? That’s cool with me; my rhymes are a bridge, come and see!",
+    "Different language, same vibe; my verses are a party, let’s subscribe!",
+    "You might not catch every word I say; but my rhythm’s contagious, come and play!",
+    "You think you can win with a different beat? My flow’s worldwide, can’t be beat!",
+    "Your language’s unique, but here’s a clue: my rhymes are magic, just for you!",
+    "You speak another dialect? That’s all right; my bars are the stars, shining bright!",
+    "I may not know your words, but feel my flow; it’s like a dance, let’s go, let’s go!",
+    "Different language, but we’re on the same stage; my rhymes are a story, turn the page!",
+    "You think your words will take me down? My rhymes are a wave, sweeping the town!",
+    "You might not speak English, but I got your back; my flow’s like a train, on the right track!",
+    "You may not know my style, but feel the beat; my rhythm’s contagious, can’t be beat!",
+    "I see you’re different, and that’s okay; my lines are a party, let’s join the fray!",
+    "You speak a new language? I’m still in the game; my verses are flames, igniting the same!",
+    "You think you can silence my lyrical spree? My words are a journey, come ride with me!",
+    "Your words might be foreign, but I’m still here; my rhymes are the magic, bringing the cheer!",
+    "You might not get every word I rhyme; but my flow’s a treasure, timeless like time!",
+    "Different languages, but we share the same dream; my rhymes are a river, flowing like a stream!",
+    "You may not know the lingo, but I’ll make it clear; my verses are a party, bringing the cheer!",
+    "You think your silence can stop my groove? My rhythm’s infectious, come on, move!",
+    "Your language’s unique, but my flow’s for all; let’s bridge the gap and have a ball!",
+    "I see you’re quiet, but I’m still alive; my rhymes are a treasure, ready to thrive!",
+    "Different words, same fire; my flow’s a rocket, reaching higher!",
+    "You might not understand, but feel my beat; my verses are sweet, can’t be beat!",
+    "You think your words will bring me down? I’m here to shine, wearing the crown!",
+    "Your language’s cool, but my flow’s supreme; together we can build a dream team!",
+    "You may not speak my tongue, but watch me shine; my rhymes are a journey, yours and mine!",
+    "You think you can win with a different style? My rhymes are a smile, come stay a while!",
+    "Different dialects, but we’re in sync; my flow’s a party, what do you think?",
+    "You might not get my words, but feel the vibe; my rhymes are alive, let’s take a ride!",
+    "You speak another language? That’s no issue; my flow’s a connection, just for you!",
+    "I may not know your slang, but here’s the score; my bars are a treasure, come explore!",
+    "You think your silence can hold me down? My rhymes are a wave, sweeping the town!",
+    "Your words might be foreign, but feel the beat; my rhythm’s a journey, come take a seat!",
+    "Different tongues, but we’re on the same track; my flow’s a river, never looking back!",
+    "You might not speak English, but that’s just fine; my rhymes are a melody, come join the line!",
+    "You think your language can stop my flow? I’m here to shine, let’s steal the show!",
+    "Your style is unique, but I’m still here; my rhymes are the magic, bringing the cheer!",
+    "You went silent? Nah, I won’t stop; my flow’s a mountain, rising to the top!",
+    "You may not know my words, but feel the beat; my rhythm’s infectious, can’t be beat!",
+    "Different languages, but we share the same heart; my flow’s a masterpiece, let’s make art!",
+    "You think your silence can dim my shine? I’m here to flow, watch me climb!",
+    "You might not know my style, but feel my vibe; my rhymes are electric, come take a ride!",
+    "Your words may be different, but my beat is strong; together we can groove, come along!",
+    "You think you can win by going mute? My rhymes are a treasure, let’s execute!",
+    "You speak another language? That’s alright; my flow’s like a star, shining bright!",
+    "I may not know your slang, but I’m still the best; my rhymes are a puzzle, put them to the test!",
+    "You think your silence can hold me back? My words are a journey, never off track!",
+    "Different tongues, but we’re here to play; my flow’s a party, come join the fray!",
+    "You might not get my words, but feel the heat; my rhymes are a wave, can’t be beat!",
+    "Your language’s unique, but my flow’s for all; let’s bridge the gap and have a ball!",
+    "You think you can win with a different beat? My verses are electric, feel the heat!",
+    "You may not speak my language, but I got your back; my rhymes are a journey, ready to track!",
+    "You think you can silence my lyrical spree? My words are a bridge, come ride with me!",
+    "Different languages, but we share the same dream; my flow’s a treasure, flowing like a stream!",
+    "You might not understand, but feel the groove; my verses are magic, let’s make a move!",
+    "You went silent? I’m still alive; my rhymes are a treasure, ready to thrive!",
+    "You think your words will bring me down? I’m here to shine, wearing the crown!",
+    "Your language’s cool, but my flow’s supreme; together we can build a dream team!",
+    "You may not know my words, but feel the vibe; my rhymes are alive, let’s take a ride!",
+    "Language barrier? Let’s break it down; together we’ll rise, wear the crown!",
+    "You speak a different tongue, but we can still rhyme; let's find our flow and have a good time!",
+    "Your words may be foreign, but feel this beat; let’s vibe together, can’t be beat!",
+    "Lost in translation? Let’s dance and play; our rhythm’s a language that’s here to stay!",
+    "Different dialects, but the same heart; let’s join our voices and make some art!",
+    "You throw your words, I’ll catch them tight; let’s mix our styles and shine bright!",
+    "Your silence speaks, let’s fill the space; together we’ll create a beautiful place!",
+    "Words may differ, but our spirits align; let’s unite through music, it’ll be fine!",
+    "With every beat, we’ll build a bridge; let’s join our talents, there’s no ridge!",
+    "You bring your language, I’ll bring my flow; together we’ll rap, let the good vibes grow!",
+    "Language can’t stop us, we’re on a roll; let’s express ourselves, heart and soul!",
+    "Your voice is unique, let’s make it loud; together we’ll shine and make us proud!",
+    "I see the challenge, but we can connect; let’s turn this moment into respect!",
+    "Words may clash, but our hearts beat as one; in this rap battle, we’ll have our fun!",
+    "Different sounds, but the rhythm stays true; let’s create magic, just me and you!",
+    "Your culture’s rich, let’s share a laugh; in this rap battle, we’ll find our path!",
+    "We may be lost, but we’re not alone; let’s build a friendship through this tone!",
+    "Rhyme in my language, I’ll feel yours too; let’s break the walls and make it through!",
+    "We’ll blend our styles like a work of art; through rhythm and rhyme, we’ll never part!",
+    "Your tongue may twist, but my beat is clear; let’s vibe together, there’s nothing to fear!",
+    "With every bar, we’ll cross the divide; together in this, we’ll take it in stride!",
+    "Language can’t bind what the heart understands; let’s keep it real, we’re making new plans!",
+    "From different lands, but our dreams are the same; in this rap game, we’re both in the frame!",
+    "Together we’ll conquer, side by side; breaking down barriers, let’s take a ride!",
+    "Throw me your words, I’ll catch them with flair; in this rap battle, we’re a perfect pair!",
+    "We may not speak the same, but we share this vibe; let’s show the world how we can thrive!",
+    "Language barriers? Nah, let’s elevate; together we’ll shine, it’s never too late!",
+    "You and I are different, but that’s our power; let’s climb together, reach the highest tower!",
+    "Your style’s unique, let it shine bright; in this rap battle, we’re taking flight!",
+    "Communication flows through rhythm and rhyme; together we’ll conquer, it’s our time!",
+    "You speak your truth, I’ll speak mine too; let’s mix our voices and break through!",
+    "Our words might clash, but our hearts are the same; let’s join forces and play this game!",
+    "Different backgrounds, but we’ll find a way; through rap and rhythm, we’ll seize the day!",
+    "No need for words when the beat is right; together we’ll dance, shining so bright!",
+    "In this rap battle, we’ll rewrite the rules; bridging our cultures, we’re no fools!",
+    "You’ve got the beat, I’ve got the flow; together we’ll create, let’s put on a show!",
+    "Language can’t stop what we feel inside; together in this, we’ll take it in stride!",
+    "Through laughter and rhythm, we’ll break the ice; in this rap game, let’s roll the dice!",
+    "Your words are your power, let them fly; together we’ll reach for the sky!",
+    "Different voices, but our dreams align; in this rap battle, we’re here to shine!",
+    "You throw your rhymes, I’ll catch them with grace; together we’ll conquer this lyrical space!",
+    "From different worlds, but we’ll find a way; in this rap battle, let’s seize the day!",
+    "Our voices unite, it’s a beautiful sound; in this rap game, we’re both spellbound!",
+    "Let’s celebrate our differences, that’s the key; together we’ll make this a melody!",
+    "Your style’s refreshing, let’s mix it with mine; in this rap battle, we’ll both shine!",
+    "With every line, we’ll create a new beat; language can’t stop us, let’s bring the heat!",
+    "Through rhythm and flow, we’ll break every wall; together in this, we’re standing tall!",
+    "Your culture is rich, let’s celebrate that; in this rap battle, we’ll make a pact!",
+    "We might be different, but that’s what makes us great; in this rap game, let’s create our fate!",
+    "Together we’ll laugh, let’s bring the fun; breaking down barriers, we’re never done!",
+    "Your words are your power, let them be heard; in this rap battle, let’s spread the word!",
+    "Through rhythm and rhyme, we’ll find common ground; in this rap game, we’re glory-bound!",
+    "With every beat, let’s dance through the night; language can’t stop us, we’ll take flight!",
+    "You bring your passion, I’ll bring my spark; in this rap battle, we’ll make our mark!",
+    "Different tongues, but we’ll find our groove; together in this, we’ve got nothing to lose!",
+    "Let’s weave our stories into this beat; language barriers won’t hold back our heat!",
+    "You speak your truth, I’ll do the same; in this rap battle, we’re playing this game!",
+    "Together we’ll rise, hand in hand; breaking down barriers, we’ll take a stand!",
+    "With every line, we’ll create something new; in this rap battle, it’s me and you!",
+    "Let’s turn this challenge into a dance; language can’t stop us; let’s take a chance!",
+    "Our voices may differ, but our hearts are the same; in this rap battle, let’s change the game!",
+    "Together we’ll flow, like a river so wide; language barriers fall when we take pride!",
+    "Your words paint a picture, let’s share our view; in this rap battle, we’ll see it through!",
+    "Let’s mix our styles, create something divine; through rhythm and rhyme, we’ll both shine!",
+    "Different paths, but we’re on the same road; in this rap battle, let’s lighten the load!",
+    "Your culture’s a treasure, let’s show it off; in this rap battle, we’ll never scoff!",
+    "Together we’ll laugh, together we’ll play; language can’t stop us, let’s seize the day!",
+    "Through rhythm and rhyme, we’ll break every chain; in this rap battle, we’ll dance in the rain!",
+    "You and I together, a powerful force; in this rap game, we’ll stay the course!",
+    "Different sounds, but the same heart beats; in this rap battle, we’ll create sweet feats!",
+    "Let’s bridge the gap, let’s find common ground; together in this, we’re glory-bound!",
+    "You speak in riddles, I’ll decode the rhyme; together we’ll flow, it’s our time to shine!",
+    "Different words, but the vibe feels right; let’s light up the stage, it’s a magical night!",
+    "I hear your voice, let’s sync our beats; language won’t stop us, we’re bringing the heat!",
+    "Together we’ll climb, breaking all the walls; through music and rhythm, we’ll answer the calls!",
+    "No need for translation when we feel the groove; let’s rap together and make our moves!",
+    "You throw your bars, I’ll catch them in stride; in this rap battle, we’re both on the ride!",
+    "Words may vary, but the heart stays true; in this lyrical dance, I’ll follow you!",
+    "Different languages, but we speak the same sound; in this rap battle, let’s turn it around!",
+    "With every line, we’ll bridge the divide; through rhythm and rhyme, we’ll take it in stride!",
+    "Our cultures collide, but that’s what makes art; let’s mix our styles and create from the heart!",
+    "From your lips to my ears, let’s share this vibe; in this rap game, we’re ready to thrive!",
+    "You’ve got the rhythm, I’ll bring the flow; together we’ll create a beautiful show!",
+    "We might not understand, but we feel the beat; in this rap battle, we can’t be beat!",
+    "Different tongues, but we share the same dream; let’s unite through music, that’s the theme!",
+    "Your sound is unique, let’s blend it with mine; in this rap battle, we’ll create a design!",
+    "Through laughter and rhythm, we’ll break the chain; language can’t stop us; we’ll dance in the rain!",
+    "Together we’ll rise, let our voices be free; breaking down barriers, just you and me!",
+    "With every bar, we’ll shatter the fear; in this rap battle, let’s make it clear!",
+    "Your language is magic, let’s weave it in rhyme; together we’ll shine, it’s our time!",
+    "We’re two different worlds, but let’s find a way; through rap and rhythm, let’s seize the day!",
+    "No need for words when the beat is alive; in this rap battle, we’ll learn and thrive!",
+    "You’ve got the spirit, I’ve got the soul; together in this, we’ll reach our goal!",
+    "Language can’t bind what we feel inside; let’s celebrate our art, let’s take pride!",
+    "Your words are your strength, let them fly high; in this rap battle, we’ll reach for the sky!",
+    "With every beat, we’ll tell our own tale; language barriers fade when we set sail!",
+    "You bring your style, I’ll add my flair; together we’ll rap, show the world we care!",
+    "Different backgrounds, but we’re here to unite; in this rap battle, we’ll shine so bright!",
+    "Let’s find our rhythm, let’s dance and play; together in this, we’ll light up the way!",
+    "Through every challenge, we’ll find a new beat; in this rap game, we can’t be beat!",
+    "Your words might twist, but I’ll catch your flow; together we’ll rap, let the good vibes grow!",
+    "We’re breaking the silence, let’s turn up the heat; in this rap battle, we’ll never admit defeat!",
+    "Your culture is rich, let’s share it today; in this rap battle, we’re paving the way!",
+    "Together we’ll laugh, together we’ll rhyme; in this lyrical dance, it’s our time!",
+    "You throw your lines, I’ll catch them with grace; in this rap battle, let’s create our space!",
+    "Language can’t stop us, we’re here to create; together we’ll shine, let’s celebrate!",
+    "With every bar, we’ll build a new bridge; through rhythm and rhyme, let’s take the ridge!",
+    "Your voice is a treasure, let’s make it loud; in this rap battle, we’ll make our crowd proud!",
+    "Different languages, but we share a beat; together in this, we’ll never face defeat!",
+    "We’re weaving our stories into every line; in this rap battle, our stars will align!",
+    "Let’s turn this challenge into something divine; together we’ll rap, it’s our time to shine!",
+    "Your words are your power, let them be free; in this rap battle, let’s just be me!",
+    "Different sounds, but we’re feeling the groove; together in this, we’ve got nothing to lose!",
+    "Language can’t bind what our hearts can sing; in this rap battle, we’ll spread our wings!",
+    "We may speak different, but we’re on the same beat; in this lyrical dance, we can’t be beat!",
+    "Together we’ll rise, let our spirits soar; breaking down barriers, we’re ready for more!",
+    "You’ve got the rhythm, I’ll bring the rhyme; in this rap battle, we’re on the climb!",
+    "With every line, we’ll find common ground; in this rap game, let’s wear our crown!",
+    "Let’s celebrate our differences, that’s what we’ll do; in this rap battle, I’m here for you!",
+    "Your culture is vibrant, let’s mix it with mine; together we’ll shine, our stars will align!",
+    "Through rhythm and rhyme, we’ll create a new sound; language barriers won’t hold us down!",
+    "You speak your truth, I’ll share my song; in this rap battle, we all belong!",
+    "With every beat, we’ll dance in the light; together we’ll shine, it feels so right!",
+    "Your voice is unique, let it echo loud; in this rap battle, we’ll make the crowd proud!",
+    "We might be different, but our hearts are the same; in this rap game, we’ll play the game!",
+    "Together we’ll laugh, let’s bring on the fun; breaking down barriers, we’ve already won!",
+    "Through rhythm and rhyme, we’ll break the ice; in this rap battle, let’s roll the dice!",
+    "You and I together, a powerful team; through music and laughter, we’ll chase our dream!",
+    "Let’s mix our styles, let’s create something new; in this rap battle, it’s just me and you!",
+    "Different paths, but we’re on the same road; in this rap battle, let’s lighten the load!",
+    "In this battle of words, let’s share our vibe; no language can stop what we can describe!",
+    "Different sounds, but we’re in sync tonight; together we’ll shine, our futures are bright!",
+    "With every bar, we’re breaking the mold; in this rap game, our stories unfold!",
+    "You’ve got the rhythm, I’ll find the beat; together we’ll create something so sweet!",
+    "Language won’t bind our hearts so free; in this rap battle, it’s just you and me!",
+    "Your voice is a melody, let’s make it sing; together we’ll conquer, let the joy ring!",
+    "We’ll mix our styles and create a new song; in this rap battle, we can’t go wrong!",
+    "Through laughter and rhymes, we’ll bridge the divide; together we’ll dance, side by side!",
+    "No matter the words, our hearts can unite; in this rap battle, we’re taking flight!",
+    "With every line, we’ll paint a new scene; breaking down barriers, living the dream!",
+    "You share your culture, I’ll bring my own flair; in this rap battle, we’re a perfect pair!",
+    "Different languages, but we share a soul; through rhythm and rhyme, we’ll reach our goal!",
+    "You bring the heat, I’ll add my style; in this rap battle, let’s go the extra mile!",
+    "Let’s embrace our roots, let’s dance and play; in this lyrical journey, we’ll find our way!",
+    "We’re speaking in beats, no need for a guide; in this rap game, let’s enjoy the ride!",
+    "Your words are a treasure, let’s share them today; together we’ll shine in a brand-new way!",
+    "Through every challenge, we’ll find a new beat; in this rap battle, we can’t face defeat!",
+    "Let’s celebrate our differences, they make us strong; in this rap battle, let’s all sing along!",
+    "With every line, we’ll lift each other high; together we’ll soar, touching the sky!",
+    "We’ll break the silence, let our voices be loud; in this rap battle, we’ll make our crowd proud!",
+    "You’ve got your style, I’ll bring my flow; together we’ll create, let the magic grow!",
+    "In this lyrical dance, we’ll find common ground; language can’t stop us; we’re homeward bound!",
+    "Let’s share our stories, let them intertwine; in this rap battle, our spirits will shine!",
+    "You bring your flavor, I’ll add my twist; together in this, we’ll make a hit!",
+    "With every beat, we’ll learn and connect; in this rap battle, let’s show respect!",
+    "Different words, but the message is clear; together we’ll rise, we’ve got no fear!",
+    "You’ve got the rhythm, I’ll find the groove; in this rap battle, we’re ready to move!",
+    "Through every struggle, we’ll find a new rhyme; in this rap game, we’ll stand the test of time!",
+    "Let’s unite through music, it’s a universal bond; in this rap battle, we’ll carry on!",
+    "We’re here together, let’s make some noise; through laughter and joy, we’ll find our voice!",
+    "Your words are a canvas, let’s paint it bright; in this rap battle, we’ll ignite the night!",
+    "No need for words when the rhythm is right; together we’ll shine in the spotlight!",
+    "We’ll break down the walls, let’s open the door; in this rap game, we’ll always explore!",
+    "Together we’ll learn, together we’ll grow; in this rap battle, we’ll steal the show!",
+    "You’ve got the spark, I’ll add the flame; in this rap battle, we’re playing the game!",
+    "Through every verse, we’ll find our way; in this rap battle, let’s seize the day!",
+    "Different tongues, but we feel the same beat; together we’ll rise, we can’t be beat!",
+    "With every bar, we’re creating our fate; in this rap battle, let’s celebrate!",
+    "Let’s mix our languages, let’s share our dreams; through rhythm and rhyme, we’ll find our themes!",
+    "You bring the fire, I’ll add the heat; in this rap battle, we can’t be beat!",
+    "Together we’ll soar, reaching new heights; in this lyrical journey, we’ll chase the lights!",
+    "You’ve got your flow, I’ll bring my beat; in this rap battle, we can’t be beat!",
+    "With every word, we’ll break the divide; through laughter and rhythm, we’ll stand side by side!",
+    "Different cultures, but we share the same heart; in this rap battle, we’re ready to start!",
+    "Your voice is your power, let it shine bright; in this rap battle, we’re taking flight!",
+    "Let’s dance to the rhythm, let’s create our sound; together we’ll rise, let’s stand our ground!",
+    "With every rhyme, we’ll light up the sky; in this rap battle, we’re ready to fly!",
+    "Different languages, but we share the same beat; together we’ll rap, can’t face defeat!",
+    "Through every struggle, we’ll rise and unite; in this rap battle, we’ll win the fight!",
+    "Let’s share our stories, let’s break down the wall; in this rap game, we’re here for all!",
+    "With every line, we’ll build something new; in this rap battle, it’s just me and you!",
+    "You’ve got the rhythm, I’ll find the rhyme; together we’ll shine, it’s our time!",
+    "Different paths, but we’re walking the same way; in this rap battle, let’s seize the day!",
+    "Let’s turn the page and write our own story; through rhythm and rhyme, we’ll find the glory!",
+    "With every beat, we’ll make magic today; in this rap battle, let’s find our way!",
+    "Your voice is unique, let it be heard; together we’ll conquer, let’s spread the word!",
+    "Different cultures, but we’re all the same; in this rap battle, let’s play the game!",
+    "We’ll find our rhythm, we’ll dance in the light; together we’ll shine, it feels so right!",
+    "Through laughter and music, we’ll break the chain; in this rap battle, we’ll dance in the rain!",
+    "No need for translations, we’ll vibe together; in this rap game, we’re light as a feather!",
+    "Your words are your power, let them ring loud; in this rap battle, we’ll make the crowd proud!",
+    "Let’s join our voices, let’s create a new song; in this rap battle, we’re where we belong!",
+    "Together we’ll rise, breaking the sound; in this rap battle, we’re glory-bound!",
+    "Different languages, but the vibe is clear; with every line, we’ll cheer and steer!",
+    "Your style’s electric, I feel the spark; in this rap battle, we’ll light up the dark!",
+    "No matter the words, our hearts can connect; through rhythm and rhyme, we’ll show respect!",
+    "Let’s break down barriers, let’s create a scene; in this rap game, we’re living the dream!",
+    "You bring your wisdom, I’ll share my flow; in this rap battle, together we grow!",
+    "With every rhyme, we’ll build a new bridge; overcoming challenges, we’ll never ridge!",
+    "Let’s embrace our cultures, let’s dance and sing; in this rap battle, joy is the king!",
+    "Different tones, but the beat feels right; together we’ll shine, we’ll ignite the night!",
+    "You’ve got your rhythm, I’ll add my twist; in this rap battle, we’ll make a hit!",
+    "With every bar, we’ll share our truth; through laughter and rhyme, we’ll inspire the youth!",
+    "Let’s mix our languages, let’s join the fight; in this rap battle, we’ll shine so bright!",
+    "No need for words when our spirits unite; together we’ll conquer, ready for flight!",
+    "Your culture’s a treasure, let’s make it shine; in this rap battle, our hearts intertwine!",
+    "We’ll share our stories, we’ll paint the night; together in this, we’ll find our light!",
+    "Through every struggle, we’ll dance and sway; in this rap battle, let’s seize the day!",
+    "You’ve got the heat, I’ll bring the chill; in this rap game, we’ll climb that hill!",
+    "With every line, we’ll break down the wall; in this rap battle, we’ll stand tall!",
+    "Let’s create a rhythm that’s ours to own; through every beat, we’ve beautifully grown!",
+    "Together we’ll rise, let our voices be heard; in this rap battle, we’re spreading the word!",
+    "Different cultures, but the goal is the same; in this rap battle, let’s play the game!",
+    "You’ve got the spark, I’ll add the flame; together we’ll dance, let’s ignite the name!",
+    "Through every verse, we’ll share our light; in this rap battle, we’ll win the night!",
+    "No matter the language, we feel the same beat; together we’ll flow, can’t face defeat!",
+    "Your vibe is contagious, let’s join our groove; in this rap battle, we’re ready to move!",
+    "Let’s build a bridge with our words so true; in this rap battle, it’s just me and you!",
+    "You bring the rhythm, I’ll find the rhyme; together we’ll shine, it’s our time!",
+    "Different styles, but we’re in sync tonight; in this rap battle, we’ll reach new heights!",
+    "With every line, we’ll elevate the game; together in this, we’ll earn our fame!",
+    "Your words are a treasure, let them ring loud; in this rap battle, we’ll make the crowd proud!",
+    "Let’s share our journeys, let’s learn from each other; in this rap battle, we’re like no other!",
+    "We’ll dance to the rhythm, let’s create our sound; in this rap battle, we’re breaking ground!",
+    "Together we’ll grow, reaching for the sky; in this rap battle, we’re soaring high!",
+    "With every beat, we’ll rise above hate; in this rap battle, we’re creating fate!",
+    "You’ve got the fire, I’ll bring the light; in this rap battle, let’s shine so bright!",
+    "Let’s join our voices, let’s create a new song; in this rap battle, we’re where we belong!",
+    "Through laughter and rhyme, we’ll bridge the divide; in this rap battle, we’re side by side!",
+    "Your story is unique, let’s share it today; together we’ll shine in a brand-new way!",
+    "With every word, we’ll light up the night; in this rap battle, everything feels right!",
+    "No language can stop what we can achieve; together we’ll thrive, let’s make them believe!",
+    "You bring the wisdom, I’ll share my flair; in this rap battle, we’re a perfect pair!",
+    "Through every challenge, we’ll find a new beat; in this rap battle, we’ll never face defeat!",
+    "Let’s dance to the rhythm, let’s celebrate life; in this rap battle, we’ll end the strife!",
+    "Different backgrounds, but we’re all the same; in this rap battle, we’ll play the game!",
+    "You’ve got your style, I’ll bring my flow; together we’ll create, let the magic grow!",
+    "With every rhyme, we’ll tell our tale; in this rap battle, we will prevail!",
+    "Together we’ll learn, together we’ll grow; in this rap battle, we’re stealing the show!",
+    "Different languages, but our hearts can connect; through rhythm and rhyme, we’ll show respect!",
+    "You bring your flavor, I’ll add my spice; in this rap battle, let’s roll the dice!",
+    "Let’s share our dreams, let’s break down the walls; in this rap battle, we’ll answer the calls!",
+    "With every line, we’ll find our groove; in this rap battle, let’s make our move!",
+    "No matter the language, our hearts beat as one; in this rap battle, we’ve already won!",
+    "We’ll find our rhythm, we’ll make it our own; together in this, we’ll never feel alone!",
+    "Through every struggle, we’ll rise and unite; in this rap battle, we’ll win the fight!",
+    "Let’s embrace our roots, let’s lift up our voices; in this rap battle, we’ll make our choices!",
+    "You’ve got the rhythm, I’ll find the beat; in this rap battle, we can’t be beat!",
+    "Together we’ll soar, reaching for the stars; in this rap battle, we’ll heal the scars!",
+    "Different sounds, but we’re in harmony; in this rap battle, it’s just you and me!",
+    "With every bar, we’ll show our might; in this rap battle, we’ll ignite the night!",
+    "No language can break this bond we share; in this rap battle, let’s show we care!",
+    "Let’s break the silence, let our voices ring; in this rap battle, we’re ready to sing!",
+    "You bring your culture, I’ll share my style; together we’ll shine, let’s go the extra mile!",
+    "Different words, but the rhythm’s the same; in this rap battle, we’re changing the game!",
+    "Let’s drop the barriers, let’s feel the vibe; in this rap battle, we’re keeping it live!",
+    "Your language is art, let’s paint the scene; together we’ll shine, if you know what I mean!",
+    "With every word, we’ll bridge the divide; in this rap battle, let’s enjoy the ride!",
+    "You’ve got the heat, I’ll bring the chill; in this rap battle, we’re climbing that hill!",
+    "Let’s mix our styles, let’s blend our sound; in this rap battle, we’re glory-bound!",
+    "We’ll rise above hate, let our voices unite; in this rap battle, we’ll shine so bright!",
+    "With every line, we’ll break down the walls; in this rap battle, we’ll answer the calls!",
+    "Your words are like magic, let’s cast a spell; in this rap battle, we’ll do it so well!",
+    "Together we’ll soar, reaching for the stars; in this rap battle, we’ll heal the scars!",
+    "Let’s dance to the rhythm, let’s make it our own; in this rap battle, we’ll never feel alone!",
+    "We’ll share our stories, we’ll sing our song; in this rap battle, we can’t go wrong!",
+    "Different languages, but our hearts can connect; through rhythm and rhyme, we’ll show respect!",
+    "You bring your passion, I’ll bring my flow; in this rap battle, let’s steal the show!",
+    "No need for translation, our vibe is clear; together in this, we’ll conquer fear!",
+    "Let’s share our cultures, let’s learn and grow; in this rap battle, we’re in the flow!",
+    "With every rhyme, we’ll find a new way; in this rap battle, let’s seize the day!",
+    "You’ve got the rhythm, I’ll add my twist; in this rap battle, we’re making a hit!",
+    "Let’s break down the barriers, let’s build a new bridge; in this rap battle, we’ll never ridge!",
+    "Different tones, but the beat feels right; together we’ll shine, we’ll ignite the night!",
+    "With every verse, we’ll elevate the game; in this rap battle, we’ll earn our fame!",
+    "Your culture’s a treasure, let it shine bright; in this rap battle, we’ll ignite the night!",
+    "Together we’ll laugh, together we’ll sing; in this rap battle, joy is the king!",
+    "We’ll share our dreams, let’s paint the sky; in this rap battle, we’re aiming high!",
+    "No matter the words, our spirits will soar; in this rap battle, we’ll break down the door!",
+    "You’ve got your vibe, I’ll bring my flair; in this rap battle, we’re a perfect pair!",
+    "With every beat, we’ll rise above hate; in this rap battle, we’re creating fate!",
+    "Let’s embrace our roots, let’s lift up our voices; in this rap battle, we’ll make our choices!",
+    "You’ve got the fire, I’ll bring the light; in this rap battle, let’s shine so bright!",
+    "Through laughter and rhyme, we’ll bridge the divide; in this rap battle, we’re side by side!",
+    "Different sounds, but we’re in harmony; in this rap battle, it’s just you and me!",
+    "Together we’ll grow, reaching for the sky; in this rap battle, we’re soaring high!",
+    "With every line, we’ll share our light; in this rap battle, we’ll win the night!",
+    "You bring the wisdom, I’ll share my flow; in this rap battle, together we’ll grow!",
+    "Let’s mix our words, let’s share our fate; in this rap battle, we’ll create the great!",
+    "With every rhyme, we’ll tell our truth; in this rap battle, we will inspire the youth!",
+    "No need for words when our spirits unite; together we’ll conquer, ready for flight!",
+    "Your vibe is contagious, let’s join our groove; in this rap battle, we’re ready to move!",
+    "Let’s share our laughter, let’s break down the walls; in this rap battle, we’ll answer the calls!",
+    "Different cultures, but we’re all the same; in this rap battle, we’ll play the game!",
+    "We’ll find our rhythm, we’ll make it our own; together in this, we’ll never feel alone!",
+    "With every beat, we’ll rise above hate; in this rap battle, we’re creating fate!",
+    "Let’s celebrate differences, let’s lift each other; in this rap battle, we’re like no other!",
+    "You’ve got the spark, I’ll add the flame; together we’ll dance, let’s ignite the name!",
+    "No matter the language, our hearts beat as one; in this rap battle, we’ve already won!",
+    "Through every challenge, we’ll find a new beat; in this rap battle, we’ll never face defeat!",
+    "Your culture’s a treasure, let’s make it shine; in this rap battle, our hearts intertwine!",
+    "We’ll break down barriers, we’ll make a new start; in this rap battle, we’re winning with heart!",
+    "You bring the rhythm, I’ll find the rhyme; together we’ll shine, it’s our time!",
+    "With every bar, we’ll share our tale; in this rap battle, we will prevail!",
+    "Together we’ll rise, breaking the sound; in this rap battle, we’re glory-bound!",
+    "Different words, but the rhythm’s the same; in this rap battle, we’re changing the game!",
+    "Let’s drop the barriers, let’s feel the vibe; in this rap battle, we’re keeping it live!",
+    "Your style’s electric, I feel the spark; in this rap battle, we’ll light up the dark!",
+    "No matter the words, our hearts can connect; through rhythm and rhyme, we’ll show respect!",
+    "Your laughter’s contagious, let’s spread that cheer; in this rap battle, we’ve got nothing to fear!",
+    "Different styles, but we’re both in the zone; in this rap battle, we’re never alone!",
+    "Let’s share our dreams, let’s reach for the stars; in this rap battle, we’ll raise the bars!",
+    "With every verse, we’ll break down the walls; in this rap battle, we’re answering the calls!",
+    "You bring the fire, I’ll bring the ice; in this rap battle, together we’re nice!",
+    "Let’s mix our beats, let’s blend our sounds; in this rap battle, we’re breaking new grounds!",
+    "Your vibe is electric, it lights up the room; in this rap battle, we’re ready to bloom!",
+    "With every rhyme, we’ll lift each other high; in this rap battle, we’ll touch the sky!",
+    "Let’s laugh and create, let’s turn up the fun; in this rap battle, we’re second to none!",
+    "Together we’ll shine, like stars in the night; in this rap battle, we’re a beautiful sight!",
+    "We’ll turn up the heat, let’s bring on the thrill; in this rap battle, we’re climbing that hill!",
+    "Your spirit is strong, let’s show what we’ve got; in this rap battle, we’re taking the shot!",
+    "We’ll share our stories, let’s let them unfold; in this rap battle, we’re breaking the mold!",
+    "Different backgrounds, but we vibe so well; in this rap battle, we’ll ring that bell!",
+    "You’ve got the spark, I’ll add the flame; in this rap battle, we’re playing the game!",
+    "Together we’ll rise, like a phoenix in flight; in this rap battle, we’re igniting the night!",
+    "With every word, we’ll build a new bridge; in this rap battle, let’s never be a gridge!",
+    "Let’s make some noise, let’s raise the roof; in this rap battle, we’re sharing the truth!",
+    "You’ve got the rhythm, I’ll find my groove; in this rap battle, we’re ready to move!",
+    "With every line, we’ll paint the scene; in this rap battle, we’re living the dream!",
+    "We’ll break down the walls, we’ll find our flow; in this rap battle, we’re putting on a show!",
+    "No matter the challenge, we’ll face it as one; in this rap battle, we’re never outdone!",
+    "Your style’s unique, let’s make it our own; in this rap battle, we’re in the zone!",
+    "With every beat, we’ll rise and unite; in this rap battle, we’re shining so bright!",
+    "Let’s embrace the rhythm, let’s feel the beat; in this rap battle, we can’t be beat!",
+    "Your laughter’s the key, it opens the door; in this rap battle, we’re ready for more!",
+    "Together we’ll flow, like a river so wide; in this rap battle, let’s take that ride!",
+    "Different languages, but we’re in sync; in this rap battle, we’ll never sink!",
+    "With every rhyme, we’ll find a new way; in this rap battle, we’ll seize the day!",
+    "You’ve got the talent, I’ll bring the cheer; in this rap battle, we’ll shift the gear!",
+    "With every verse, we’ll light up the night; in this rap battle, we’ll shine so bright!",
+    "Let’s share our dreams, let’s make them come true; in this rap battle, it’s me and you!",
+    "We’ll laugh and we’ll dance, let’s make it our show; in this rap battle, we’ll steal the glow!",
+    "Together we’ll climb, reaching for the sky; in this rap battle, we’ll always fly high!",
+    "With every beat, we’ll conquer our fears; in this rap battle, we’ll bring the cheers!",
+    "Let’s mix our voices, let’s sing out loud; in this rap battle, we’re making a crowd!",
+    "No need for hate, let’s spread the love; in this rap battle, we’re soaring above!",
+    "You’ve got the rhythm, I’ve got the flow; in this rap battle, let’s steal the show!",
+    "With every line, we’ll break the routine; in this rap battle, we’ll be the dream team!",
+    "Let’s lift each other, let’s shine like the sun; in this rap battle, we’re all having fun!",
+    "Different paths, but we’re on the same ride; in this rap battle, we’re filled with pride!",
+    "You’ve got the spirit, I’ll bring the heart; in this rap battle, we’ll never be apart!",
+    "Together we’ll create, let’s make it a blast; in this rap battle, we’ll outlast!",
+    "With every verse, we’ll rise and shine; in this rap battle, our hearts will align!",
+    "Let’s turn up the fun, let’s dance to the beat; in this rap battle, we can’t be beat!",
+    "Your vibe is amazing, let’s keep it alive; in this rap battle, we’ll always thrive!",
+    "We’ll share our dreams, let’s paint the sky; in this rap battle, we’re aiming high!",
+    "With every bar, we’ll find our way; in this rap battle, let’s seize the day!",
+    "You’ve got the passion, I’ll add the groove; in this rap battle, we’re ready to move!",
+    "Let’s celebrate life, let’s dance and sing; in this rap battle, we’re the real thing!",
+    "Together we’re strong, let’s lift each other; in this rap battle, we’re like no other!",
+    "With every beat, we’ll rise to the call; in this rap battle, we’ll never fall!",
+    "Let’s mix our styles, let’s share the stage; in this rap battle, we’re turning the page!",
+    "Your joy is infectious, it spreads like a flame; in this rap battle, we’ll make our name!",
+    "We’ll dance to the rhythm, let’s make it a blast; in this rap battle, we’ll outlast!",
+    "With every line, we’ll share our story; in this rap battle, we’ll find our glory!",
+    "You’ve got the beat, I’ll bring the rhyme; in this rap battle, we’re in our prime!",
+    "Together we’ll shine, like stars in the night; in this rap battle, we’re taking flight!",
+    "Let’s lift each other, let’s reach for the top; in this rap battle, we’ll never stop!"
+}
 
 local cooldowns = {}
 local sentMessages = {} -- Track sent messages and their timestamps
@@ -3191,6 +3623,7 @@ for _, phrase in ipairs(momPhrases) do cooldowns[phrase] = 0 end
 for _, phrase in ipairs(dadPhrases) do cooldowns[phrase] = 0 end
 for _, phrase in ipairs(silentPhrases) do cooldowns[phrase] = 0 end
 for _, phrase in ipairs(copyPastePhrases) do cooldowns[phrase] = 0 end
+for _, phrase in ipairs(languageBarrierPhrases) do cooldowns[phrase] = 0 end
 
 -- Function to get a random non-duplicate phrase with cooldown
 local function getRandomPhrase(phraseList)
@@ -3260,6 +3693,13 @@ copyPasteButton.MouseButton1Click:Connect(function()
     local selectedPhrase = getRandomPhrase(copyPastePhrases)
     if selectedPhrase then
         setclipboard(selectedPhrase) -- Copies the selected copy-paste phrase to the clipboard
+    end
+end)
+
+languageBarrierButton.MouseButton1Click:Connect(function()
+    local selectedPhrase = getRandomPhrase(languageBarrierPhrases)
+    if selectedPhrase then
+        setclipboard(selectedPhrase) -- Copies the selected language barrier phrase to the clipboard
     end
 end)
 
