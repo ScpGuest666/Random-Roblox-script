@@ -85,6 +85,30 @@ roastButton.Position = UDim2.new(0, 20, 0, 180)
 roastButton.Text = "Reply Back"
 roastButton.TextScaled = true
 
+local testing1Button = Instance.new("TextButton")
+testing1Button.Parent = frame
+testing1Button.BackgroundColor3 = Color3.fromRGB(173, 255, 47)
+testing1Button.Size = UDim2.new(0, 60, 0, 30)
+testing1Button.Position = UDim2.new(0, 20, 0, 220)
+testing1Button.Text = "Spelling"
+testing1Button.TextScaled = true
+
+local testing2Button = Instance.new("TextButton")
+testing2Button.Parent = frame
+testing2Button.BackgroundColor3 = Color3.fromRGB(100, 149, 237)
+testing2Button.Size = UDim2.new(0, 60, 0, 30)
+testing2Button.Position = UDim2.new(0, 120, 0, 220)
+testing2Button.Text = "Testing 2"
+testing2Button.TextScaled = true
+
+local testing3Button = Instance.new("TextButton")
+testing3Button.Parent = frame
+testing3Button.BackgroundColor3 = Color3.fromRGB(255, 20, 147)
+testing3Button.Size = UDim2.new(0, 60, 0, 30)
+testing3Button.Position = UDim2.new(0, 120, 0, 180)
+testing3Button.Text = "Testing 3"
+testing3Button.TextScaled = true
+
 local destroyButton = Instance.new("TextButton")
 destroyButton.Parent = frame
 destroyButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
@@ -8533,6 +8557,21 @@ local roastPhrases = {
     "You’re as necessary as a pop-up in the middle of a video.",
     "Your skill level is about as low as an email spam folder."
 }
+local testing1Phrases = {
+    "Testing 1 Message A", 
+    "Testing 1 Message B", 
+    "Testing 1 Message C"
+}
+local testing2Phrases = {
+    "Testing 2 Message A", 
+    "Testing 2 Message B", 
+    "Testing 2 Message C"
+}
+local testing3Phrases = {
+    "Testing 3 Message A", 
+    "Testing 3 Message B", 
+    "Testing 3 Message C"
+}
 
 local cooldowns = {}
 local sentMessages = {} -- Track sent messages and their timestamps
@@ -8547,6 +8586,9 @@ for _, phrase in ipairs(copyPastePhrases) do cooldowns[phrase] = 0 end
 for _, phrase in ipairs(languageBarrierPhrases) do cooldowns[phrase] = 0 end
 for _, phrase in ipairs(roastPhrases) do cooldowns[phrase] = 0 end
 for _, phrase in ipairs(wasteOfTimePhrases) do cooldowns[phrase] = 0 end
+for _, phrase in ipairs(testing1Phrases) do cooldowns[phrase] = 0 end
+for _, phrase in ipairs(testing2Phrases) do cooldowns[phrase] = 0 end
+for _, phrase in ipairs(testing3Phrases) do cooldowns[phrase] = 0 end
 
 -- Function to get a random non-duplicate phrase with cooldown
 local function getRandomPhrase(phraseList)
@@ -8628,6 +8670,27 @@ end)
 
 roastButton.MouseButton1Click:Connect(function()
     local selectedPhrase = getRandomPhrase(roastPhrases)
+    if selectedPhrase then
+        setclipboard(selectedPhrase)
+    end
+end)
+
+testing1Button.MouseButton1Click:Connect(function()
+    local selectedPhrase = getRandomPhrase(testing1Phrases)
+    if selectedPhrase then
+        setclipboard(selectedPhrase)
+    end
+end)
+
+testing2Button.MouseButton1Click:Connect(function()
+    local selectedPhrase = getRandomPhrase(testing2Phrases)
+    if selectedPhrase then
+        setclipboard(selectedPhrase)
+    end
+end)
+
+testing3Button.MouseButton1Click:Connect(function()
+    local selectedPhrase = getRandomPhrase(testing3Phrases)
     if selectedPhrase then
         setclipboard(selectedPhrase)
     end
