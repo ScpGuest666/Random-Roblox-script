@@ -6,6 +6,7 @@ local Player = Players.LocalPlayer
 -- Create GUI elements
 local ScreenGui = Instance.new("ScreenGui")
 local Frame = Instance.new("Frame")
+local TitleLabel = Instance.new("TextLabel")  -- New title label
 local TextBox = Instance.new("TextBox")
 local FlingButton = Instance.new("TextButton")
 local DestroyButton = Instance.new("TextButton")
@@ -21,6 +22,16 @@ Frame.Position = UDim2.new(0.5, -100, 0.5, -50)
 Frame.Size = UDim2.new(0, 200, 0, 150)
 Frame.Active = true
 Frame.Draggable = true
+
+-- Title label properties
+TitleLabel.Parent = Frame  -- Make it a child of Frame
+TitleLabel.Text = "Io_oI"
+TitleLabel.Font = Enum.Font.SourceSansBold
+TitleLabel.TextSize = 24
+TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)  -- White text
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Size = UDim2.new(1, 0, 0, 30)  -- Full width of Frame
+TitleLabel.Position = UDim2.new(0, 0, 0, -5)  -- Position above the Frame content
 
 -- TextBox properties
 TextBox.Parent = Frame
