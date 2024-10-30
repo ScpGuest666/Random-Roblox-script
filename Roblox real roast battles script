@@ -12122,11 +12122,37 @@ local function getRandomPhrase(phraseList)
     return selectedPhrase
 end
 
+-- Function to show copied phrase temporarily
+local function showCopiedPhrase(phrase)
+    -- Create temporary frame for displaying the copied phrase
+    local copiedFrame = Instance.new("Frame")
+    copiedFrame.Parent = screenGui
+    copiedFrame.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
+    copiedFrame.Size = UDim2.new(0, 200, 0, 50)
+    copiedFrame.Position = UDim2.new(0, 10, 0.5, -25)
+    copiedFrame.Visible = true
+    
+    -- Create label to show the phrase
+    local copiedLabel = Instance.new("TextLabel")
+    copiedLabel.Parent = copiedFrame
+    copiedLabel.BackgroundTransparency = 1
+    copiedLabel.Size = UDim2.new(1, 0, 1, 0)
+    copiedLabel.Text = "Copied: " .. phrase
+    copiedLabel.TextScaled = true
+    copiedLabel.TextColor3 = Color3.fromRGB(0, 0, 0)
+    
+    -- Make the frame disappear after 6 seconds
+    task.delay(6, function()
+        copiedFrame:Destroy()
+    end)
+end
+
 -- Button Functions
 wasteOfTimeButton.MouseButton1Click:Connect(function()
     local selectedPhrase = getRandomPhrase(wasteOfTimePhrases)
     if selectedPhrase then
         setclipboard(selectedPhrase)
+        showCopiedPhrase(selectedPhrase)
     end
 end)
 
@@ -12134,6 +12160,7 @@ copyButton.MouseButton1Click:Connect(function()
     local randomPhrase = getRandomPhrase(phrases)
     if randomPhrase then
         setclipboard(randomPhrase)
+        showCopiedPhrase(randomPhrase)
     end
 end)
 
@@ -12141,6 +12168,7 @@ beNiceButton.MouseButton1Click:Connect(function()
     local selectedPhrase = getRandomPhrase(nicePhrases)
     if selectedPhrase then
         setclipboard(selectedPhrase)
+        showCopiedPhrase(selectedPhrase)
     end
 end)
 
@@ -12148,6 +12176,7 @@ momButton.MouseButton1Click:Connect(function()
     local selectedPhrase = getRandomPhrase(momPhrases)
     if selectedPhrase then
         setclipboard(selectedPhrase)
+        showCopiedPhrase(selectedPhrase)
     end
 end)
 
@@ -12155,6 +12184,7 @@ dadButton.MouseButton1Click:Connect(function()
     local selectedPhrase = getRandomPhrase(dadPhrases)
     if selectedPhrase then
         setclipboard(selectedPhrase)
+        showCopiedPhrase(selectedPhrase)
     end
 end)
 
@@ -12162,6 +12192,7 @@ silentButton.MouseButton1Click:Connect(function()
     local selectedPhrase = getRandomPhrase(silentPhrases)
     if selectedPhrase then
         setclipboard(selectedPhrase)
+        showCopiedPhrase(selectedPhrase)
     end
 end)
 
@@ -12169,6 +12200,7 @@ copyPasteButton.MouseButton1Click:Connect(function()
     local selectedPhrase = getRandomPhrase(copyPastePhrases)
     if selectedPhrase then
         setclipboard(selectedPhrase)
+        showCopiedPhrase(selectedPhrase)
     end
 end)
 
@@ -12176,6 +12208,7 @@ languageBarrierButton.MouseButton1Click:Connect(function()
     local selectedPhrase = getRandomPhrase(languageBarrierPhrases)
     if selectedPhrase then
         setclipboard(selectedPhrase)
+        showCopiedPhrase(selectedPhrase)
     end
 end)
 
@@ -12183,6 +12216,7 @@ roastButton.MouseButton1Click:Connect(function()
     local selectedPhrase = getRandomPhrase(roastPhrases)
     if selectedPhrase then
         setclipboard(selectedPhrase)
+        showCopiedPhrase(selectedPhrase)
     end
 end)
 
@@ -12190,6 +12224,7 @@ testing1Button.MouseButton1Click:Connect(function()
     local selectedPhrase = getRandomPhrase(testing1Phrases)
     if selectedPhrase then
         setclipboard(selectedPhrase)
+        showCopiedPhrase(selectedPhrase)
     end
 end)
 
@@ -12197,6 +12232,7 @@ testing2Button.MouseButton1Click:Connect(function()
     local selectedPhrase = getRandomPhrase(testing2Phrases)
     if selectedPhrase then
         setclipboard(selectedPhrase)
+        showCopiedPhrase(selectedPhrase)
     end
 end)
 
@@ -12204,6 +12240,7 @@ testing3Button.MouseButton1Click:Connect(function()
     local selectedPhrase = getRandomPhrase(testing3Phrases)
     if selectedPhrase then
         setclipboard(selectedPhrase)
+        showCopiedPhrase(selectedPhrase)
     end
 end)
 
