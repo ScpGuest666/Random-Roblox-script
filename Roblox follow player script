@@ -66,23 +66,40 @@ local function findPlayerByName(partialName)
     return nil
 end
 
--- Function to move the character towards/away from target player
+-- Improved function to move the character towards/away from target player with obstacle detection
 local function moveToPlayer(targetPlayer)
     local localPlayer = game.Players.LocalPlayer
     local localRootPart = localPlayer.Character and localPlayer.Character:FindFirstChild("HumanoidRootPart")
     local targetRootPart = targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart")
-    
+
     if localRootPart and targetRootPart then
         local distance = (localRootPart.Position - targetRootPart.Position).Magnitude
-        
-        if distance > followDistance then
+
+        -- Check if the character is within a small range around the followDistance (to stop circling)
+        if math.abs(distance - followDistance) > 0.5 then
             local direction = (targetRootPart.Position - localRootPart.Position).unit
             local newPosition = targetRootPart.Position - (direction * followDistance)
+
+            -- Perform a raycast to detect obstacles in the movement path
+            local ray = Ray.new(localRootPart.Position, direction * followDistance)
+            local hitPart, hitPosition = workspace:FindPartOnRay(ray, localPlayer.Character)
+
+            if hitPart then
+                -- If an obstacle is detected, attempt to dodge by sidestepping
+                local dodgeDirection = Vector3.new(-direction.Z, 0, direction.X) -- Perpendicular to the target direction
+                newPosition = localRootPart.Position + (dodgeDirection * dodgeDistance)
+            end
+
             localPlayer.Character.Humanoid:MoveTo(newPosition)
+
         elseif distance < dodgeDistance then
-            local direction = (localRootPart.Position - targetRootPart.Position).unit
-            local newPosition = localRootPart.Position + (direction * dodgeDistance)
-            localPlayer.Character.Humanoid:MoveTo(newPosition)
+            -- Dodge away from the target player if too close
+            local dodgeDirection = (localRootPart.Position - targetRootPart.Position).unit
+            local dodgePosition = localRootPart.Position + (dodgeDirection * dodgeDistance)
+            localPlayer.Character.Humanoid:MoveTo(dodgePosition)
+        else
+            -- Stop moving if within range to avoid circling
+            localPlayer.Character.Humanoid:MoveTo(localRootPart.Position)
         end
     end
 end
