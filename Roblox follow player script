@@ -1,3 +1,15 @@
+-- Utility function to create buttons
+local function createButton(parent, position, size, bgColor, text, scaled)
+    local button = Instance.new("TextButton")
+    button.Parent = parent
+    button.Size = size
+    button.Position = position
+    button.BackgroundColor3 = bgColor
+    button.Text = text
+    button.TextScaled = scaled
+    return button
+end
+
 -- Create ScreenGui
 local screenGui = Instance.new("ScreenGui")
 screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
@@ -7,8 +19,8 @@ screenGui.ResetOnSpawn = false
 local frame = Instance.new("Frame")
 frame.Parent = screenGui
 frame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-frame.Size = UDim2.new(0, 200, 0, 150)
-frame.Position = UDim2.new(0.5, -100, 0.5, -75)
+frame.Size = UDim2.new(0, 200, 0, 180)
+frame.Position = UDim2.new(0.5, -100, 0.5, -90)
 frame.Active = true
 frame.Draggable = true
 
@@ -21,93 +33,53 @@ playerInput.Position = UDim2.new(0, 20, 0, 20)
 playerInput.PlaceholderText = "Enter Player Name"
 playerInput.TextScaled = true
 
--- Create On Button
-local onButton = Instance.new("TextButton")
-onButton.Parent = frame
-onButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-onButton.Size = UDim2.new(0, 60, 0, 30)
-onButton.Position = UDim2.new(0, 20, 0, 60)
-onButton.Text = "On"
-onButton.TextScaled = true
+-- UI Elements: On, Off, Destroy, Status Label, + and -
+local onButton = createButton(frame, UDim2.new(0, 20, 0, 60), UDim2.new(0, 60, 0, 30), Color3.fromRGB(0, 255, 0), "On", true)
+local offButton = createButton(frame, UDim2.new(0, 120, 0, 60), UDim2.new(0, 60, 0, 30), Color3.fromRGB(255, 0, 0), "Off", true)
+local destroyButton = createButton(frame, UDim2.new(0, 20, 0, 100), UDim2.new(0, 160, 0, 30), Color3.fromRGB(255, 255, 255), "Destroy", true)
+local plusButton = createButton(frame, UDim2.new(0, 20, 0, 140), UDim2.new(0, 40, 0, 30), Color3.fromRGB(0, 255, 255), "+", true)
+local minusButton = createButton(frame, UDim2.new(0, 140, 0, 140), UDim2.new(0, 40, 0, 30), Color3.fromRGB(255, 165, 0), "-", true)
 
--- Create Off Button
-local offButton = Instance.new("TextButton")
-offButton.Parent = frame
-offButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-offButton.Size = UDim2.new(0, 60, 0, 30)
-offButton.Position = UDim2.new(0, 120, 0, 60)
-offButton.Text = "Off"
-offButton.TextScaled = true
-
--- Create Destroy Button
-local destroyButton = Instance.new("TextButton")
-destroyButton.Parent = frame
-destroyButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-destroyButton.Size = UDim2.new(0, 160, 0, 30)
-destroyButton.Position = UDim2.new(0, 20, 0, 100)
-destroyButton.Text = "Destroy"
-destroyButton.TextScaled = true
-
--- Create Status Indicator
+-- Status Label
 local statusLabel = Instance.new("TextLabel")
 statusLabel.Parent = frame
-statusLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 statusLabel.Size = UDim2.new(0, 200, 0, 30)
 statusLabel.Position = UDim2.new(0, 0, 0, -30)
+statusLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 statusLabel.Text = "Status: Off"
 statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
 statusLabel.TextScaled = true
 
-local followDistance = 10 -- Default follow distance
-local dodgeDistance = 9.9 -- Default dodge distance
+-- Variables to manage follow/dodge distances and state
+local followDistance = 10
+local dodgeDistance = 9.9
 local lookAtEnabled = false
 
--- Create + and - Buttons for adjusting distance
-local plusButton = Instance.new("TextButton")
-plusButton.Parent = frame
-plusButton.BackgroundColor3 = Color3.fromRGB(0, 255, 255)
-plusButton.Size = UDim2.new(0, 40, 0, 30)
-plusButton.Position = UDim2.new(0, 20, 0, 140)
-plusButton.Text = "+"
-plusButton.TextScaled = true
-
-local minusButton = Instance.new("TextButton")
-minusButton.Parent = frame
-minusButton.BackgroundColor3 = Color3.fromRGB(255, 165, 0)
-minusButton.Size = UDim2.new(0, 40, 0, 30)
-minusButton.Position = UDim2.new(0, 140, 0, 140)
-minusButton.Text = "-"
-minusButton.TextScaled = true
-
--- Function to find a player by partial name match
+-- Function to find a player by partial name
 local function findPlayerByName(partialName)
+    partialName = string.lower(partialName)
     for _, player in pairs(game.Players:GetPlayers()) do
-        if string.find(string.lower(player.Name), string.lower(partialName)) or string.find(string.lower(player.DisplayName), string.lower(partialName)) then
+        if string.find(string.lower(player.Name), partialName) or string.find(string.lower(player.DisplayName), partialName) then
             return player
         end
     end
     return nil
 end
 
--- Function to move the character towards the target while keeping distance
+-- Function to move the character towards/away from target player
 local function moveToPlayer(targetPlayer)
     local localPlayer = game.Players.LocalPlayer
     local localRootPart = localPlayer.Character and localPlayer.Character:FindFirstChild("HumanoidRootPart")
     local targetRootPart = targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart")
-
+    
     if localRootPart and targetRootPart then
         local distance = (localRootPart.Position - targetRootPart.Position).Magnitude
-
-        -- If player is farther than follow distance, move closer
+        
         if distance > followDistance then
-            -- Move towards the target player, maintaining a fixed distance without using LookVector
             local direction = (targetRootPart.Position - localRootPart.Position).unit
             local newPosition = targetRootPart.Position - (direction * followDistance)
             localPlayer.Character.Humanoid:MoveTo(newPosition)
-        
-        -- If player is too close, dodge by moving away
         elseif distance < dodgeDistance then
-            -- Move away from the player while maintaining a dodge distance
             local direction = (localRootPart.Position - targetRootPart.Position).unit
             local newPosition = localRootPart.Position + (direction * dodgeDistance)
             localPlayer.Character.Humanoid:MoveTo(newPosition)
@@ -115,53 +87,61 @@ local function moveToPlayer(targetPlayer)
     end
 end
 
--- Loop to continuously follow and dodge the player
-local followLoop = spawn(function()
-    while true do
+-- Loop to continuously follow/dodge player
+local followLoop
+local function startFollowing()
+    if followLoop then return end
+    followLoop = game:GetService("RunService").Heartbeat:Connect(function()
         if lookAtEnabled then
             local targetPlayer = findPlayerByName(playerInput.Text)
             if targetPlayer then
                 moveToPlayer(targetPlayer)
             end
         end
-        wait(0.00001) -- Small delay for smoother movement
-    end
-end)
+    end)
+end
 
--- Update status label with follow and dodge distances
+local function stopFollowing()
+    if followLoop then
+        followLoop:Disconnect()
+        followLoop = nil
+    end
+end
+
+-- Update status label
 local function updateStatusLabel()
     statusLabel.Text = "Status: On (Follow: " .. tostring(followDistance) .. " studs, Dodge: " .. tostring(dodgeDistance) .. " studs)"
 end
 
--- Adjust the follow and dodge distance, making sure it's at least 1
+-- Button Event Listeners
 plusButton.MouseButton1Click:Connect(function()
-    followDistance = math.max(1, followDistance + 1)
-    dodgeDistance = math.max(1, dodgeDistance + 1)
+    followDistance = math.min(20, followDistance + 1)  -- Max 20 studs
+    dodgeDistance = math.min(20, dodgeDistance + 1)
     updateStatusLabel()
 end)
 
 minusButton.MouseButton1Click:Connect(function()
-    followDistance = math.max(1, followDistance - 1)
+    followDistance = math.max(1, followDistance - 1)   -- Min 1 stud
     dodgeDistance = math.max(1, dodgeDistance - 1)
     updateStatusLabel()
 end)
 
--- On Button: Enable following and dodging
 onButton.MouseButton1Click:Connect(function()
     lookAtEnabled = true
     updateStatusLabel()
     statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+    startFollowing()
 end)
 
--- Off Button: Disable following and dodging
 offButton.MouseButton1Click:Connect(function()
     lookAtEnabled = false
     statusLabel.Text = "Status: Off"
     statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+    stopFollowing()
 end)
 
--- Destroy Button: Reset and destroy GUI
 destroyButton.MouseButton1Click:Connect(function()
-    lookAtEnabled = false -- Disable the feature
-    screenGui:Destroy() -- Destroy the GUI
+    lookAtEnabled = false
+    stopFollowing()
+    screenGui:Destroy()
 end)
