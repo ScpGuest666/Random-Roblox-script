@@ -1,4 +1,4 @@
--- Utility function to create buttons
+-- Utility function to create buttons with rounded corners
 local function createButton(parent, position, size, bgColor, text, scaled)
     local button = Instance.new("TextButton")
     button.Parent = parent
@@ -7,50 +7,62 @@ local function createButton(parent, position, size, bgColor, text, scaled)
     button.BackgroundColor3 = bgColor
     button.Text = text
     button.TextScaled = scaled
+    button.BorderSizePixel = 0
+    
+    -- Rounded corners for a modern look
+    local uicorner = Instance.new("UICorner")
+    uicorner.CornerRadius = UDim.new(0, 5)
+    uicorner.Parent = button
+    
     return button
 end
 
--- Create ScreenGui
+-- Create ScreenGui with optional rounded background for the frame
 local screenGui = Instance.new("ScreenGui")
 screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
 screenGui.ResetOnSpawn = false
 
--- Create Frame
 local frame = Instance.new("Frame")
 frame.Parent = screenGui
-frame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-frame.Size = UDim2.new(0, 200, 0, 180)
-frame.Position = UDim2.new(0.5, -100, 0.5, -90)
+frame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+frame.Size = UDim2.new(0, 220, 0, 240)
+frame.Position = UDim2.new(0.5, -110, 0.5, -120)
 frame.Active = true
 frame.Draggable = true
 
--- Create TextBox for player input
+local uicorner = Instance.new("UICorner")
+uicorner.CornerRadius = UDim.new(0, 10)
+uicorner.Parent = frame
+
+-- TextBox for player input
 local playerInput = Instance.new("TextBox")
 playerInput.Parent = frame
 playerInput.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-playerInput.Size = UDim2.new(0, 160, 0, 30)
+playerInput.Size = UDim2.new(0, 180, 0, 30)
 playerInput.Position = UDim2.new(0, 20, 0, 20)
 playerInput.PlaceholderText = "Enter Player Name"
 playerInput.TextScaled = true
+playerInput.TextColor3 = Color3.fromRGB(0, 0, 0)
 
--- UI Elements: On, Off, Destroy, Status Label, + and -
-local onButton = createButton(frame, UDim2.new(0, 20, 0, 60), UDim2.new(0, 60, 0, 30), Color3.fromRGB(0, 255, 0), "On", true)
-local offButton = createButton(frame, UDim2.new(0, 120, 0, 60), UDim2.new(0, 60, 0, 30), Color3.fromRGB(255, 0, 0), "Off", true)
-local destroyButton = createButton(frame, UDim2.new(0, 20, 0, 100), UDim2.new(0, 160, 0, 30), Color3.fromRGB(255, 255, 255), "Destroy", true)
+-- Create Buttons: On, Off, Destroy, and Increase/Decrease Distance
+local onButton = createButton(frame, UDim2.new(0, 20, 0, 60), UDim2.new(0, 80, 0, 30), Color3.fromRGB(0, 255, 0), "On", true)
+local offButton = createButton(frame, UDim2.new(0, 120, 0, 60), UDim2.new(0, 80, 0, 30), Color3.fromRGB(255, 0, 0), "Off", true)
+local destroyButton = createButton(frame, UDim2.new(0, 20, 0, 100), UDim2.new(0, 180, 0, 30), Color3.fromRGB(255, 255, 255), "Destroy", true)
 local plusButton = createButton(frame, UDim2.new(0, 20, 0, 140), UDim2.new(0, 40, 0, 30), Color3.fromRGB(0, 255, 255), "+", true)
-local minusButton = createButton(frame, UDim2.new(0, 140, 0, 140), UDim2.new(0, 40, 0, 30), Color3.fromRGB(255, 165, 0), "-", true)
+local minusButton = createButton(frame, UDim2.new(0, 160, 0, 140), UDim2.new(0, 40, 0, 30), Color3.fromRGB(255, 165, 0), "-", true)
 
 -- Status Label
 local statusLabel = Instance.new("TextLabel")
 statusLabel.Parent = frame
-statusLabel.Size = UDim2.new(0, 200, 0, 30)
+statusLabel.Size = UDim2.new(0, 220, 0, 30)
 statusLabel.Position = UDim2.new(0, 0, 0, -30)
-statusLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+statusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 statusLabel.Text = "Status: Off"
 statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
 statusLabel.TextScaled = true
+statusLabel.Font = Enum.Font.SourceSansBold
 
--- Variables to manage follow/dodge distances and state
+-- Variables for managing distances
 local followDistance = 10
 local dodgeDistance = 9.9
 local lookAtEnabled = false
@@ -66,7 +78,7 @@ local function findPlayerByName(partialName)
     return nil
 end
 
--- Improved function to move the character towards/away from target player with advanced obstacle detection
+-- Improved movement with dynamic obstacle detection
 local function moveToPlayer(targetPlayer)
     local localPlayer = game.Players.LocalPlayer
     local localRootPart = localPlayer.Character and localPlayer.Character:FindFirstChild("HumanoidRootPart")
@@ -75,11 +87,10 @@ local function moveToPlayer(targetPlayer)
     if localRootPart and targetRootPart then
         local distance = (localRootPart.Position - targetRootPart.Position).Magnitude
 
-        if math.abs(distance - followDistance) > 0.5 then
+        if math.abs(distance - followDistance) > 1 then
             local direction = (targetRootPart.Position - localRootPart.Position).unit
             local newPosition = targetRootPart.Position - (direction * followDistance)
 
-            -- Dynamic obstacle detection
             local raycastParams = RaycastParams.new()
             raycastParams.FilterDescendantsInstances = {localPlayer.Character}
             raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
@@ -87,12 +98,20 @@ local function moveToPlayer(targetPlayer)
             local rayResult = workspace:Raycast(localRootPart.Position, direction * followDistance, raycastParams)
 
             if rayResult then
-                -- Dodge by finding an alternate path based on surrounding clear directions
-                local dodgeDirection = Vector3.new(-direction.Z, 0, direction.X).unit * dodgeDistance
-                local alternativePositions = {localRootPart.Position + dodgeDirection, localRootPart.Position - dodgeDirection}
-                
+                -- Define more dodge options: forward/backward along an orthogonal axis
+                local dodgeDirection1 = Vector3.new(-direction.Z, 0, direction.X).unit * dodgeDistance
+                local dodgeDirection2 = -dodgeDirection1
+                local dodgeDirection3 = direction * dodgeDistance
+
+                -- Attempt multiple alternative dodge positions
+                local alternativePositions = {
+                    localRootPart.Position + dodgeDirection1,
+                    localRootPart.Position + dodgeDirection2,
+                    localRootPart.Position + dodgeDirection3,
+                }
+
                 for _, altPos in ipairs(alternativePositions) do
-                    local altRayResult = workspace:Raycast(localRootPart.Position, (altPos - localRootPart.Position).unit * followDistance, raycastParams)
+                    local altRayResult = workspace:Raycast(localRootPart.Position, (altPos - localRootPart.Position).unit * dodgeDistance, raycastParams)
                     if not altRayResult then
                         newPosition = altPos
                         break
@@ -101,19 +120,17 @@ local function moveToPlayer(targetPlayer)
             end
 
             localPlayer.Character.Humanoid:MoveTo(newPosition)
+
         elseif distance < dodgeDistance then
-            -- Dynamic dodge direction when too close
+            -- Perform a gradual retreat if too close
             local dodgeDirection = (localRootPart.Position - targetRootPart.Position).unit
             local dodgePosition = localRootPart.Position + (dodgeDirection * dodgeDistance)
             localPlayer.Character.Humanoid:MoveTo(dodgePosition)
-        else
-            -- Stop moving if within follow range to prevent circling
-            localPlayer.Character.Humanoid:MoveTo(localRootPart.Position)
         end
     end
 end
 
--- Loop to continuously follow/dodge player
+-- Loop for following/dodging player
 local followLoop
 local function startFollowing()
     if followLoop then return end
@@ -141,13 +158,13 @@ end
 
 -- Button Event Listeners
 plusButton.MouseButton1Click:Connect(function()
-    followDistance = math.min(20, followDistance + 1)  -- Max 20 studs
-    dodgeDistance = math.min(20, dodgeDistance + 1)
+    followDistance = math.min(30, followDistance + 1)
+    dodgeDistance = math.min(30, dodgeDistance + 1)
     updateStatusLabel()
 end)
 
 minusButton.MouseButton1Click:Connect(function()
-    followDistance = math.max(1, followDistance - 1)   -- Min 1 stud
+    followDistance = math.max(1, followDistance - 1)
     dodgeDistance = math.max(1, dodgeDistance - 1)
     updateStatusLabel()
 end)
