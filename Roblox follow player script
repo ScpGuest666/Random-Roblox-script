@@ -8,12 +8,12 @@ local function createButton(parent, position, size, bgColor, text, scaled)
     button.Text = text
     button.TextScaled = scaled
     button.BorderSizePixel = 0
-    
+
     -- Rounded corners for a modern look
     local uicorner = Instance.new("UICorner")
     uicorner.CornerRadius = UDim.new(0, 5)
     uicorner.Parent = button
-    
+
     return button
 end
 
@@ -78,7 +78,7 @@ local function findPlayerByName(partialName)
     return nil
 end
 
--- Improved movement with dynamic obstacle detection
+-- Enhanced movement function with smarter obstacle avoidance
 local function moveToPlayer(targetPlayer)
     local localPlayer = game.Players.LocalPlayer
     local localRootPart = localPlayer.Character and localPlayer.Character:FindFirstChild("HumanoidRootPart")
@@ -86,46 +86,47 @@ local function moveToPlayer(targetPlayer)
 
     if localRootPart and targetRootPart then
         local distance = (localRootPart.Position - targetRootPart.Position).Magnitude
-
         if math.abs(distance - followDistance) > 1 then
+            -- Define initial direction and destination
             local direction = (targetRootPart.Position - localRootPart.Position).unit
-            local newPosition = targetRootPart.Position - (direction * followDistance)
+            local destination = targetRootPart.Position - (direction * followDistance)
 
+            -- Set up raycasting parameters for collision detection
             local raycastParams = RaycastParams.new()
             raycastParams.FilterDescendantsInstances = {localPlayer.Character}
             raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
 
+            -- Check if destination is clear
             local rayResult = workspace:Raycast(localRootPart.Position, direction * followDistance, raycastParams)
-
             if rayResult then
-                -- Define more dodge options: forward/backward along an orthogonal axis
-                local dodgeDirection1 = Vector3.new(-direction.Z, 0, direction.X).unit * dodgeDistance
-                local dodgeDirection2 = -dodgeDirection1
-                local dodgeDirection3 = direction * dodgeDistance
-
-                -- Attempt multiple alternative dodge positions
-                local alternativePositions = {
-                    localRootPart.Position + dodgeDirection1,
-                    localRootPart.Position + dodgeDirection2,
-                    localRootPart.Position + dodgeDirection3,
+                -- If collision detected, try alternative dodge directions
+                local dodgeOptions = {
+                    Vector3.new(-direction.Z, 0, direction.X).unit,   -- Perpendicular left
+                    Vector3.new(direction.Z, 0, -direction.X).unit,   -- Perpendicular right
+                    direction * 0.5,                                  -- Halfway forward
+                    -direction                                        -- Opposite (back)
                 }
-
-                for _, altPos in ipairs(alternativePositions) do
-                    local altRayResult = workspace:Raycast(localRootPart.Position, (altPos - localRootPart.Position).unit * dodgeDistance, raycastParams)
-                    if not altRayResult then
-                        newPosition = altPos
+                
+                for _, dodgeDirection in ipairs(dodgeOptions) do
+                    local dodgePosition = localRootPart.Position + (dodgeDirection * dodgeDistance)
+                    local dodgeRayResult = workspace:Raycast(localRootPart.Position, dodgeDirection * dodgeDistance, raycastParams)
+                    
+                    -- Move to the first clear dodge position
+                    if not dodgeRayResult then
+                        destination = dodgePosition
                         break
                     end
                 end
             end
 
-            localPlayer.Character.Humanoid:MoveTo(newPosition)
+            -- Smoothly move to the calculated destination
+            localPlayer.Character.Humanoid:MoveTo(destination)
 
         elseif distance < dodgeDistance then
-            -- Perform a gradual retreat if too close
-            local dodgeDirection = (localRootPart.Position - targetRootPart.Position).unit
-            local dodgePosition = localRootPart.Position + (dodgeDirection * dodgeDistance)
-            localPlayer.Character.Humanoid:MoveTo(dodgePosition)
+            -- Back away smoothly if too close
+            local retreatDirection = (localRootPart.Position - targetRootPart.Position).unit
+            local retreatPosition = localRootPart.Position + (retreatDirection * dodgeDistance * 0.5)
+            localPlayer.Character.Humanoid:MoveTo(retreatPosition)
         end
     end
 end
