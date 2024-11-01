@@ -66,7 +66,7 @@ local function findPlayerByName(partialName)
     return nil
 end
 
--- Improved function to move the character towards/away from target player with obstacle detection
+-- Improved function to move the character towards/away from target player with advanced obstacle detection
 local function moveToPlayer(targetPlayer)
     local localPlayer = game.Players.LocalPlayer
     local localRootPart = localPlayer.Character and localPlayer.Character:FindFirstChild("HumanoidRootPart")
@@ -75,30 +75,39 @@ local function moveToPlayer(targetPlayer)
     if localRootPart and targetRootPart then
         local distance = (localRootPart.Position - targetRootPart.Position).Magnitude
 
-        -- Check if the character is within a small range around the followDistance (to stop circling)
         if math.abs(distance - followDistance) > 0.5 then
             local direction = (targetRootPart.Position - localRootPart.Position).unit
             local newPosition = targetRootPart.Position - (direction * followDistance)
 
-            -- Perform a raycast to detect obstacles in the movement path
-            local ray = Ray.new(localRootPart.Position, direction * followDistance)
-            local hitPart, hitPosition = workspace:FindPartOnRay(ray, localPlayer.Character)
+            -- Dynamic obstacle detection
+            local raycastParams = RaycastParams.new()
+            raycastParams.FilterDescendantsInstances = {localPlayer.Character}
+            raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
 
-            if hitPart then
-                -- If an obstacle is detected, attempt to dodge by sidestepping
-                local dodgeDirection = Vector3.new(-direction.Z, 0, direction.X) -- Perpendicular to the target direction
-                newPosition = localRootPart.Position + (dodgeDirection * dodgeDistance)
+            local rayResult = workspace:Raycast(localRootPart.Position, direction * followDistance, raycastParams)
+
+            if rayResult then
+                -- Dodge by finding an alternate path based on surrounding clear directions
+                local dodgeDirection = Vector3.new(-direction.Z, 0, direction.X).unit * dodgeDistance
+                local alternativePositions = {localRootPart.Position + dodgeDirection, localRootPart.Position - dodgeDirection}
+                
+                for _, altPos in ipairs(alternativePositions) do
+                    local altRayResult = workspace:Raycast(localRootPart.Position, (altPos - localRootPart.Position).unit * followDistance, raycastParams)
+                    if not altRayResult then
+                        newPosition = altPos
+                        break
+                    end
+                end
             end
 
             localPlayer.Character.Humanoid:MoveTo(newPosition)
-
         elseif distance < dodgeDistance then
-            -- Dodge away from the target player if too close
+            -- Dynamic dodge direction when too close
             local dodgeDirection = (localRootPart.Position - targetRootPart.Position).unit
             local dodgePosition = localRootPart.Position + (dodgeDirection * dodgeDistance)
             localPlayer.Character.Humanoid:MoveTo(dodgePosition)
         else
-            -- Stop moving if within range to avoid circling
+            -- Stop moving if within follow range to prevent circling
             localPlayer.Character.Humanoid:MoveTo(localRootPart.Position)
         end
     end
