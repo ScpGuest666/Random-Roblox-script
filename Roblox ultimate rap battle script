@@ -34,7 +34,7 @@ beNiceButton.Parent = frame
 beNiceButton.BackgroundColor3 = Color3.fromRGB(255, 165, 0)
 beNiceButton.Size = UDim2.new(0, 60, 0, 30)
 beNiceButton.Position = UDim2.new(0, 20, 0, 60)
-beNiceButton.Text = "Be Nice"
+beNiceButton.Text = "Be nice?"
 beNiceButton.TextScaled = true
 
 local momButton = Instance.new("TextButton")
@@ -42,7 +42,7 @@ momButton.Parent = frame
 momButton.BackgroundColor3 = Color3.fromRGB(255, 182, 193)
 momButton.Size = UDim2.new(0, 60, 0, 30)
 momButton.Position = UDim2.new(0, 120, 0, 60)
-momButton.Text = "Mom"
+momButton.Text = "Female rizz"
 momButton.TextScaled = true
 
 local dadButton = Instance.new("TextButton")
@@ -50,7 +50,7 @@ dadButton.Parent = frame
 dadButton.BackgroundColor3 = Color3.fromRGB(135, 206, 250)
 dadButton.Size = UDim2.new(0, 60, 0, 30)
 dadButton.Position = UDim2.new(0, 20, 0, 100)
-dadButton.Text = "Dad"
+dadButton.Text = "Male rizz"
 dadButton.TextScaled = true
 
 local silentButton = Instance.new("TextButton")
@@ -82,7 +82,7 @@ roastButton.Parent = frame
 roastButton.BackgroundColor3 = Color3.fromRGB(255, 69, 0)
 roastButton.Size = UDim2.new(0, 160, 0, 30)
 roastButton.Position = UDim2.new(0, 20, 0, 180)
-roastButton.Text = "Roast"
+roastButton.Text = "Impressive!"
 roastButton.TextScaled = true
 
 local destroyButton = Instance.new("TextButton")
