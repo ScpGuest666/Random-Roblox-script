@@ -17,7 +17,7 @@ local wasteOfTimeButton = Instance.new("TextButton")
 wasteOfTimeButton.Parent = frame
 wasteOfTimeButton.BackgroundColor3 = Color3.fromRGB(128, 0, 128)
 wasteOfTimeButton.Size = UDim2.new(0, 60, 0, 30)
-wasteOfTimeButton.Position = UDim2.new(0, 20, 0, 20)
+wasteOfTimeButton.Position = UDim2.new(0, 5, 0, 20)
 wasteOfTimeButton.Text = "Waste of Time"
 wasteOfTimeButton.TextScaled = true
 
@@ -25,7 +25,7 @@ local copyButton = Instance.new("TextButton")
 copyButton.Parent = frame
 copyButton.BackgroundColor3 = Color3.fromRGB(255, 255, 0)
 copyButton.Size = UDim2.new(0, 60, 0, 30)
-copyButton.Position = UDim2.new(0, 120, 0, 20)
+copyButton.Position = UDim2.new(0, 135, 0, 20)
 copyButton.Text = "Roast Male"
 copyButton.TextScaled = true
 
@@ -33,7 +33,7 @@ local beNiceButton = Instance.new("TextButton")
 beNiceButton.Parent = frame
 beNiceButton.BackgroundColor3 = Color3.fromRGB(255, 165, 0)
 beNiceButton.Size = UDim2.new(0, 60, 0, 30)
-beNiceButton.Position = UDim2.new(0, 20, 0, 60)
+beNiceButton.Position = UDim2.new(0, 5, 0, 60)
 beNiceButton.Text = "Roast Female"
 beNiceButton.TextScaled = true
 
@@ -41,7 +41,7 @@ local momButton = Instance.new("TextButton")
 momButton.Parent = frame
 momButton.BackgroundColor3 = Color3.fromRGB(255, 182, 193)
 momButton.Size = UDim2.new(0, 60, 0, 30)
-momButton.Position = UDim2.new(0, 120, 0, 60)
+momButton.Position = UDim2.new(0, 135, 0, 60)
 momButton.Text = "Mom"
 momButton.TextScaled = true
 
@@ -49,7 +49,7 @@ local dadButton = Instance.new("TextButton")
 dadButton.Parent = frame
 dadButton.BackgroundColor3 = Color3.fromRGB(135, 206, 250)
 dadButton.Size = UDim2.new(0, 60, 0, 30)
-dadButton.Position = UDim2.new(0, 20, 0, 100)
+dadButton.Position = UDim2.new(0, 5, 0, 100)
 dadButton.Text = "Dad"
 dadButton.TextScaled = true
 
@@ -57,7 +57,7 @@ local silentButton = Instance.new("TextButton")
 silentButton.Parent = frame
 silentButton.BackgroundColor3 = Color3.fromRGB(211, 211, 211)
 silentButton.Size = UDim2.new(0, 60, 0, 30)
-silentButton.Position = UDim2.new(0, 120, 0, 100)
+silentButton.Position = UDim2.new(0, 135, 0, 100)
 silentButton.Text = "Silent"
 silentButton.TextScaled = true
 
@@ -65,7 +65,7 @@ local copyPasteButton = Instance.new("TextButton")
 copyPasteButton.Parent = frame
 copyPasteButton.BackgroundColor3 = Color3.fromRGB(173, 216, 230)
 copyPasteButton.Size = UDim2.new(0, 60, 0, 30)
-copyPasteButton.Position = UDim2.new(0, 20, 0, 140)
+copyPasteButton.Position = UDim2.new(0, 5, 0, 140)
 copyPasteButton.Text = "No Swearing"
 copyPasteButton.TextScaled = true
 
@@ -73,7 +73,7 @@ local languageBarrierButton = Instance.new("TextButton")
 languageBarrierButton.Parent = frame
 languageBarrierButton.BackgroundColor3 = Color3.fromRGB(240, 128, 128)
 languageBarrierButton.Size = UDim2.new(0, 60, 0, 30)
-languageBarrierButton.Position = UDim2.new(0, 120, 0, 140)
+languageBarrierButton.Position = UDim2.new(0, 135, 0, 140)
 languageBarrierButton.Text = "Language Barrier"
 languageBarrierButton.TextScaled = true
 
@@ -81,7 +81,7 @@ local roastButton = Instance.new("TextButton")
 roastButton.Parent = frame
 roastButton.BackgroundColor3 = Color3.fromRGB(255, 69, 0)
 roastButton.Size = UDim2.new(0, 60, 0, 30)
-roastButton.Position = UDim2.new(0, 20, 0, 180)
+roastButton.Position = UDim2.new(0, 5, 0, 180)
 roastButton.Text = "Reply Back"
 roastButton.TextScaled = true
 
@@ -89,7 +89,7 @@ local testing1Button = Instance.new("TextButton")
 testing1Button.Parent = frame
 testing1Button.BackgroundColor3 = Color3.fromRGB(173, 255, 47)
 testing1Button.Size = UDim2.new(0, 60, 0, 30)
-testing1Button.Position = UDim2.new(0, 20, 0, 220)
+testing1Button.Position = UDim2.new(0, 5, 0, 220)
 testing1Button.Text = "Spelling"
 testing1Button.TextScaled = true
 
@@ -97,7 +97,7 @@ local testing2Button = Instance.new("TextButton")
 testing2Button.Parent = frame
 testing2Button.BackgroundColor3 = Color3.fromRGB(100, 149, 237)
 testing2Button.Size = UDim2.new(0, 60, 0, 30)
-testing2Button.Position = UDim2.new(0, 120, 0, 220)
+testing2Button.Position = UDim2.new(0, 135, 0, 220)
 testing2Button.Text = "Sus"
 testing2Button.TextScaled = true
 
@@ -105,9 +105,57 @@ local testing3Button = Instance.new("TextButton")
 testing3Button.Parent = frame
 testing3Button.BackgroundColor3 = Color3.fromRGB(255, 20, 147)
 testing3Button.Size = UDim2.new(0, 60, 0, 30)
-testing3Button.Position = UDim2.new(0, 120, 0, 180)
+testing3Button.Position = UDim2.new(0, 135, 0, 180)
 testing3Button.Text = "Confused"
 testing3Button.TextScaled = true
+
+local testing4Button = Instance.new("TextButton")
+testing4Button.Parent = frame
+testing4Button.BackgroundColor3 = Color3.fromRGB(250, 128, 114)
+testing4Button.Size = UDim2.new(0, 60, 0, 30)
+testing4Button.Position = UDim2.new(0, 70, 0, 20)
+testing4Button.Text = "Testing 4"
+testing4Button.TextScaled = true
+
+local testing5Button = Instance.new("TextButton")
+testing5Button.Parent = frame
+testing5Button.BackgroundColor3 = Color3.fromRGB(255, 105, 180)
+testing5Button.Size = UDim2.new(0, 60, 0, 30)
+testing5Button.Position = UDim2.new(0, 70, 0, 60)
+testing5Button.Text = "Testing 5"
+testing5Button.TextScaled = true
+
+local testing6Button = Instance.new("TextButton")
+testing6Button.Parent = frame
+testing6Button.BackgroundColor3 = Color3.fromRGB(72, 209, 204)
+testing6Button.Size = UDim2.new(0, 60, 0, 30)
+testing6Button.Position = UDim2.new(0, 70, 0, 100)
+testing6Button.Text = "Testing 6"
+testing6Button.TextScaled = true
+
+local testing7Button = Instance.new("TextButton")
+testing7Button.Parent = frame
+testing7Button.BackgroundColor3 = Color3.fromRGB(255, 165, 0)
+testing7Button.Size = UDim2.new(0, 60, 0, 30)
+testing7Button.Position = UDim2.new(0, 70, 0, 140)
+testing7Button.Text = "Testing 7"
+testing7Button.TextScaled = true
+
+local testing8Button = Instance.new("TextButton")
+testing8Button.Parent = frame
+testing8Button.BackgroundColor3 = Color3.fromRGB(139, 69, 19)
+testing8Button.Size = UDim2.new(0, 60, 0, 30)
+testing8Button.Position = UDim2.new(0, 70, 0, 180)
+testing8Button.Text = "Testing 8"
+testing8Button.TextScaled = true
+
+local testing9Button = Instance.new("TextButton")
+testing9Button.Parent = frame
+testing9Button.BackgroundColor3 = Color3.fromRGB(0, 191, 255)
+testing9Button.Size = UDim2.new(0, 60, 0, 30)
+testing9Button.Position = UDim2.new(0, 70, 0, 220)
+testing9Button.Text = "Testing 9"
+testing9Button.TextScaled = true
 
 local destroyButton = Instance.new("TextButton")
 destroyButton.Parent = frame
@@ -12170,6 +12218,36 @@ local testing3Phrases = {
     "Mate, even my banned alt would cringe at that.",
     "Bruh, that’s more random than a noob with commands."
 }
+local testing4Phrases = {
+    "Testing 4 Message A", 
+    "Testing 4 Message B", 
+    "Testing 4 Message C"
+}
+local testing5Phrases = {
+    "Testing 5 Message A", 
+    "Testing 5 Message B", 
+    "Testing 5 Message C"
+}
+local testing6Phrases = {
+    "Testing 6 Message A", 
+    "Testing 6 Message B", 
+    "Testing 6 Message C"
+}
+local testing7Phrases = {
+    "Testing 7 Message A", 
+    "Testing 7 Message B", 
+    "Testing 7 Message C"
+}
+local testing8Phrases = {
+    "Testing 8 Message A", 
+    "Testing 8 Message B", 
+    "Testing 8 Message C"
+}
+local testing9Phrases = {
+    "Testing 9 Message A", 
+    "Testing 9 Message B", 
+    "Testing 9 Message C"
+}
 
 local cooldowns = {}
 local sentMessages = {} -- Track sent messages and their timestamps
@@ -12187,6 +12265,12 @@ for _, phrase in ipairs(wasteOfTimePhrases) do cooldowns[phrase] = 0 end
 for _, phrase in ipairs(testing1Phrases) do cooldowns[phrase] = 0 end
 for _, phrase in ipairs(testing2Phrases) do cooldowns[phrase] = 0 end
 for _, phrase in ipairs(testing3Phrases) do cooldowns[phrase] = 0 end
+for _, phrase in ipairs(testing4Phrases) do cooldowns[phrase] = 0 end
+for _, phrase in ipairs(testing5Phrases) do cooldowns[phrase] = 0 end
+for _, phrase in ipairs(testing6Phrases) do cooldowns[phrase] = 0 end
+for _, phrase in ipairs(testing7Phrases) do cooldowns[phrase] = 0 end
+for _, phrase in ipairs(testing8Phrases) do cooldowns[phrase] = 0 end
+for _, phrase in ipairs(testing9Phrases) do cooldowns[phrase] = 0 end
 
 -- Function to get a random non-duplicate phrase with cooldown
 local function getRandomPhrase(phraseList)
@@ -12325,6 +12409,54 @@ end)
 
 testing3Button.MouseButton1Click:Connect(function()
     local selectedPhrase = getRandomPhrase(testing3Phrases)
+    if selectedPhrase then
+        setclipboard(selectedPhrase)
+        showCopiedPhrase(selectedPhrase)
+    end
+end)
+
+testing4Button.MouseButton1Click:Connect(function()
+    local selectedPhrase = getRandomPhrase(testing4Phrases)
+    if selectedPhrase then
+        setclipboard(selectedPhrase)
+        showCopiedPhrase(selectedPhrase)
+    end
+end)
+
+testing5Button.MouseButton1Click:Connect(function()
+    local selectedPhrase = getRandomPhrase(testing5Phrases)
+    if selectedPhrase then
+        setclipboard(selectedPhrase)
+        showCopiedPhrase(selectedPhrase)
+    end
+end)
+
+testing6Button.MouseButton1Click:Connect(function()
+    local selectedPhrase = getRandomPhrase(testing6Phrases)
+    if selectedPhrase then
+        setclipboard(selectedPhrase)
+        showCopiedPhrase(selectedPhrase)
+    end
+end)
+
+testing7Button.MouseButton1Click:Connect(function()
+    local selectedPhrase = getRandomPhrase(testing7Phrases)
+    if selectedPhrase then
+        setclipboard(selectedPhrase)
+        showCopiedPhrase(selectedPhrase)
+    end
+end)
+
+testing8Button.MouseButton1Click:Connect(function()
+    local selectedPhrase = getRandomPhrase(testing8Phrases)
+    if selectedPhrase then
+        setclipboard(selectedPhrase)
+        showCopiedPhrase(selectedPhrase)
+    end
+end)
+
+testing9Button.MouseButton1Click:Connect(function()
+    local selectedPhrase = getRandomPhrase(testing9Phrases)
     if selectedPhrase then
         setclipboard(selectedPhrase)
         showCopiedPhrase(selectedPhrase)
