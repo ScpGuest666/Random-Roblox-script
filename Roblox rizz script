@@ -1093,6 +1093,31 @@ local function getRandomPhrase()
     return selected.text
 end
 
+-- Function to show copied phrase temporarily
+local function showCopiedPhrase(phrase)
+    -- Create temporary frame for displaying the copied phrase
+    local copiedFrame = Instance.new("Frame")
+    copiedFrame.Parent = screenGui
+    copiedFrame.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
+    copiedFrame.Size = UDim2.new(0, 200, 0, 50)
+    copiedFrame.Position = UDim2.new(0, 10, 0.5, -25)
+    copiedFrame.Visible = true
+    
+    -- Create label to show the phrase
+    local copiedLabel = Instance.new("TextLabel")
+    copiedLabel.Parent = copiedFrame
+    copiedLabel.BackgroundTransparency = 1
+    copiedLabel.Size = UDim2.new(1, 0, 1, 0)
+    copiedLabel.Text = "Copied: " .. phrase
+    copiedLabel.TextScaled = true
+    copiedLabel.TextColor3 = Color3.fromRGB(0, 0, 0)
+    
+    -- Make the frame disappear after 6 seconds
+    task.delay(6, function()
+        copiedFrame:Destroy()
+    end)
+end
+
 -- Button Functions
 onButton.MouseButton1Click:Connect(function()
     statusLabel.Text = "Status: On"
@@ -1130,6 +1155,7 @@ copyButton.MouseButton1Click:Connect(function()
     local randomPhrase = getRandomPhrase()
     if randomPhrase then
         setclipboard(randomPhrase) -- Copies the phrase to the clipboard
+        showCopiedPhrase(randomPhrase)
     end
 end)
 
