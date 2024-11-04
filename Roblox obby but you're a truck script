@@ -60,7 +60,7 @@ local function createPlatform()
     
     -- Create a new part
     platform = Instance.new("Part")
-    platform.Size = Vector3.new(35, 1, 35)  -- Size of the platform
+    platform.Size = Vector3.new(40, 1, 40)  -- Size of the platform
     platform.Anchored = true
     platform.Color = Color3.fromRGB(255, 0, 0)  -- Red color
     platform.Parent = workspace
