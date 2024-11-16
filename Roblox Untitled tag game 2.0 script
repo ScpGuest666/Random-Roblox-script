@@ -1,0 +1,250 @@
+-- Create ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+screenGui.ResetOnSpawn = false
+
+-- Create Frame
+local frame = Instance.new("Frame")
+frame.Parent = screenGui
+frame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+frame.Size = UDim2.new(0, 200, 0, 210)
+frame.Position = UDim2.new(0.5, -100, 0.5, -150)
+frame.Active = true
+frame.Draggable = true
+
+-- Create Off Button
+local offButton = Instance.new("TextButton")
+offButton.Parent = frame
+offButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+offButton.Size = UDim2.new(0, 160, 0, 30)
+offButton.Position = UDim2.new(0, 20, 0, 20)
+offButton.Text = "Off"
+offButton.TextScaled = true
+
+-- Create Destroy Button
+local destroyButton = Instance.new("TextButton")
+destroyButton.Parent = frame
+destroyButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+destroyButton.Size = UDim2.new(0, 160, 0, 30)
+destroyButton.Position = UDim2.new(0, 20, 0, 60)
+destroyButton.Text = "Destroy"
+destroyButton.TextScaled = true
+
+-- Create Status Indicator
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Parent = frame
+statusLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+statusLabel.Size = UDim2.new(0, 200, 0, 30)
+statusLabel.Position = UDim2.new(0, 0, 0, -30)
+statusLabel.Text = "Status: Off"
+statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+statusLabel.TextScaled = true
+
+-- Create Team List Frame
+local teamListFrame = Instance.new("ScrollingFrame")
+teamListFrame.Parent = frame
+teamListFrame.BackgroundColor3 = Color3.fromRGB(240, 240, 240)
+teamListFrame.Size = UDim2.new(0, 160, 0, 100)
+teamListFrame.Position = UDim2.new(0, 20, 0, 100)
+teamListFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+teamListFrame.ScrollBarThickness = 1
+teamListFrame.ScrollingDirection = Enum.ScrollingDirection.Y
+
+-- Variables
+local teleportEnabled = false
+local selectedTeam = nil
+local currentFollowedPlayer = nil
+local originalPosition = nil
+local tpButtons = {}
+
+-- Helper Functions
+local function teleportToRandomPlayerOnTeam(teamColor)
+    local playersOnTeam = {}
+    for _, player in pairs(game.Players:GetPlayers()) do
+        if player.Character then
+            local torso = player.Character:FindFirstChild("Torso") or player.Character:FindFirstChild("UpperTorso")
+            if torso and torso.BrickColor.Name == teamColor then
+                table.insert(playersOnTeam, player)
+            end
+        end
+    end
+
+    if #playersOnTeam > 0 then
+        currentFollowedPlayer = playersOnTeam[math.random(1, #playersOnTeam)]
+        local localPlayer = game.Players.LocalPlayer
+        local character = localPlayer.Character
+        if character and not originalPosition then -- Only save once
+            local rootPart = character:FindFirstChild("HumanoidRootPart")
+            if rootPart then
+                originalPosition = rootPart.Position
+            end
+        end
+    end
+end
+
+local function followPlayer()
+    if currentFollowedPlayer and currentFollowedPlayer.Character then
+        local localPlayer = game.Players.LocalPlayer
+        local character = localPlayer.Character
+        if character then
+            local rootPart = character:FindFirstChild("HumanoidRootPart")
+            local targetRootPart = currentFollowedPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if rootPart and targetRootPart then
+                rootPart.CFrame = targetRootPart.CFrame * CFrame.new(0, 0, 3)
+            end
+        end
+    end
+end
+
+local function createTpButton(teamColor, yPosition)
+    local tpButton = Instance.new("TextButton")
+    tpButton.Parent = teamListFrame
+    tpButton.Size = UDim2.new(0, 60, 0, 20)
+    tpButton.Position = UDim2.new(0, 130, 0, yPosition)
+    tpButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0) -- Default to "Off" (red)
+    tpButton.Text = "TP: Off"
+    tpButton.TextScaled = true
+    tpButton.MouseButton1Click:Connect(function()
+        local currentState = tpButton.Text == "TP: On"
+        if currentState then
+            tpButton.Text = "TP: Off"
+            tpButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+            teleportEnabled = false
+            selectedTeam = nil
+            currentFollowedPlayer = nil
+            statusLabel.Text = "Status: Off"
+            statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+        else
+            for _, button in pairs(tpButtons) do
+                button.Text = "TP: Off"
+                button.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+            end
+            tpButton.Text = "TP: On"
+            tpButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+            teleportEnabled = true
+            selectedTeam = teamColor
+            teleportToRandomPlayerOnTeam(teamColor)
+            statusLabel.Text = "Status: On"
+            statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+        end
+    end)
+    return tpButton
+end
+
+local function updateTeamList()
+    for _, child in pairs(teamListFrame:GetChildren()) do
+        if child:IsA("TextLabel") or child:IsA("TextButton") then
+            child:Destroy()
+        end
+    end
+    tpButtons = {}
+
+    local teams = {}
+
+    for _, player in pairs(game.Players:GetPlayers()) do
+        if player.Character then
+            local torso = player.Character:FindFirstChild("Torso") or player.Character:FindFirstChild("UpperTorso")
+            if torso then
+                local torsoColor = torso.BrickColor.Name
+                if not teams[torsoColor] then
+                    teams[torsoColor] = {Count = 0, Color = torso.BrickColor.Color}
+                end
+                teams[torsoColor].Count = teams[torsoColor].Count + 1
+            end
+        end
+    end
+
+    local yPosition = 0
+    for teamColor, info in pairs(teams) do
+        local teamLabel = Instance.new("TextLabel")
+        teamLabel.Parent = teamListFrame
+        teamLabel.Size = UDim2.new(0, 120, 0, 20)
+        teamLabel.Position = UDim2.new(0, 10, 0, yPosition)
+        teamLabel.BackgroundColor3 = info.Color
+        teamLabel.Text = teamColor .. ": " .. info.Count
+        teamLabel.TextScaled = true
+
+        local tpButton = createTpButton(teamColor, yPosition)
+        table.insert(tpButtons, tpButton)
+
+        yPosition = yPosition + 25
+    end
+    teamListFrame.CanvasSize = UDim2.new(0, 0, 0, yPosition)
+end
+
+-- Main Loops
+spawn(function()
+    while true do
+        if teleportEnabled and selectedTeam then
+            if currentFollowedPlayer and currentFollowedPlayer.Character then
+                local torso = currentFollowedPlayer.Character:FindFirstChild("Torso") or currentFollowedPlayer.Character:FindFirstChild("UpperTorso")
+                if torso and torso.BrickColor.Name == selectedTeam then
+                    followPlayer()
+                else
+                    teleportToRandomPlayerOnTeam(selectedTeam)
+                end
+            else
+                teleportToRandomPlayerOnTeam(selectedTeam)
+            end
+        end
+        wait(0.1)
+    end
+end)
+
+spawn(function()
+    while true do
+        updateTeamList()
+        wait(2)
+    end
+end)
+
+offButton.MouseButton1Click:Connect(function()
+    teleportEnabled = false
+    statusLabel.Text = "Status: Off"
+    statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+    -- Teleport character back to original position
+    if originalPosition then
+        local localPlayer = game.Players.LocalPlayer
+        local character = localPlayer.Character
+        if character then
+            local rootPart = character:FindFirstChild("HumanoidRootPart")
+            if rootPart then
+                rootPart.CFrame = CFrame.new(originalPosition)
+            end
+        end
+        originalPosition = nil -- Reset original position after teleporting back
+    end
+end)
+
+destroyButton.MouseButton1Click:Connect(function()
+    -- Turn off teleportation
+    teleportEnabled = false
+    statusLabel.Text = "Status: Off"
+    statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+
+    -- Reset other settings like currentFollowedPlayer
+    selectedTeam = nil
+    currentFollowedPlayer = nil
+
+    -- Destroy all teleport buttons
+    for _, button in pairs(tpButtons) do
+        button:Destroy()
+    end
+    tpButtons = {}
+
+    -- Destroy the entire GUI
+    screenGui:Destroy()
+
+    -- Optionally, reset the character position if desired
+    if originalPosition then
+        local localPlayer = game.Players.LocalPlayer
+        local character = localPlayer.Character
+        if character then
+            local rootPart = character:FindFirstChild("HumanoidRootPart")
+            if rootPart then
+                rootPart.CFrame = CFrame.new(originalPosition)
+            end
+        end
+        originalPosition = nil -- Reset original position after teleporting back
+    end
+end)
