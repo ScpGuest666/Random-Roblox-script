@@ -5,10 +5,22 @@ local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 local Workspace = game:GetService("Workspace")
 
+-- Function to update the Character and HumanoidRootPart reference
+local function onCharacterAdded(character)
+    Character = character
+    HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+end
+
+-- Connect to CharacterAdded event
+LocalPlayer.CharacterAdded:Connect(onCharacterAdded)
+
 -- Create GUI
-local screenGui = Instance.new("ScreenGui", LocalPlayer.PlayerGui)
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "PersistentScreenGui"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 local frame = Instance.new("Frame", screenGui)
-frame.Size = UDim2.new(0, 250, 0, 200)
+frame.Size = UDim2.new(0, 250, 0, 250)
 frame.Position = UDim2.new(0, 10, 0, 10)
 frame.BackgroundColor3 = Color3.new(0.5, 0.5, 0.5)
 frame.Active = true
@@ -31,18 +43,16 @@ destroyButton.Size = UDim2.new(0, 30, 0, 30)
 destroyButton.Position = UDim2.new(0, 150, 0, 10)
 destroyButton.Text = "X"
 
--- Labels for distances
 local withinLabel = Instance.new("TextLabel", frame)
 withinLabel.Size = UDim2.new(0, 100, 0, 30)
 withinLabel.Position = UDim2.new(0, 10, 0, 50)
-withinLabel.Text = "Within Studs: 20"
+withinLabel.Text = "Within Studs: 10"
 
 local teleportLabel = Instance.new("TextLabel", frame)
 teleportLabel.Size = UDim2.new(0, 100, 0, 30)
 teleportLabel.Position = UDim2.new(0, 10, 0, 90)
-teleportLabel.Text = "Teleport Studs: 30"
+teleportLabel.Text = "Teleport Studs: 10"
 
--- Increase/Decrease buttons for within studs
 local withinPlus = Instance.new("TextButton", frame)
 withinPlus.Size = UDim2.new(0, 30, 0, 30)
 withinPlus.Position = UDim2.new(0, 120, 0, 50)
@@ -53,7 +63,6 @@ withinMinus.Size = UDim2.new(0, 30, 0, 30)
 withinMinus.Position = UDim2.new(0, 160, 0, 50)
 withinMinus.Text = "-"
 
--- Increase/Decrease buttons for teleport studs
 local teleportPlus = Instance.new("TextButton", frame)
 teleportPlus.Size = UDim2.new(0, 30, 0, 30)
 teleportPlus.Position = UDim2.new(0, 120, 0, 90)
@@ -64,12 +73,23 @@ teleportMinus.Size = UDim2.new(0, 30, 0, 30)
 teleportMinus.Position = UDim2.new(0, 160, 0, 90)
 teleportMinus.Text = "-"
 
-local active = false
-local withinStuds = 20
-local teleportStuds = 30
-local minTeleportStuds = 10  -- Minimum teleport distance
+local enableRaycastLabel = Instance.new("TextLabel", frame)
+enableRaycastLabel.Size = UDim2.new(0, 100, 0, 30)
+enableRaycastLabel.Position = UDim2.new(0, 10, 0, 130)
+enableRaycastLabel.Text = "Dodging Mode: Off"
 
--- Function to check if a position is safe for teleporting
+local enableRaycastButton = Instance.new("TextButton", frame)
+enableRaycastButton.Size = UDim2.new(0, 80, 0, 30)
+enableRaycastButton.Position = UDim2.new(0, 120, 0, 130)
+enableRaycastButton.Text = "Toggle Dodging"
+enableRaycastButton.BackgroundColor3 = Color3.new(1, 0, 0)  -- Red color initially
+
+local active = false
+local withinStuds = 10
+local teleportStuds = 10
+local minTeleportStuds = 10  -- Minimum teleport distance
+local raycastEnabled = false  -- Raycast toggle state
+
 local function isSafePosition(position)
     local raycastParams = RaycastParams.new()
     raycastParams.FilterDescendantsInstances = {Character}
@@ -79,24 +99,34 @@ local function isSafePosition(position)
     return raycastResult and raycastResult.Position and raycastResult.Position.Y < position.Y
 end
 
--- Function to calculate the position behind a player
-local function getTeleportPosition(playerHumanoidRootPart)
-    local direction = (HumanoidRootPart.Position - playerHumanoidRootPart.Position).unit
-    local teleportDistance = math.max(teleportStuds, minTeleportStuds)  -- Ensure teleport distance is at least minTeleportStuds
-    return playerHumanoidRootPart.Position - direction * teleportDistance
+local function getSafeTeleportPosition(playerHumanoidRootPart)
+    local angleIncrement = math.pi / 8  -- 22.5 degrees per step (16 checks for a full circle)
+    local radius = teleportStuds
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterDescendantsInstances = {Character}
+    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+
+    for i = 0, 15 do
+        local angle = i * angleIncrement
+        local direction = Vector3.new(math.cos(angle), 0, math.sin(angle))
+        local targetPosition = playerHumanoidRootPart.Position + direction * radius
+        local raycastResult = Workspace:Raycast(playerHumanoidRootPart.Position, targetPosition - playerHumanoidRootPart.Position, raycastParams)
+
+        if not raycastResult then
+            return targetPosition  -- Return the first safe position found
+        end
+    end
+
+    return nil
 end
 
--- Function to check if the local player is facing towards the other player
 local function isFacingTarget(otherHumanoidRootPart)
     local directionToOtherPlayer = (otherHumanoidRootPart.Position - HumanoidRootPart.Position).unit
     local facingDirection = HumanoidRootPart.CFrame.LookVector
     local dotProduct = facingDirection:Dot(directionToOtherPlayer)
-
-    -- Check if the dot product is greater than a threshold (0.99) to confirm they are roughly facing each other
     return dotProduct > 0.99
 end
 
--- Function to check distance and teleport
 local function avoidPlayers()
     if not active then return end
 
@@ -105,8 +135,14 @@ local function avoidPlayers()
             local otherHumanoidRootPart = player.Character.HumanoidRootPart
             local distance = (HumanoidRootPart.Position - otherHumanoidRootPart.Position).Magnitude
             if distance < withinStuds and isFacingTarget(otherHumanoidRootPart) then
-                local newPosition = getTeleportPosition(otherHumanoidRootPart)
-                if isSafePosition(newPosition) then
+                local newPosition
+                if raycastEnabled then
+                    newPosition = getSafeTeleportPosition(otherHumanoidRootPart)
+                else
+                    newPosition = otherHumanoidRootPart.Position - (HumanoidRootPart.Position - otherHumanoidRootPart.Position).unit * teleportStuds
+                end
+
+                if newPosition and isSafePosition(newPosition) then
                     HumanoidRootPart.CFrame = CFrame.new(newPosition)
                 end
             end
@@ -116,17 +152,19 @@ end
 
 onButton.MouseButton1Click:Connect(function()
     active = true
-    onButton.BackgroundColor3 = Color3.new(0, 1, 0)  -- Green color
-    offButton.BackgroundColor3 = Color3.new(1, 0, 0)  -- Red color
+    onButton.BackgroundColor3 = Color3.new(0, 1, 0)
+    offButton.BackgroundColor3 = Color3.new(1, 0, 0)
 end)
 
 offButton.MouseButton1Click:Connect(function()
     active = false
-    onButton.BackgroundColor3 = Color3.new(1, 0, 0)  -- Red color
-    offButton.BackgroundColor3 = Color3.new(0, 1, 0)  -- Green color
+    onButton.BackgroundColor3 = Color3.new(1, 0, 0)
+    offButton.BackgroundColor3 = Color3.new(0, 1, 0)
 end)
 
 destroyButton.MouseButton1Click:Connect(function()
+    active = false
+    raycastEnabled = false
     screenGui:Destroy()
 end)
 
@@ -148,6 +186,12 @@ end)
 teleportMinus.MouseButton1Click:Connect(function()
     teleportStuds = math.max(minTeleportStuds, teleportStuds - 1)
     teleportLabel.Text = "Teleport Studs: " .. teleportStuds
+end)
+
+enableRaycastButton.MouseButton1Click:Connect(function()
+    raycastEnabled = not raycastEnabled
+    enableRaycastButton.BackgroundColor3 = raycastEnabled and Color3.new(0, 1, 0) or Color3.new(1, 0, 0)
+    enableRaycastLabel.Text = "Dodging Mode: " .. (raycastEnabled and "On" or "Off")
 end)
 
 RunService.Stepped:Connect(avoidPlayers)
