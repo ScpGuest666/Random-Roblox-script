@@ -1,0 +1,206 @@
+-- Create ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+screenGui.ResetOnSpawn = false
+
+-- Create Frame
+local frame = Instance.new("Frame")
+frame.Parent = screenGui
+frame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+frame.Size = UDim2.new(0, 200, 0, 220)  -- Adjusted size to fit all buttons
+frame.Position = UDim2.new(0.5, -100, 0.5, -75)
+frame.Active = true
+frame.Draggable = true
+
+-- Create On Button
+local onButton = Instance.new("TextButton")
+onButton.Parent = frame
+onButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+onButton.Size = UDim2.new(0, 60, 0, 30)
+onButton.Position = UDim2.new(0, 0, 0, 20)
+onButton.Text = "On"
+onButton.TextScaled = true
+
+-- Create TP Button (Positioned between On and Off buttons)
+local tpButton = Instance.new("TextButton")
+tpButton.Parent = frame
+tpButton.BackgroundColor3 = Color3.fromRGB(255, 255, 0)
+tpButton.Size = UDim2.new(0, 60, 0, 30)
+tpButton.Position = UDim2.new(0, 70, 0, 20)
+tpButton.Text = "TP"
+tpButton.TextScaled = true
+
+-- Create Off Button
+local offButton = Instance.new("TextButton")
+offButton.Parent = frame
+offButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+offButton.Size = UDim2.new(0, 60, 0, 30)
+offButton.Position = UDim2.new(0, 140, 0, 20)
+offButton.Text = "Off"
+offButton.TextScaled = true
+
+-- Create Destroy Button
+local destroyButton = Instance.new("TextButton")
+destroyButton.Parent = frame
+destroyButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+destroyButton.Size = UDim2.new(0, 160, 0, 30)
+destroyButton.Position = UDim2.new(0, 20, 0, 60)
+destroyButton.Text = "Destroy"
+destroyButton.TextScaled = true
+
+-- Create Clear All Button
+local clearAllButton = Instance.new("TextButton")
+clearAllButton.Parent = frame
+clearAllButton.BackgroundColor3 = Color3.fromRGB(0, 0, 255)
+clearAllButton.Size = UDim2.new(0, 160, 0, 30)
+clearAllButton.Position = UDim2.new(0, 20, 0, 100)
+clearAllButton.Text = "Clear All"
+clearAllButton.TextScaled = true
+
+-- Create Clear Last Button
+local clearLastButton = Instance.new("TextButton")
+clearLastButton.Parent = frame
+clearLastButton.BackgroundColor3 = Color3.fromRGB(255, 165, 0)
+clearLastButton.Size = UDim2.new(0, 160, 0, 30)
+clearLastButton.Position = UDim2.new(0, 20, 0, 130)
+clearLastButton.Text = "Clear Last"
+clearLastButton.TextScaled = true
+
+-- Create Spawn Button
+local spawnButton = Instance.new("TextButton")
+spawnButton.Parent = frame
+spawnButton.BackgroundColor3 = Color3.fromRGB(255, 255, 0)
+spawnButton.Size = UDim2.new(0, 160, 0, 30)
+spawnButton.Position = UDim2.new(0, 20, 0, 160)
+spawnButton.Text = "Spawn"
+spawnButton.TextScaled = true
+
+-- Create Status Indicator
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Parent = frame
+statusLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+statusLabel.Size = UDim2.new(0, 200, 0, 30)
+statusLabel.Position = UDim2.new(0, 0, 0, -30)
+statusLabel.Text = "Status: Off"
+statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+statusLabel.TextScaled = true
+
+-- Table to hold red platforms
+local redPlatforms = {}
+local shouldTeleport = false  -- Flag to control teleportation
+
+-- Button Functions
+onButton.MouseButton1Click:Connect(function()
+    statusLabel.Text = "Status: On"
+    statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+    shouldTeleport = true  -- Enable teleportation when the GUI is On
+end)
+
+offButton.MouseButton1Click:Connect(function()
+    statusLabel.Text = "Status: Off"
+    statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+    shouldTeleport = false  -- Disable teleportation when the GUI is Off
+end)
+
+tpButton.MouseButton1Click:Connect(function()
+    -- TP functionality (teleport from first to last platform)
+    if statusLabel.Text == "Status: On" and #redPlatforms > 0 then
+        local character = game.Players.LocalPlayer.Character
+        if character then
+            local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+            if humanoidRootPart then
+                -- Start teleportation from the first to the last red platform
+                for i, platform in ipairs(redPlatforms) do
+                    if platform and shouldTeleport then
+                        humanoidRootPart.CFrame = CFrame.new(platform.Position + Vector3.new(0, 2, 0))  -- Position above the platform
+                        wait(0.2)  -- Delay between each teleport
+                    end
+                    -- If GUI is turned off during teleportation, stop the process
+                    if not shouldTeleport then
+                        break
+                    end
+                end
+            end
+        end
+    end
+end)
+
+spawnButton.MouseButton1Click:Connect(function()
+    -- Get the character and position the platform below the feet
+    local character = game.Players.LocalPlayer.Character
+    if character and character:FindFirstChild("HumanoidRootPart") then
+        local humanoidRootPart = character.HumanoidRootPart
+        local spawnPosition = humanoidRootPart.Position - Vector3.new(0, humanoidRootPart.Size.Y / 2 + 2, 0) -- Adjust to place it slightly lower
+
+        -- Create and position the red platform
+        local redPlatform = Instance.new("Part")
+        redPlatform.Parent = workspace
+        redPlatform.Size = Vector3.new(5, 1, 5)  -- Smaller platform size
+        redPlatform.Position = spawnPosition  -- Position below the character's feet
+        redPlatform.Anchored = true  -- Make the platform stationary
+        redPlatform.BrickColor = BrickColor.new("Bright red")  -- Set the platform color to red
+        redPlatform.CanCollide = false  -- Disable collisions
+        
+        -- Add the platform to the redPlatforms table
+        table.insert(redPlatforms, redPlatform)
+    end
+end)
+
+clearAllButton.MouseButton1Click:Connect(function()
+    -- Destroy all red platforms
+    for _, platform in ipairs(redPlatforms) do
+        if platform then
+            platform:Destroy()
+        end
+    end
+    -- Clear the table
+    redPlatforms = {}
+end)
+
+clearLastButton.MouseButton1Click:Connect(function()
+    -- Destroy the last red platform, if any
+    if #redPlatforms > 0 then
+        local lastPlatform = redPlatforms[#redPlatforms]
+        if lastPlatform then
+            lastPlatform:Destroy()  -- Destroy the last platform
+            table.remove(redPlatforms, #redPlatforms)  -- Remove the reference from the table
+        end
+    end
+end)
+
+destroyButton.MouseButton1Click:Connect(function()
+    -- Destroy all red platforms first
+    for _, platform in ipairs(redPlatforms) do
+        if platform then
+            platform:Destroy()
+        end
+    end
+    -- Clear the table of platforms
+    redPlatforms = {}
+
+    -- Destroy the GUI
+    screenGui:Destroy()
+end)
+
+-- Handle Character Respawn
+game.Players.LocalPlayer.CharacterAdded:Connect(function(character)
+    -- Wait for the character's humanoid root part
+    local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+
+    -- Wait until the GUI is On
+    if statusLabel.Text == "Status: On" then
+        -- Teleport the character to each red platform with a delay of ??? seconds
+        for i, platform in ipairs(redPlatforms) do
+            if platform and shouldTeleport then  -- Check if teleportation is allowed
+                -- Teleport the character to the platform
+                humanoidRootPart.CFrame = CFrame.new(platform.Position + Vector3.new(0, 2, 0)) -- Position above the platform
+                wait(0.2)  -- Wait for ??? seconds before teleporting to the next platform
+
+                -- If GUI is turned off during teleportation, stop the process
+                if not shouldTeleport then
+                    break
+                end
+            end
+        end
+    end
+end)
