@@ -1,0 +1,141 @@
+-- LocalScript inside StarterPlayerScripts
+local player = game.Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local RunService = game:GetService("RunService")
+
+-- Create GUI
+local screenGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
+local frame = Instance.new("Frame", screenGui)
+frame.Size = UDim2.new(0, 200, 0, 220)
+frame.Position = UDim2.new(0.5, -100, 0.5, -100)
+frame.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+frame.Active = true
+frame.Draggable = true
+
+-- Create GUI elements for staring functionality
+local toggleStareButton = Instance.new("TextButton", frame)
+toggleStareButton.Size = UDim2.new(0, 180, 0, 40)
+toggleStareButton.Position = UDim2.new(0, 10, 0, 10)
+toggleStareButton.Text = "Stare OFF"
+toggleStareButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+
+local increaseStareDistanceButton = Instance.new("TextButton", frame)
+increaseStareDistanceButton.Size = UDim2.new(0, 85, 0, 30)
+increaseStareDistanceButton.Position = UDim2.new(0, 10, 0, 60)
+increaseStareDistanceButton.Text = "+"
+
+local decreaseStareDistanceButton = Instance.new("TextButton", frame)
+decreaseStareDistanceButton.Size = UDim2.new(0, 85, 0, 30)
+decreaseStareDistanceButton.Position = UDim2.new(0, 105, 0, 60)
+decreaseStareDistanceButton.Text = "-"
+
+local stareDistanceLabel = Instance.new("TextLabel", frame)
+stareDistanceLabel.Size = UDim2.new(0, 180, 0, 30)
+stareDistanceLabel.Position = UDim2.new(0, 10, 0, 90)
+stareDistanceLabel.Text = "Stare Distance: 10 studs"
+stareDistanceLabel.BackgroundTransparency = 1
+
+-- Create GUI element for auto functionality
+local autoButton = Instance.new("TextButton", frame)
+autoButton.Size = UDim2.new(0, 180, 0, 40)
+autoButton.Position = UDim2.new(0, 10, 0, 140)
+autoButton.Text = "Auto OFF"
+autoButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+
+local destroyButton = Instance.new("TextButton", frame)
+destroyButton.Size = UDim2.new(0, 180, 0, 40)
+destroyButton.Position = UDim2.new(0, 10, 0, 170)
+destroyButton.Text = "Destroy"
+
+-- Initialize states
+local stareEnabled = false
+local stareDistance = 10
+local autoEnabled = false
+
+-- Function to stare at the closest ball (modified to search the entire workspace)
+local function stareAtClosestBall()
+    local closestBall = nil
+    local shortestDistance = math.huge
+
+    -- Search through all parts in the workspace
+    for _, part in ipairs(workspace:GetDescendants()) do
+        if part:IsA("Part") and part.BrickColor == BrickColor.new("Really red") and part.Shape == Enum.PartType.Ball then
+            local distance = (character.HumanoidRootPart.Position - part.Position).magnitude
+            if distance < shortestDistance and distance <= stareDistance then
+                closestBall = part
+                shortestDistance = distance
+            end
+        end
+    end
+
+    if closestBall then
+        local lookAt = closestBall.Position
+        local characterPos = character.HumanoidRootPart.Position
+        local direction = (lookAt - characterPos).unit
+
+        local lookVector = (lookAt - characterPos).unit
+        lookVector = Vector3.new(lookVector.X, 0, lookVector.Z).unit
+        character.HumanoidRootPart.CFrame = CFrame.lookAt(characterPos, characterPos + lookVector)
+    end
+end
+
+-- Toggle button functionality for staring
+toggleStareButton.MouseButton1Click:Connect(function()
+    stareEnabled = not stareEnabled
+    if stareEnabled then
+        toggleStareButton.Text = "Stare ON"
+        toggleStareButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+    else
+        toggleStareButton.Text = "Stare OFF"
+        toggleStareButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+    end
+end)
+
+-- Destroy button functionality
+destroyButton.MouseButton1Click:Connect(function()
+    screenGui:Destroy()
+end)
+
+-- Increase stare distance button functionality
+increaseStareDistanceButton.MouseButton1Click:Connect(function()
+    stareDistance = stareDistance + 5
+    stareDistanceLabel.Text = "Stare Distance: " .. stareDistance .. " studs"
+end)
+
+-- Decrease stare distance button functionality
+decreaseStareDistanceButton.MouseButton1Click:Connect(function()
+    stareDistance = math.max(5, stareDistance - 5)
+    stareDistanceLabel.Text = "Stare Distance: " .. stareDistance .. " studs"
+end)
+
+-- Auto button functionality
+autoButton.MouseButton1Click:Connect(function()
+	autoEnabled = not autoEnabled
+	if autoEnabled then
+		autoButton.Text = "Auto ON"
+		autoButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+
+		-- Start a loop to toggle stare
+		while autoEnabled do
+			stareEnabled = true
+			toggleStareButton.Text = "Stare ON"
+			toggleStareButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+			task.wait(0.1)
+
+			stareEnabled = false
+			toggleStareButton.Text = "Stare OFF"
+			toggleStareButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+			task.wait(1)
+		end
+	else
+		autoButton.Text = "Auto OFF"
+		autoButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+	end
+end)
+
+-- Update loop
+RunService.RenderStepped:Connect(function()
+    if stareEnabled then
+        stareAtClosestBall()
+    end
+end)
