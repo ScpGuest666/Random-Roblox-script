@@ -2,6 +2,7 @@
 local player = game.Players.LocalPlayer
 local character = player.Character or player.CharacterAdded:Wait()
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 
 -- Create GUI
 local screenGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
@@ -51,6 +52,18 @@ destroyButton.Text = "Destroy"
 local stareEnabled = false
 local stareDistance = 10
 local autoEnabled = false
+local lastPosition = Vector3.new(0,0,0)
+
+-- Function to check if the character is moving (improved)
+local function checkMoving()
+    local currentPosition = character.HumanoidRootPart.Position
+    if (currentPosition - lastPosition).Magnitude > 0.1 then  -- Check against last position
+        lastPosition = currentPosition
+        return true
+    end
+    lastPosition = currentPosition
+    return false
+end
 
 -- Function to stare at the closest ball (modified to search the entire workspace)
 local function stareAtClosestBall()
@@ -91,8 +104,12 @@ toggleStareButton.MouseButton1Click:Connect(function()
     end
 end)
 
--- Destroy button functionality
+-- Destroy button functionality (improved)
 destroyButton.MouseButton1Click:Connect(function()
+    autoEnabled = false  -- Turn off auto mode
+    autoButton.Text = "Auto OFF"
+    autoButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+
     screenGui:Destroy()
 end)
 
@@ -110,31 +127,33 @@ end)
 
 -- Auto button functionality
 autoButton.MouseButton1Click:Connect(function()
-	autoEnabled = not autoEnabled
-	if autoEnabled then
-		autoButton.Text = "Auto ON"
-		autoButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+    autoEnabled = not autoEnabled
+    if autoEnabled then
+        autoButton.Text = "Auto ON"
+        autoButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
 
-		-- Start a loop to toggle stare
-		while autoEnabled do
-			stareEnabled = true
-			toggleStareButton.Text = "Stare ON"
-			toggleStareButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-			task.wait(0.1)
+        -- Start a loop to toggle stare
+        while autoEnabled do
+            if not checkMoving() then  -- Use the improved checkMoving function
+                stareEnabled = true
+                toggleStareButton.Text = "Stare ON"
+                toggleStareButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+                task.wait(0.1)
 
-			stareEnabled = false
-			toggleStareButton.Text = "Stare OFF"
-			toggleStareButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-			task.wait(1)
-		end
-	else
-		autoButton.Text = "Auto OFF"
-		autoButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-	end
+                stareEnabled = false
+                toggleStareButton.Text = "Stare OFF"
+                toggleStareButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+            end
+            task.wait(1)
+        end
+    else
+        autoButton.Text = "Auto OFF"
+        autoButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+    end
 end)
 
 -- Update loop
-RunService.RenderStepped:Connect(function()
+RunService.Heartbeat:Connect(function() --Using Heartbeat to track the position every frame for more accurate result
     if stareEnabled then
         stareAtClosestBall()
     end
