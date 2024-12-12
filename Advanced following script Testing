@@ -66,8 +66,8 @@ statusLabel.TextScaled = true
 statusLabel.Font = Enum.Font.SourceSansBold
 
 -- Variables for managing distances
-local followDistance = 10
-local dodgeDistance = 9
+local followDistance = 3
+local dodgeDistance = 3
 local lookAtEnabled = false
 local pathfindingEnabled = false -- Initially pathfinding is off
 local isShaking = false
