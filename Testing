@@ -68,8 +68,8 @@ statusLabel.TextScaled = true
 statusLabel.Font = Enum.Font.SourceSansBold
 
 -- Variables for managing distances
-local followDistance = 10
-local dodgeDistance = 9
+local followDistance = 3
+local dodgeDistance = 3
 local lookAtEnabled = false
 local pathfindingEnabled = false -- Initially pathfinding is off
 local isShaking = false
@@ -259,7 +259,7 @@ local function updatePlatforms()
 		end
 
 		-- Position the Left 2 pivot part using PivotTo() without rotating
-		local newCFrame = rootPart.CFrame * CFrame.new(-7, -3, 0)
+		local newCFrame = rootPart.CFrame * CFrame.new(-4, -3, -5)
 		left2Pivot:PivotTo(newCFrame)
 	else
 		if left2Pivot then
@@ -290,7 +290,7 @@ local function updatePlatforms()
 		end
 
 		-- Position the Right 2 pivot part using PivotTo() without rotating
-		local newCFrame = rootPart.CFrame * CFrame.new(7, -3, 0)
+		local newCFrame = rootPart.CFrame * CFrame.new(4, -3, -5)
 		right2Pivot:PivotTo(newCFrame)
 	else
 		if right2Pivot then
