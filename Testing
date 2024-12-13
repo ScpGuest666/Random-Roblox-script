@@ -274,7 +274,7 @@ local function updatePlatforms()
             left2Ball.BrickColor = BrickColor.new("Really red")
             left2Ball.Anchored = true
             left2Ball.CanCollide = false
-            left2Ball.CFrame = CFrame.new(2, 0, -4) -- Position in front and to the right
+            left2Ball.CFrame = CFrame.new(4, 0, 2) -- Position in front and to the right
         end
 
         -- Position the Left 2 pivot part using PivotTo() without rotating
@@ -319,7 +319,7 @@ local function updatePlatforms()
             right2Ball.BrickColor = BrickColor.new("Really red")
             right2Ball.Anchored = true
             right2Ball.CanCollide = false
-            right2Ball.CFrame = CFrame.new(-2, 0, -4) -- Position in front and to the left
+            right2Ball.CFrame = CFrame.new(-4, 0, 2) -- Position in front and to the left
         end
 
         -- Position the Right 2 pivot part using PivotTo() without rotating
