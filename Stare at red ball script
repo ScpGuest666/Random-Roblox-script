@@ -6,6 +6,7 @@ local UserInputService = game:GetService("UserInputService")
 
 -- Create GUI
 local screenGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
+screenGui.ResetOnSpawn = false  -- Prevent GUI reset on character respawn
 local frame = Instance.new("Frame", screenGui)
 frame.Size = UDim2.new(0, 200, 0, 220)
 frame.Position = UDim2.new(0.5, -100, 0.5, -100)
@@ -152,8 +153,17 @@ autoButton.MouseButton1Click:Connect(function()
     end
 end)
 
+-- Function to handle character respawn
+local function onCharacterAdded(newCharacter)
+    character = newCharacter
+    lastPosition = Vector3.new(0,0,0) --Reset lastPosition
+end
+
+-- Connect character added event
+player.CharacterAdded:Connect(onCharacterAdded)
+
 -- Update loop
-RunService.Heartbeat:Connect(function() --Using Heartbeat to track the position every frame for more accurate result
+RunService.Heartbeat:Connect(function()
     if stareEnabled then
         stareAtClosestBall()
     end
