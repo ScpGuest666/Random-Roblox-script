@@ -25,8 +25,8 @@ screenGui.ResetOnSpawn = false
 local frame = Instance.new("Frame")
 frame.Parent = screenGui
 frame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-frame.Size = UDim2.new(0, 220, 0, 350) -- Increased height for extra buttons
-frame.Position = UDim2.new(0.5, -110, 0.5, -175) -- Adjusted position
+frame.Size = UDim2.new(0, 220, 0, 400) -- Increased height for extra buttons
+frame.Position = UDim2.new(0.5, -110, 0.5, -285) -- Adjusted position
 frame.Active = true
 frame.Draggable = true
 
@@ -44,7 +44,7 @@ playerInput.PlaceholderText = "Enter Player Name"
 playerInput.TextScaled = true
 playerInput.TextColor3 = Color3.fromRGB(0, 0, 0)
 
--- Create Buttons: On, Off, Destroy, Increase/Decrease Distance, Left, Right
+-- Create Buttons: On, Off, Destroy, Increase/Decrease Distance, Left, Right, Left 2, Right 2, Back, Back Left, Back Right
 local onButton = createButton(frame, UDim2.new(0, 20, 0, 60), UDim2.new(0, 80, 0, 30), Color3.fromRGB(0, 255, 0), "On", true)
 local offButton = createButton(frame, UDim2.new(0, 120, 0, 60), UDim2.new(0, 80, 0, 30), Color3.fromRGB(255, 0, 0), "Off", true)
 local pathfindButton = createButton(frame, UDim2.new(0, 20, 0, 100), UDim2.new(0, 180, 0, 30), Color3.fromRGB(255, 255, 0), "Pathfind: On", true)
@@ -53,6 +53,11 @@ local plusButton = createButton(frame, UDim2.new(0, 20, 0, 180), UDim2.new(0, 40
 local minusButton = createButton(frame, UDim2.new(0, 160, 0, 180), UDim2.new(0, 40, 0, 30), Color3.fromRGB(255, 165, 0), "-", true)
 local leftButton = createButton(frame, UDim2.new(0, 20, 0, 220), UDim2.new(0, 80, 0, 30), Color3.fromRGB(255, 255, 0), "Left", true)
 local rightButton = createButton(frame, UDim2.new(0, 120, 0, 220), UDim2.new(0, 80, 0, 30), Color3.fromRGB(255, 0, 0), "Right", true)
+local left2Button = createButton(frame, UDim2.new(0, 20, 0, 260), UDim2.new(0, 80, 0, 30), Color3.fromRGB(255, 165, 0), "Left 2", true)
+local right2Button = createButton(frame, UDim2.new(0, 120, 0, 260), UDim2.new(0, 80, 0, 30), Color3.fromRGB(255, 100, 0), "Right 2", true)
+local backButton = createButton(frame, UDim2.new(0, 20, 0, 300), UDim2.new(0, 180, 0, 30), Color3.fromRGB(128, 0, 128), "Back", true) -- Purple
+local backLeftButton = createButton(frame, UDim2.new(0, 20, 0, 340), UDim2.new(0, 80, 0, 30), Color3.fromRGB(0, 128, 128), "Back Left", true) -- Teal
+local backRightButton = createButton(frame, UDim2.new(0, 120, 0, 340), UDim2.new(0, 80, 0, 30), Color3.fromRGB(0, 0, 128), "Back Right", true) -- Dark Blue
 
 -- Status Label
 local statusLabel = Instance.new("TextLabel")
@@ -66,8 +71,8 @@ statusLabel.TextScaled = true
 statusLabel.Font = Enum.Font.SourceSansBold
 
 -- Variables for managing distances
-local followDistance = 10
-local dodgeDistance = 9
+local followDistance = 3
+local dodgeDistance = 3
 local lookAtEnabled = false
 local pathfindingEnabled = false -- Initially pathfinding is off
 local isShaking = false
@@ -78,13 +83,23 @@ local notMovingCounter = 0 -- Counter to check if the character hasn't moved in 
 -- Variables for platform control
 local leftPlatformEnabled = false
 local rightPlatformEnabled = false
-local leftPlatform, rightPlatform -- These will be the colored platforms
-local leftPivot, rightPivot -- These will be the invisible pivot parts
+local left2PlatformEnabled = false
+local right2PlatformEnabled = false
+local backPlatformEnabled = false
+local backLeftPlatformEnabled = false  -- For the new Back Left platform
+local backRightPlatformEnabled = false -- For the new Back Right platform
+local leftPlatform, rightPlatform
+local leftPivot, rightPivot
+local left2Platform, right2Platform
+local left2Pivot, right2Pivot
+local backPlatform, backPivot
+local backLeftPlatform, backLeftPivot  -- For Back Left
+local backRightPlatform, backRightPivot -- For Back Right
+local leftBall, rightBall
+local left2Ball, right2Ball
+local backBall
+local backLeftBall, backRightBall -- For Back Left and Back Right
 local targetPlayer = nil
-
--- Variables for facing forward
-local isFacingForward = false
-local faceForwardStartTime = 0
 
 -- Function to find a player by partial name
 local function findPlayerByName(partialName)
@@ -107,10 +122,10 @@ local function calculatePath(start, goal)
 	return path
 end
 
--- Function to create/update the platforms
+-- Function to create/update the platforms and balls
 local function updatePlatforms()
     if not targetPlayer or not targetPlayer.Character then
-        -- If the target is lost, destroy platforms and pivots
+        -- If the target is lost, destroy platforms, pivots, and balls
         if leftPivot then
             leftPivot:Destroy()
             leftPivot = nil
@@ -120,6 +135,59 @@ local function updatePlatforms()
             rightPivot:Destroy()
             rightPivot = nil
             rightPlatform = nil
+        end
+        if left2Pivot then
+            left2Pivot:Destroy()
+            left2Pivot = nil
+            left2Platform = nil
+        end
+        if right2Pivot then
+            right2Pivot:Destroy()
+            right2Pivot = nil
+            right2Platform = nil
+        end
+		if backPivot then
+            backPivot:Destroy()
+            backPivot = nil
+            backPlatform = nil
+        end
+		if backLeftPivot then
+            backLeftPivot:Destroy()
+            backLeftPivot = nil
+            backLeftPlatform = nil
+        end
+        if backRightPivot then
+            backRightPivot:Destroy()
+            backRightPivot = nil
+            backRightPlatform = nil
+        end
+        if leftBall then
+            leftBall:Destroy()
+            leftBall = nil
+        end
+        if rightBall then
+            rightBall:Destroy()
+            rightBall = nil
+        end
+		if left2Ball then
+            left2Ball:Destroy()
+            left2Ball = nil
+        end
+        if right2Ball then
+            right2Ball:Destroy()
+            right2Ball = nil
+        end
+		if backBall then
+            backBall:Destroy()
+            backBall = nil
+        end
+		if backLeftBall then
+            backLeftBall:Destroy()
+            backLeftBall = nil
+        end
+        if backRightBall then
+            backRightBall:Destroy()
+            backRightBall = nil
         end
         return
     end
@@ -132,7 +200,7 @@ local function updatePlatforms()
             -- Create the invisible pivot
             leftPivot = Instance.new("Part")
             leftPivot.Parent = workspace
-            leftPivot.Size = Vector3.new(1, 0.2, 1) -- Pivot part (invisible)
+            leftPivot.Size = Vector3.new(1, 0.2, 1)
             leftPivot.Transparency = 1
             leftPivot.Anchored = true
             leftPivot.CanCollide = false
@@ -144,16 +212,31 @@ local function updatePlatforms()
             leftPlatform.BrickColor = BrickColor.new("New Yeller")
             leftPlatform.Anchored = true
             leftPlatform.CanCollide = false
-            leftPlatform.CFrame = CFrame.new(0, 0, 0) -- Position relative to pivot
+            leftPlatform.CFrame = CFrame.new(0, 0, 0)
+
+            -- Create the red ball and parent it to the pivot
+            leftBall = Instance.new("Part")
+            leftBall.Parent = leftPivot
+            leftBall.Shape = Enum.PartType.Ball
+            leftBall.Size = Vector3.new(1, 1, 1)
+            leftBall.BrickColor = BrickColor.new("Really red")
+            leftBall.Anchored = true
+            leftBall.CanCollide = false
+            leftBall.CFrame = CFrame.new(2, 0, -4) -- Position in front and to the right
         end
-        -- Position and rotate the pivot part using PivotTo()
-        local newCFrame = rootPart.CFrame * CFrame.new(-4, -3, 0) * CFrame.Angles(0, math.rad(rootPart.Orientation.Y), 0)
+
+        -- Position the pivot part using PivotTo() without rotating
+        local newCFrame = rootPart.CFrame * CFrame.new(-4, -3, 0)
         leftPivot:PivotTo(newCFrame)
     else
         if leftPivot then
             leftPivot:Destroy()
             leftPivot = nil
             leftPlatform = nil
+        end
+        if leftBall then
+            leftBall:Destroy()
+            leftBall = nil
         end
     end
 
@@ -162,7 +245,7 @@ local function updatePlatforms()
             -- Create the invisible pivot
             rightPivot = Instance.new("Part")
             rightPivot.Parent = workspace
-            rightPivot.Size = Vector3.new(1, 0.2, 1) -- Pivot part (invisible)
+            rightPivot.Size = Vector3.new(1, 0.2, 1)
             rightPivot.Transparency = 1
             rightPivot.Anchored = true
             rightPivot.CanCollide = false
@@ -174,16 +257,259 @@ local function updatePlatforms()
             rightPlatform.BrickColor = BrickColor.new("Really red")
             rightPlatform.Anchored = true
             rightPlatform.CanCollide = false
-            rightPlatform.CFrame = CFrame.new(0, 0, 0) -- Position relative to pivot
+            rightPlatform.CFrame = CFrame.new(0, 0, 0)
+
+            -- Create the red ball and parent it to the pivot
+            rightBall = Instance.new("Part")
+            rightBall.Parent = rightPivot
+            rightBall.Shape = Enum.PartType.Ball
+            rightBall.Size = Vector3.new(1, 1, 1)
+            rightBall.BrickColor = BrickColor.new("Really red")
+            rightBall.Anchored = true
+            rightBall.CanCollide = false
+            rightBall.CFrame = CFrame.new(-2, 0, -4) -- Position in front and to the left
         end
-        -- Position and rotate the pivot part using PivotTo()
-        local newCFrame = rootPart.CFrame * CFrame.new(4, -3, 0) * CFrame.Angles(0, math.rad(rootPart.Orientation.Y), 0)
+
+        -- Position the pivot part using PivotTo() without rotating
+        local newCFrame = rootPart.CFrame * CFrame.new(4, -3, 0)
         rightPivot:PivotTo(newCFrame)
     else
         if rightPivot then
             rightPivot:Destroy()
             rightPivot = nil
             rightPlatform = nil
+        end
+        if rightBall then
+            rightBall:Destroy()
+            rightBall = nil
+        end
+    end
+
+    if left2PlatformEnabled then
+        if not left2Pivot then
+            -- Create the invisible pivot for Left 2
+            left2Pivot = Instance.new("Part")
+            left2Pivot.Parent = workspace
+            left2Pivot.Size = Vector3.new(1, 0.2, 1)
+            left2Pivot.Transparency = 1
+            left2Pivot.Anchored = true
+            left2Pivot.CanCollide = false
+
+            -- Create the colored platform for Left 2 and parent it to the pivot
+            left2Platform = Instance.new("Part")
+            left2Platform.Parent = left2Pivot
+            left2Platform.Size = Vector3.new(2, 0.2, 2)
+            left2Platform.BrickColor = BrickColor.new("Orange")
+            left2Platform.Anchored = true
+            left2Platform.CanCollide = false
+            left2Platform.CFrame = CFrame.new(0, 0, 0)
+
+            -- Create the red ball for Left 2 and parent it to the pivot
+            left2Ball = Instance.new("Part")
+            left2Ball.Parent = left2Pivot
+            left2Ball.Shape = Enum.PartType.Ball
+            left2Ball.Size = Vector3.new(1, 1, 1)
+            left2Ball.BrickColor = BrickColor.new("Really red")
+            left2Ball.Anchored = true
+            left2Ball.CanCollide = false
+            left2Ball.CFrame = CFrame.new(4, 0, 2) -- Position in front and to the right
+        end
+
+        -- Position the Left 2 pivot part using PivotTo() without rotating
+        local newCFrame = rootPart.CFrame * CFrame.new(-4, -3, -5)
+        left2Pivot:PivotTo(newCFrame)
+    else
+        if left2Pivot then
+            left2Pivot:Destroy()
+            left2Pivot = nil
+            left2Platform = nil
+        end
+        if left2Ball then
+            left2Ball:Destroy()
+            left2Ball = nil
+        end
+    end
+
+    if right2PlatformEnabled then
+        if not right2Pivot then
+            -- Create the invisible pivot for Right 2
+            right2Pivot = Instance.new("Part")
+            right2Pivot.Parent = workspace
+            right2Pivot.Size = Vector3.new(1, 0.2, 1)
+            right2Pivot.Transparency = 1
+            right2Pivot.Anchored = true
+            right2Pivot.CanCollide = false
+
+            -- Create the colored platform for Right 2 and parent it to the pivot
+            right2Platform = Instance.new("Part")
+            right2Platform.Parent = right2Pivot
+            right2Platform.Size = Vector3.new(2, 0.2, 2)
+            right2Platform.BrickColor = BrickColor.new("Reddish brown")
+            right2Platform.Anchored = true
+            right2Platform.CanCollide = false
+            right2Platform.CFrame = CFrame.new(0, 0, 0)
+
+            -- Create the red ball for Right 2 and parent it to the pivot
+            right2Ball = Instance.new("Part")
+            right2Ball.Parent = right2Pivot
+            right2Ball.Shape = Enum.PartType.Ball
+            right2Ball.Size = Vector3.new(1, 1, 1)
+            right2Ball.BrickColor = BrickColor.new("Really red")
+            right2Ball.Anchored = true
+            right2Ball.CanCollide = false
+            right2Ball.CFrame = CFrame.new(-4, 0, 2) -- Position in front and to the left
+        end
+
+        -- Position the Right 2 pivot part using PivotTo() without rotating
+        local newCFrame = rootPart.CFrame * CFrame.new(4, -3, -5)
+        right2Pivot:PivotTo(newCFrame)
+    else
+        if right2Pivot then
+            right2Pivot:Destroy()
+            right2Pivot = nil
+            right2Platform = nil
+        end
+        if right2Ball then
+            right2Ball:Destroy()
+            right2Ball = nil
+        end
+    end
+
+	-- Back platform logic
+    if backPlatformEnabled then
+        if not backPivot then
+            -- Create the invisible pivot for Back
+            backPivot = Instance.new("Part")
+            backPivot.Parent = workspace
+            backPivot.Size = Vector3.new(1, 0.2, 1)
+            backPivot.Transparency = 1
+            backPivot.Anchored = true
+            backPivot.CanCollide = false
+
+            -- Create the colored platform for Back and parent it to the pivot
+            backPlatform = Instance.new("Part")
+            backPlatform.Parent = backPivot
+            backPlatform.Size = Vector3.new(2, 0.2, 2)
+            backPlatform.BrickColor = BrickColor.new("Teal")
+            backPlatform.Anchored = true
+            backPlatform.CanCollide = false
+            backPlatform.CFrame = CFrame.new(0, 0, 0)
+
+            -- Create the red ball for Back and parent it to the pivot
+            backBall = Instance.new("Part")
+            backBall.Parent = backPivot
+            backBall.Shape = Enum.PartType.Ball
+            backBall.Size = Vector3.new(1, 1, 1)
+            backBall.BrickColor = BrickColor.new("Really red")
+            backBall.Anchored = true
+            backBall.CanCollide = false
+            backBall.CFrame = CFrame.new(0, 0, -4) -- Position in front of the platform
+        end
+
+        -- Position the Back pivot part using PivotTo() without rotating
+        local newCFrame = rootPart.CFrame * CFrame.new(0, -3, 3)
+        backPivot:PivotTo(newCFrame)
+    else
+        if backPivot then
+            backPivot:Destroy()
+            backPivot = nil
+            backPlatform = nil
+        end
+        if backBall then
+            backBall:Destroy()
+            backBall = nil
+        end
+    end
+
+	-- Back Left platform logic
+    if backLeftPlatformEnabled then
+        if not backLeftPivot then
+            -- Create the invisible pivot for Back Left
+            backLeftPivot = Instance.new("Part")
+            backLeftPivot.Parent = workspace
+            backLeftPivot.Size = Vector3.new(1, 0.2, 1)
+            backLeftPivot.Transparency = 1
+            backLeftPivot.Anchored = true
+            backLeftPivot.CanCollide = false
+
+            -- Create the colored platform for Back Left and parent it to the pivot
+            backLeftPlatform = Instance.new("Part")
+            backLeftPlatform.Parent = backLeftPivot
+            backLeftPlatform.Size = Vector3.new(2, 0.2, 2)
+            backLeftPlatform.BrickColor = BrickColor.new("Bright bluish green") -- Different shade of Teal
+            backLeftPlatform.Anchored = true
+            backLeftPlatform.CanCollide = false
+            backLeftPlatform.CFrame = CFrame.new(0, 0, 0)
+
+            -- Create the red ball for Back Left and parent it to the pivot
+            backLeftBall = Instance.new("Part")
+            backLeftBall.Parent = backLeftPivot
+            backLeftBall.Shape = Enum.PartType.Ball
+            backLeftBall.Size = Vector3.new(1, 1, 1)
+            backLeftBall.BrickColor = BrickColor.new("Really red")
+            backLeftBall.Anchored = true
+            backLeftBall.CanCollide = false
+            backLeftBall.CFrame = CFrame.new(0, 0, -4) -- Position in front and to the left
+        end
+
+        -- Position the Back Left pivot part using PivotTo() without rotating
+        local newCFrame = rootPart.CFrame * CFrame.new(-4, -3, 3) -- Adjusted for left side
+        backLeftPivot:PivotTo(newCFrame)
+    else
+        if backLeftPivot then
+            backLeftPivot:Destroy()
+            backLeftPivot = nil
+            backLeftPlatform = nil
+        end
+        if backLeftBall then
+            backLeftBall:Destroy()
+            backLeftBall = nil
+        end
+    end
+
+    -- Back Right platform logic
+    if backRightPlatformEnabled then
+        if not backRightPivot then
+            -- Create the invisible pivot for Back Right
+            backRightPivot = Instance.new("Part")
+            backRightPivot.Parent = workspace
+            backRightPivot.Size = Vector3.new(1, 0.2, 1)
+            backRightPivot.Transparency = 1
+            backRightPivot.Anchored = true
+            backRightPivot.CanCollide = false
+
+            -- Create the colored platform for Back Right and parent it to the pivot
+            backRightPlatform = Instance.new("Part")
+            backRightPlatform.Parent = backRightPivot
+            backRightPlatform.Size = Vector3.new(2, 0.2, 2)
+            backRightPlatform.BrickColor = BrickColor.new("Dark stone grey") -- A different color
+            backRightPlatform.Anchored = true
+            backRightPlatform.CanCollide = false
+            backRightPlatform.CFrame = CFrame.new(0, 0, 0)
+
+            -- Create the red ball for Back Right and parent it to the pivot
+            backRightBall = Instance.new("Part")
+            backRightBall.Parent = backRightPivot
+            backRightBall.Shape = Enum.PartType.Ball
+            backRightBall.Size = Vector3.new(1, 1, 1)
+            backRightBall.BrickColor = BrickColor.new("Really red")
+            backRightBall.Anchored = true
+            backRightBall.CanCollide = false
+            backRightBall.CFrame = CFrame.new(0, 0, -4) -- Position in front and to the right
+        end
+
+        -- Position the Back Right pivot part using PivotTo() without rotating
+        local newCFrame = rootPart.CFrame * CFrame.new(4, -3, 3) -- Adjusted for right side
+        backRightPivot:PivotTo(newCFrame)
+    else
+        if backRightPivot then
+            backRightPivot:Destroy()
+            backRightPivot = nil
+            backRightPlatform = nil
+        end
+        if backRightBall then
+            backRightBall:Destroy()
+            backRightBall = nil
         end
     end
 end
@@ -205,31 +531,6 @@ local function moveToPlatform(platform)
 
             -- Use MoveTo for close-range movement
             localPlayer.Character.Humanoid:MoveTo(platformPosition)
-
-            -- Check if the character is not moving
-            if not localPlayer.Character.Humanoid.MoveToFinished then
-                if not isFacingForward then
-                    isFacingForward = true
-                    faceForwardStartTime = tick()
-                end
-
-                -- Face forward after stopping for 1 second
-                if isFacingForward and tick() - faceForwardStartTime >= 1 then
-                    -- Get the target's LookVector
-                    local targetLookVector = targetPlayer.Character.HumanoidRootPart.CFrame.LookVector
-
-                    -- Set the character's CFrame to face the same direction
-                    localPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(
-                        localRootPart.Position,
-                        localRootPart.Position + targetLookVector
-                    )
-
-                    isFacingForward = false -- Reset the facing forward flag
-                end
-            else
-                isFacingForward = false -- Reset the facing forward flag if the character is moving
-            end
-
             return -- Exit early after using MoveTo
         end
 
@@ -468,6 +769,16 @@ local function startFollowing()
                     moveToPlatform(leftPlatform)
                 elseif rightPlatformEnabled and rightPlatform then
                     moveToPlatform(rightPlatform)
+                elseif left2PlatformEnabled and left2Platform then
+					moveToPlatform(left2Platform)
+				elseif right2PlatformEnabled and right2Platform then
+					moveToPlatform(right2Platform)
+				elseif backPlatformEnabled and backPlatform then
+                    moveToPlatform(backPlatform)
+				elseif backLeftPlatformEnabled and backLeftPlatform then
+                    moveToPlatform(backLeftPlatform)
+                elseif backRightPlatformEnabled and backRightPlatform then
+                    moveToPlatform(backRightPlatform)
                 else
                     moveToPlayer(targetPlayer)
                 end
@@ -505,6 +816,59 @@ playerInput.Changed:Connect(function()
             rightPivot:Destroy()
             rightPivot = nil
             rightPlatform = nil
+        end
+        if left2Pivot then
+            left2Pivot:Destroy()
+            left2Pivot = nil
+            left2Platform = nil
+        end
+        if right2Pivot then
+            right2Pivot:Destroy()
+            right2Pivot = nil
+            right2Platform = nil
+        end
+		if backPivot then
+            backPivot:Destroy()
+            backPivot = nil
+            backPlatform = nil
+        end
+		if backLeftPivot then
+            backLeftPivot:Destroy()
+            backLeftPivot = nil
+            backLeftPlatform = nil
+        end
+        if backRightPivot then
+            backRightPivot:Destroy()
+            backRightPivot = nil
+            backRightPlatform = nil
+        end
+        if leftBall then
+            leftBall:Destroy()
+            leftBall = nil
+        end
+        if rightBall then
+            rightBall:Destroy()
+            rightBall = nil
+        end
+		if left2Ball then
+            left2Ball:Destroy()
+            left2Ball = nil
+        end
+        if right2Ball then
+            right2Ball:Destroy()
+            right2Ball = nil
+        end
+		if backBall then
+            backBall:Destroy()
+            backBall = nil
+        end
+		if backLeftBall then
+            backLeftBall:Destroy()
+            backLeftBall = nil
+        end
+        if backRightBall then
+            backRightBall:Destroy()
+            backRightBall = nil
         end
     end
 end)
@@ -557,6 +921,17 @@ leftButton.MouseButton1Click:Connect(function()
             leftButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0) -- Green when on
             rightPlatformEnabled = false
             rightButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0) -- Red when off
+			-- Turn off Left 2, Right 2, and Back platforms
+            left2PlatformEnabled = false
+            left2Button.BackgroundColor3 = Color3.fromRGB(255, 165, 0) -- Orange when off
+            right2PlatformEnabled = false
+            right2Button.BackgroundColor3 = Color3.fromRGB(255, 100, 0) -- Orange when off
+			backPlatformEnabled = false
+            backButton.BackgroundColor3 = Color3.fromRGB(128, 0, 128) -- Purple when off
+			backLeftPlatformEnabled = false
+            backLeftButton.BackgroundColor3 = Color3.fromRGB(0, 128, 128) -- Teal when off
+            backRightPlatformEnabled = false
+            backRightButton.BackgroundColor3 = Color3.fromRGB(0, 0, 128) -- Dark Blue when off
         else
             leftButton.BackgroundColor3 = Color3.fromRGB(255, 255, 0) -- Yellow when off
         end
@@ -571,10 +946,146 @@ rightButton.MouseButton1Click:Connect(function()
             rightButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0) -- Green when on
             leftPlatformEnabled = false
             leftButton.BackgroundColor3 = Color3.fromRGB(255, 255, 0) -- Yellow when off
+			-- Turn off Left 2, Right 2, and Back platforms
+            left2PlatformEnabled = false
+            left2Button.BackgroundColor3 = Color3.fromRGB(255, 165, 0) -- Orange when off
+            right2PlatformEnabled = false
+            right2Button.BackgroundColor3 = Color3.fromRGB(255, 100, 0) -- Orange when off
+			backPlatformEnabled = false
+            backButton.BackgroundColor3 = Color3.fromRGB(128, 0, 128) -- Purple when off
+			backLeftPlatformEnabled = false
+            backLeftButton.BackgroundColor3 = Color3.fromRGB(0, 128, 128) -- Teal when off
+            backRightPlatformEnabled = false
+            backRightButton.BackgroundColor3 = Color3.fromRGB(0, 0, 128) -- Dark Blue when off
         else
             rightButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0) -- Red when off
         end
         updatePlatforms() -- Update immediately when button state changes
+    end
+end)
+
+left2Button.MouseButton1Click:Connect(function()
+	if targetPlayer then
+		left2PlatformEnabled = not left2PlatformEnabled
+		if left2PlatformEnabled then
+			left2Button.BackgroundColor3 = Color3.fromRGB(0, 255, 0) -- Green when on
+			right2PlatformEnabled = false
+			right2Button.BackgroundColor3 = Color3.fromRGB(255, 100, 0) -- Orange when off
+			-- Turn off Left, Right, and Back platforms
+            leftPlatformEnabled = false
+            leftButton.BackgroundColor3 = Color3.fromRGB(255, 255, 0) -- Yellow when off
+            rightPlatformEnabled = false
+            rightButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0) -- Red when off
+			backPlatformEnabled = false
+            backButton.BackgroundColor3 = Color3.fromRGB(128, 0, 128) -- Purple when off
+			backLeftPlatformEnabled = false
+            backLeftButton.BackgroundColor3 = Color3.fromRGB(0, 128, 128) -- Teal when off
+            backRightPlatformEnabled = false
+            backRightButton.BackgroundColor3 = Color3.fromRGB(0, 0, 128) -- Dark Blue when off
+		else
+			left2Button.BackgroundColor3 = Color3.fromRGB(255, 165, 0) -- Orange when off
+		end
+		updatePlatforms() -- Update immediately when button state changes
+	end
+end)
+
+right2Button.MouseButton1Click:Connect(function()
+	if targetPlayer then
+		right2PlatformEnabled = not right2PlatformEnabled
+		if right2PlatformEnabled then
+			right2Button.BackgroundColor3 = Color3.fromRGB(0, 255, 0) -- Green when on
+			left2PlatformEnabled = false
+			left2Button.BackgroundColor3 = Color3.fromRGB(255, 165, 0) -- Orange when off
+			-- Turn off Left, Right, and Back platforms
+            leftPlatformEnabled = false
+            leftButton.BackgroundColor3 = Color3.fromRGB(255, 255, 0) -- Yellow when off
+            rightPlatformEnabled = false
+            rightButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0) -- Red when off
+			backPlatformEnabled = false
+            backButton.BackgroundColor3 = Color3.fromRGB(128, 0, 128) -- Purple when off
+			backLeftPlatformEnabled = false
+            backLeftButton.BackgroundColor3 = Color3.fromRGB(0, 128, 128) -- Teal when off
+            backRightPlatformEnabled = false
+            backRightButton.BackgroundColor3 = Color3.fromRGB(0, 0, 128) -- Dark Blue when off
+		else
+			right2Button.BackgroundColor3 = Color3.fromRGB(255, 100, 0) -- Orange when off
+		end
+		updatePlatforms() -- Update immediately when button state changes
+	end
+end)
+
+backButton.MouseButton1Click:Connect(function()
+    if targetPlayer then
+        backPlatformEnabled = not backPlatformEnabled
+        if backPlatformEnabled then
+            backButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0) -- Green when on
+            -- Turn off Left, Right, Left 2, and Right 2 platforms
+            leftPlatformEnabled = false
+            leftButton.BackgroundColor3 = Color3.fromRGB(255, 255, 0) -- Yellow when off
+            rightPlatformEnabled = false
+            rightButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0) -- Red when off
+            left2PlatformEnabled = false
+            left2Button.BackgroundColor3 = Color3.fromRGB(255, 165, 0) -- Orange when off
+            right2PlatformEnabled = false
+            right2Button.BackgroundColor3 = Color3.fromRGB(255, 100, 0) -- Orange when off
+			backLeftPlatformEnabled = false
+            backLeftButton.BackgroundColor3 = Color3.fromRGB(0, 128, 128) -- Teal when off
+            backRightPlatformEnabled = false
+            backRightButton.BackgroundColor3 = Color3.fromRGB(0, 0, 128) -- Dark Blue when off
+        else
+            backButton.BackgroundColor3 = Color3.fromRGB(128, 0, 128) -- Purple when off
+        end
+        updatePlatforms() -- Update immediately when button state changes
+    end
+end)
+
+backLeftButton.MouseButton1Click:Connect(function()
+    if targetPlayer then
+        backLeftPlatformEnabled = not backLeftPlatformEnabled
+        if backLeftPlatformEnabled then
+            backLeftButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0) -- Green when on
+            -- Turn off other platforms
+			leftPlatformEnabled = false
+            leftButton.BackgroundColor3 = Color3.fromRGB(255, 255, 0) -- Yellow when off
+            rightPlatformEnabled = false
+            rightButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0) -- Red when off
+            left2PlatformEnabled = false
+            left2Button.BackgroundColor3 = Color3.fromRGB(255, 165, 0) -- Orange when off
+            right2PlatformEnabled = false
+            right2Button.BackgroundColor3 = Color3.fromRGB(255, 100, 0) -- Orange when off
+			backPlatformEnabled = false
+            backButton.BackgroundColor3 = Color3.fromRGB(128, 0, 128) -- Purple when off
+            backRightPlatformEnabled = false
+            backRightButton.BackgroundColor3 = Color3.fromRGB(0, 0, 128) -- Dark Blue when off
+        else
+            backLeftButton.BackgroundColor3 = Color3.fromRGB(0, 128, 128) -- Teal when off
+        end
+        updatePlatforms()
+    end
+end)
+
+backRightButton.MouseButton1Click:Connect(function()
+    if targetPlayer then
+        backRightPlatformEnabled = not backRightPlatformEnabled
+        if backRightPlatformEnabled then
+            backRightButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0) -- Green when on
+            -- Turn off other platforms
+			leftPlatformEnabled = false
+            leftButton.BackgroundColor3 = Color3.fromRGB(255, 255, 0) -- Yellow when off
+            rightPlatformEnabled = false
+            rightButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0) -- Red when off
+            left2PlatformEnabled = false
+            left2Button.BackgroundColor3 = Color3.fromRGB(255, 165, 0) -- Orange when off
+            right2PlatformEnabled = false
+            right2Button.BackgroundColor3 = Color3.fromRGB(255, 100, 0) -- Orange when off
+			backPlatformEnabled = false
+            backButton.BackgroundColor3 = Color3.fromRGB(128, 0, 128) -- Purple when off
+            backLeftPlatformEnabled = false
+            backLeftButton.BackgroundColor3 = Color3.fromRGB(0, 128, 128) -- Teal when off
+        else
+            backRightButton.BackgroundColor3 = Color3.fromRGB(0, 0, 128) -- Dark Blue when off
+        end
+        updatePlatforms()
     end
 end)
 
@@ -604,8 +1115,18 @@ destroyButton.MouseButton1Click:Connect(function()
     leftButton.BackgroundColor3 = Color3.fromRGB(255, 255, 0)
     rightPlatformEnabled = false
     rightButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+	left2PlatformEnabled = false
+	left2Button.BackgroundColor3 = Color3.fromRGB(255, 165, 0)
+	right2PlatformEnabled = false
+	right2Button.BackgroundColor3 = Color3.fromRGB(255, 100, 0)
+	backPlatformEnabled = false
+    backButton.BackgroundColor3 = Color3.fromRGB(128, 0, 128)
+	backLeftPlatformEnabled = false
+    backLeftButton.BackgroundColor3 = Color3.fromRGB(0, 128, 128)
+    backRightPlatformEnabled = false
+    backRightButton.BackgroundColor3 = Color3.fromRGB(0, 0, 128)
 
-    -- Destroy platforms and pivots if they exist
+    -- Destroy platforms, pivots, and balls if they exist
     if leftPivot then
         leftPivot:Destroy()
         leftPivot = nil
@@ -615,6 +1136,59 @@ destroyButton.MouseButton1Click:Connect(function()
         rightPivot:Destroy()
         rightPivot = nil
         rightPlatform = nil
+    end
+    if left2Pivot then
+        left2Pivot:Destroy()
+        left2Pivot = nil
+        left2Platform = nil
+    end
+    if right2Pivot then
+        right2Pivot:Destroy()
+        right2Pivot = nil
+        right2Platform = nil
+    end
+	if backPivot then
+        backPivot:Destroy()
+        backPivot = nil
+        backPlatform = nil
+    end
+	if backLeftPivot then
+        backLeftPivot:Destroy()
+        backLeftPivot = nil
+        backLeftPlatform = nil
+    end
+    if backRightPivot then
+        backRightPivot:Destroy()
+        backRightPivot = nil
+        backRightPlatform = nil
+    end
+    if leftBall then
+        leftBall:Destroy()
+        leftBall = nil
+    end
+    if rightBall then
+        rightBall:Destroy()
+        rightBall = nil
+    end
+	if left2Ball then
+        left2Ball:Destroy()
+        left2Ball = nil
+    end
+    if right2Ball then
+        right2Ball:Destroy()
+        right2Ball = nil
+    end
+	if backBall then
+        backBall:Destroy()
+        backBall = nil
+    end
+	if backLeftBall then
+        backLeftBall:Destroy()
+        backLeftBall = nil
+    end
+    if backRightBall then
+        backRightBall:Destroy()
+        backRightBall = nil
     end
 
     -- Destroy the GUI
