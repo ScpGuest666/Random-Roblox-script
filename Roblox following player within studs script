@@ -1,0 +1,201 @@
+-- LocalScript inside StarterPlayerScripts
+local player = game.Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local RunService = game:GetService("RunService")
+
+-- Create GUI
+local screenGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
+local frame = Instance.new("Frame", screenGui)
+frame.Size = UDim2.new(0, 200, 0, 310)
+frame.Position = UDim2.new(0.5, -100, 0.5, -100)
+frame.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+frame.Active = true
+frame.Draggable = true
+
+-- Create GUI elements for staring functionality
+local toggleStareButton = Instance.new("TextButton", frame)
+toggleStareButton.Size = UDim2.new(0, 180, 0, 40)
+toggleStareButton.Position = UDim2.new(0, 10, 0, 10)
+toggleStareButton.Text = "Stare OFF"
+toggleStareButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+
+local increaseStareDistanceButton = Instance.new("TextButton", frame)
+increaseStareDistanceButton.Size = UDim2.new(0, 85, 0, 30)
+increaseStareDistanceButton.Position = UDim2.new(0, 10, 0, 60)
+increaseStareDistanceButton.Text = "+"
+
+local decreaseStareDistanceButton = Instance.new("TextButton", frame)
+decreaseStareDistanceButton.Size = UDim2.new(0, 85, 0, 30)
+decreaseStareDistanceButton.Position = UDim2.new(0, 105, 0, 60)
+decreaseStareDistanceButton.Text = "-"
+
+local stareDistanceLabel = Instance.new("TextLabel", frame)
+stareDistanceLabel.Size = UDim2.new(0, 180, 0, 30)
+stareDistanceLabel.Position = UDim2.new(0, 10, 0, 90)
+stareDistanceLabel.Text = "Stare Distance: 20 studs"
+stareDistanceLabel.BackgroundTransparency = 1
+
+-- Create GUI elements for follow functionality
+local toggleFollowButton = Instance.new("TextButton", frame)
+toggleFollowButton.Size = UDim2.new(0, 180, 0, 40)
+toggleFollowButton.Position = UDim2.new(0, 10, 0, 140)
+toggleFollowButton.Text = "Follow OFF"
+toggleFollowButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+
+local increaseFollowDistanceButton = Instance.new("TextButton", frame)
+increaseFollowDistanceButton.Size = UDim2.new(0, 85, 0, 30)
+increaseFollowDistanceButton.Position = UDim2.new(0, 10, 0, 190)
+increaseFollowDistanceButton.Text = "+"
+
+local decreaseFollowDistanceButton = Instance.new("TextButton", frame)
+decreaseFollowDistanceButton.Size = UDim2.new(0, 85, 0, 30)
+decreaseFollowDistanceButton.Position = UDim2.new(0, 105, 0, 190)
+decreaseFollowDistanceButton.Text = "-"
+
+local followDistanceLabel = Instance.new("TextLabel", frame)
+followDistanceLabel.Size = UDim2.new(0, 180, 0, 30)
+followDistanceLabel.Position = UDim2.new(0, 10, 0, 220)
+followDistanceLabel.Text = "Follow Distance: 10 studs"
+followDistanceLabel.BackgroundTransparency = 1
+
+local destroyButton = Instance.new("TextButton", frame)
+destroyButton.Size = UDim2.new(0, 180, 0, 40)
+destroyButton.Position = UDim2.new(0, 10, 0, 260)
+destroyButton.Text = "Destroy"
+
+-- Initialize states
+local stareEnabled = false
+local followEnabled = false
+local stareDistance = 20
+local followDistance = 10
+local isFollowing = false  -- Flag to indicate if the character is actively following
+
+-- Store RenderStepped connection
+local renderSteppedConnection
+
+-- Function to find the closest player within a specified distance
+local function findClosestPlayer(maxDistance)
+    local closestPlayer = nil
+    local shortestDistance = math.huge
+
+    for _, otherPlayer in pairs(game.Players:GetPlayers()) do
+        if otherPlayer ~= player and otherPlayer.Character and otherPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            local distance = (character.HumanoidRootPart.Position - otherPlayer.Character.HumanoidRootPart.Position).magnitude
+            if distance < shortestDistance and distance <= maxDistance then
+                closestPlayer = otherPlayer
+                shortestDistance = distance
+            end
+        end
+    end
+
+    return closestPlayer, shortestDistance
+end
+
+-- Function to stare at the closest player
+local function stareAtClosestPlayer()
+    local closestPlayer = findClosestPlayer(stareDistance)
+    if closestPlayer and closestPlayer.Character and closestPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        local lookAt = closestPlayer.Character.HumanoidRootPart.Position
+        local characterPos = character.HumanoidRootPart.Position
+
+        local lookVector = (lookAt - characterPos).unit
+        lookVector = Vector3.new(lookVector.X, 0, lookVector.Z).unit
+        character.HumanoidRootPart.CFrame = CFrame.lookAt(characterPos, characterPos + lookVector)
+    end
+end
+
+-- Function to walk forward to the closest player
+local function walkForwardToClosestPlayer()
+    if not followEnabled then return end
+    local closestPlayer, distance = findClosestPlayer(followDistance)
+    if closestPlayer and closestPlayer.Character and closestPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        if distance > 3 then
+            isFollowing = true
+            local direction = (closestPlayer.Character.HumanoidRootPart.Position - character.HumanoidRootPart.Position).unit
+            character.Humanoid:MoveTo(closestPlayer.Character.HumanoidRootPart.Position)
+        elseif isFollowing then
+            isFollowing = false
+            character.Humanoid:MoveTo(character.HumanoidRootPart.Position) -- Stop moving
+        end
+    else
+        isFollowing = false
+        character.Humanoid:MoveTo(character.HumanoidRootPart.Position) -- Stop moving if no player is found
+    end
+end
+
+-- Toggle button functionality for staring
+toggleStareButton.MouseButton1Click:Connect(function()
+    stareEnabled = not stareEnabled
+    if stareEnabled then
+        toggleStareButton.Text = "Stare ON"
+        toggleStareButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+    else
+        toggleStareButton.Text = "Stare OFF"
+        toggleStareButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+    end
+end)
+
+-- Toggle button functionality for follow
+toggleFollowButton.MouseButton1Click:Connect(function()
+    followEnabled = not followEnabled
+    if followEnabled then
+        toggleFollowButton.Text = "Follow ON"
+        toggleFollowButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+        isFollowing = true
+    else
+        toggleFollowButton.Text = "Follow OFF"
+        toggleFollowButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+        isFollowing = false
+    end
+end)
+
+-- Destroy button functionality
+destroyButton.MouseButton1Click:Connect(function()
+    -- Disable functionalities
+    stareEnabled = false
+    followEnabled = false
+    isFollowing = false
+
+    -- Disconnect RenderStepped
+    if renderSteppedConnection then
+        renderSteppedConnection:Disconnect()
+        renderSteppedConnection = nil
+    end
+
+    -- Destroy the GUI
+    screenGui:Destroy()
+end)
+
+-- Increase stare distance button functionality
+increaseStareDistanceButton.MouseButton1Click:Connect(function()
+    stareDistance = stareDistance + 5
+    stareDistanceLabel.Text = "Stare Distance: " .. stareDistance .. " studs"
+end)
+
+-- Decrease stare distance button functionality
+decreaseStareDistanceButton.MouseButton1Click:Connect(function()
+    stareDistance = math.max(5, stareDistance - 5)
+    stareDistanceLabel.Text = "Stare Distance: " .. stareDistance .. " studs"
+end)
+
+-- Increase follow distance button functionality
+increaseFollowDistanceButton.MouseButton1Click:Connect(function()
+    followDistance = followDistance + 5
+    followDistanceLabel.Text = "Follow Distance: " .. followDistance .. " studs"
+end)
+
+-- Decrease follow distance button functionality
+decreaseFollowDistanceButton.MouseButton1Click:Connect(function()
+    followDistance = math.max(5, followDistance - 5)
+    followDistanceLabel.Text = "Follow Distance: " .. followDistance .. " studs"
+    isFollowing = false
+    character.Humanoid:MoveTo(character.HumanoidRootPart.Position)
+end)
+
+-- Update loop
+renderSteppedConnection = RunService.RenderStepped:Connect(function()
+    if stareEnabled then
+        stareAtClosestPlayer()
+    end
+    walkForwardToClosestPlayer()
+end)
