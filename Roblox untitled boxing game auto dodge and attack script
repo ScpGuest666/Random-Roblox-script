@@ -199,16 +199,40 @@ tpButton.MouseButton1Click:Connect(function()
     end
 end)
 
--- TP Logic (modified to check for obstacles)
+-- TP Logic (Corrected to teleport a studs in front, face target, and avoid obstacles)
 local function teleportToPlayer()
     if not tpActive then return end
 
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
             local otherHumanoidRootPart = player.Character.HumanoidRootPart
-            if isTargetVisible(otherHumanoidRootPart) then  -- Now checks for visibility
-                HumanoidRootPart.CFrame = otherHumanoidRootPart.CFrame
-                break
+
+            -- Check if facing the target (using a less strict dot product)
+            local directionToOtherPlayer = (otherHumanoidRootPart.Position - HumanoidRootPart.Position).unit
+            local facingDirection = HumanoidRootPart.CFrame.LookVector
+            local dotProduct = facingDirection:Dot(directionToOtherPlayer)
+
+            if dotProduct > 0.7 then  -- Adjust the threshold as needed
+
+                -- Calculate a position studs in front of the target player
+                local targetPosition = otherHumanoidRootPart.Position + otherHumanoidRootPart.CFrame.LookVector * -1
+
+                -- Raycast from YOUR character's position to the target position
+                local raycastParams = RaycastParams.new()
+                raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+                raycastParams.FilterDescendantsInstances = {Character, otherHumanoidRootPart.Parent}
+
+                local raycastResult = Workspace:Raycast(HumanoidRootPart.Position, targetPosition - HumanoidRootPart.Position, raycastParams)
+
+                if not raycastResult then
+                    -- No obstacle, safe to teleport
+                    HumanoidRootPart.CFrame = CFrame.new(targetPosition, otherHumanoidRootPart.Position) -- Face the target
+                    break
+                else
+                    warn("Teleport blocked by an obstacle.")
+                end
+            else
+                warn("Not facing the target player closely enough.")
             end
         end
     end
