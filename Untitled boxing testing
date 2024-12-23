@@ -99,6 +99,13 @@ lockButton.Position = UDim2.new(1, -70, 0, 10) -- Positioned at the top-right co
 lockButton.Text = "Lock"
 lockButton.BackgroundColor3 = Color3.new(1, 0, 0) -- Red color initially (Unlocked)
 
+-- Add Move Backward Button
+local moveBackwardButton = Instance.new("TextButton", frame)
+moveBackwardButton.Size = UDim2.new(0, 120, 0, 30)
+moveBackwardButton.Position = UDim2.new(0, 80, 0, 170)
+moveBackwardButton.Text = "Move Backward"
+moveBackwardButton.BackgroundColor3 = Color3.new(1, 0, 0) -- Red color initially (Off)
+
 local active = true  -- Start with 'On' button active
 local tpActive = false
 local userTapped = false
@@ -108,6 +115,8 @@ local raycastEnabled = false
 local lastTapTime = 0
 local doubleTapInterval = 0.3  -- Adjust as needed
 local guiLocked = false  -- Initially unlocked
+local moveBackwardActive = false
+local backwardForce = 150 -- Adjust the force as needed
 
 -- Lock Button Functionality
 lockButton.MouseButton1Click:Connect(function()
@@ -116,6 +125,20 @@ lockButton.MouseButton1Click:Connect(function()
     lockButton.BackgroundColor3 = guiLocked and Color3.new(0, 1, 0) or Color3.new(1, 0, 0) -- Green if locked, Red if unlocked
     lockButton.Text = guiLocked and "Unlock" or "Lock"
 end)
+
+-- Move Backward Button Functionality
+moveBackwardButton.MouseButton1Click:Connect(function()
+    moveBackwardActive = not moveBackwardActive
+    moveBackwardButton.BackgroundColor3 = moveBackwardActive and Color3.new(0, 1, 0) or Color3.new(1, 0, 0)
+end)
+
+-- Apply Backward Force
+local function applyBackwardForce()
+    if moveBackwardActive and HumanoidRootPart then
+        local forceDirection = -HumanoidRootPart.CFrame.LookVector * backwardForce
+        HumanoidRootPart:ApplyImpulse(forceDirection)
+    end
+end
 
 -- Raycast Function to Check Safe Position
 local function isSafePosition(position)
@@ -291,6 +314,8 @@ RunService.Stepped:Connect(function()
     elseif active then  -- Run avoidPlayers only when 'On' is active and TP is not active
         avoidPlayers()
     end
+
+    applyBackwardForce() -- Call the function to apply backward force if active
 end)
 
 -- Button Functionality for On and Off
@@ -311,6 +336,7 @@ destroyButton.MouseButton1Click:Connect(function()
     active = false
     tpActive = false
     raycastEnabled = false
+    moveBackwardActive = false
     screenGui:Destroy()
 end)
 
