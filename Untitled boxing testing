@@ -92,6 +92,13 @@ tpButton.Position = UDim2.new(0, 10, 0, 170)
 tpButton.Text = "TP"
 tpButton.BackgroundColor3 = Color3.new(1, 0, 0) -- Red color initially (Off)
 
+-- Add Lock Button
+local lockButton = Instance.new("TextButton", frame)
+lockButton.Size = UDim2.new(0, 60, 0, 30)
+lockButton.Position = UDim2.new(1, -70, 0, 10) -- Positioned at the top-right corner
+lockButton.Text = "Lock"
+lockButton.BackgroundColor3 = Color3.new(1, 0, 0) -- Red color initially (Unlocked)
+
 local active = true  -- Start with 'On' button active
 local tpActive = false
 local userTapped = false
@@ -100,6 +107,15 @@ local teleportStuds = 10
 local raycastEnabled = false
 local lastTapTime = 0
 local doubleTapInterval = 0.3  -- Adjust as needed
+local guiLocked = false  -- Initially unlocked
+
+-- Lock Button Functionality
+lockButton.MouseButton1Click:Connect(function()
+    guiLocked = not guiLocked
+    frame.Draggable = not guiLocked  -- Toggle draggable property
+    lockButton.BackgroundColor3 = guiLocked and Color3.new(0, 1, 0) or Color3.new(1, 0, 0) -- Green if locked, Red if unlocked
+    lockButton.Text = guiLocked and "Unlock" or "Lock"
+end)
 
 -- Raycast Function to Check Safe Position
 local function isSafePosition(position)
