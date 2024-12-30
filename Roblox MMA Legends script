@@ -1,0 +1,343 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+local Workspace = game:GetService("Workspace")
+
+-- Function to update the Character and HumanoidRootPart reference
+local function onCharacterAdded(character)
+    Character = character
+    HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+end
+
+-- Connect to CharacterAdded event
+LocalPlayer.CharacterAdded:Connect(onCharacterAdded)
+
+-- Create GUI
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "PersistentScreenGui"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+local frame = Instance.new("Frame", screenGui)
+frame.Size = UDim2.new(0, 250, 0, 250)
+frame.Position = UDim2.new(0, 10, 0, 10)
+frame.BackgroundColor3 = Color3.new(0.5, 0.5, 0.5)
+frame.Active = true
+frame.Draggable = true
+
+local onButton = Instance.new("TextButton", frame)
+onButton.Size = UDim2.new(0, 60, 0, 30)
+onButton.Position = UDim2.new(0, 10, 0, 10)
+onButton.Text = "On"
+onButton.BackgroundColor3 = Color3.new(1, 0, 0)  -- Red color initially (Off)
+
+local offButton = Instance.new("TextButton", frame)
+offButton.Size = UDim2.new(0, 60, 0, 30)
+offButton.Position = UDim2.new(0, 80, 0, 10)
+offButton.Text = "Off"
+offButton.BackgroundColor3 = Color3.new(0, 1, 0)  -- Green color initially (On)
+
+local destroyButton = Instance.new("TextButton", frame)
+destroyButton.Size = UDim2.new(0, 30, 0, 30)
+destroyButton.Position = UDim2.new(0, 150, 0, 10)
+destroyButton.Text = "X"
+
+local withinLabel = Instance.new("TextLabel", frame)
+withinLabel.Size = UDim2.new(0, 100, 0, 30)
+withinLabel.Position = UDim2.new(0, 10, 0, 50)
+withinLabel.Text = "Within Studs: 10"
+
+local teleportLabel = Instance.new("TextLabel", frame)
+teleportLabel.Size = UDim2.new(0, 100, 0, 30)
+teleportLabel.Position = UDim2.new(0, 10, 0, 90)
+teleportLabel.Text = "Teleport Studs: 10"
+
+local withinPlus = Instance.new("TextButton", frame)
+withinPlus.Size = UDim2.new(0, 30, 0, 30)
+withinPlus.Position = UDim2.new(0, 120, 0, 50)
+withinPlus.Text = "+"
+
+local withinMinus = Instance.new("TextButton", frame)
+withinMinus.Size = UDim2.new(0, 30, 0, 30)
+withinMinus.Position = UDim2.new(0, 160, 0, 50)
+withinMinus.Text = "-"
+
+local teleportPlus = Instance.new("TextButton", frame)
+teleportPlus.Size = UDim2.new(0, 30, 0, 30)
+teleportPlus.Position = UDim2.new(0, 120, 0, 90)
+teleportPlus.Text = "+"
+
+local teleportMinus = Instance.new("TextButton", frame)
+teleportMinus.Size = UDim2.new(0, 30, 0, 30)
+teleportMinus.Position = UDim2.new(0, 160, 0, 90)
+teleportMinus.Text = "-"
+
+local enableRaycastLabel = Instance.new("TextLabel", frame)
+enableRaycastLabel.Size = UDim2.new(0, 100, 0, 30)
+enableRaycastLabel.Position = UDim2.new(0, 10, 0, 130)
+enableRaycastLabel.Text = "Dodging Mode: Off"
+
+local enableRaycastButton = Instance.new("TextButton", frame)
+enableRaycastButton.Size = UDim2.new(0, 80, 0, 30)
+enableRaycastButton.Position = UDim2.new(0, 120, 0, 130)
+enableRaycastButton.Text = "Toggle Dodging"
+enableRaycastButton.BackgroundColor3 = Color3.new(1, 0, 0)  -- Red color initially
+
+-- Add TP Button
+local tpButton = Instance.new("TextButton", frame)
+tpButton.Size = UDim2.new(0, 60, 0, 30)
+tpButton.Position = UDim2.new(0, 10, 0, 170)
+tpButton.Text = "TP"
+tpButton.BackgroundColor3 = Color3.new(1, 0, 0) -- Red color initially (Off)
+
+-- Add Lock Button
+local lockButton = Instance.new("TextButton", frame)
+lockButton.Size = UDim2.new(0, 60, 0, 30)
+lockButton.Position = UDim2.new(1, -70, 0, 10) -- Positioned at the top-right corner
+lockButton.Text = "Lock"
+lockButton.BackgroundColor3 = Color3.new(1, 0, 0) -- Red color initially (Unlocked)
+
+-- Add Text Box for Player Name
+local playerNameTextBox = Instance.new("TextBox", frame)
+playerNameTextBox.Size = UDim2.new(0, 150, 0, 30)
+playerNameTextBox.Position = UDim2.new(0, 70, 0, 170)
+playerNameTextBox.PlaceholderText = "Enter Player Name"
+
+local active = false  -- Start with 'Off' button active
+local tpActive = false
+local withinStuds = 10
+local teleportStuds = 10
+local raycastEnabled = false
+local guiLocked = false  -- Initially unlocked
+local lastInputText = ""
+local onButtonPreviousState = false
+local tpTeleportStuds = -4 
+
+-- Lock Button Functionality
+lockButton.MouseButton1Click:Connect(function()
+    guiLocked = not guiLocked
+    frame.Draggable = not guiLocked  -- Toggle draggable property
+    lockButton.BackgroundColor3 = guiLocked and Color3.new(0, 1, 0) or Color3.new(1, 0, 0) -- Green if locked, Red if unlocked
+    lockButton.Text = guiLocked and "Unlock" or "Lock"
+end)
+
+-- Raycast Function to Check Safe Position
+local function isSafePosition(position)
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterDescendantsInstances = {Character}
+    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+
+    local raycastResult = Workspace:Raycast(position, Vector3.new(0, -100, 0), raycastParams)
+    return raycastResult and raycastResult.Position and raycastResult.Position.Y < position.Y
+end
+
+-- Function to Get a Safe Teleport Position
+local function getSafeTeleportPosition(playerHumanoidRootPart)
+    local angleIncrement = math.pi / 8 -- 22.5 degrees per step
+    local radius = teleportStuds
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterDescendantsInstances = {Character}
+    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+
+    for i = 0, 15 do
+        local angle = i * angleIncrement
+        local direction = Vector3.new(math.cos(angle), 0, math.sin(angle))
+        local targetPosition = playerHumanoidRootPart.Position + direction * radius
+        local raycastResult = Workspace:Raycast(playerHumanoidRootPart.Position, targetPosition - playerHumanoidRootPart.Position, raycastParams)
+
+        if not raycastResult then
+            return targetPosition
+        end
+    end
+
+    return nil
+end
+
+-- Function to Check if Facing a Target (Simplified for Avoidance Logic)
+local function isFacingTarget(otherHumanoidRootPart)
+    local directionToOtherPlayer = (otherHumanoidRootPart.Position - HumanoidRootPart.Position).unit
+    local facingDirection = HumanoidRootPart.CFrame.LookVector
+    local dotProduct = facingDirection:Dot(directionToOtherPlayer)
+    return dotProduct > 0.7  -- Less strict facing requirement for avoidance
+end
+
+-- Function to find matching player
+local function findMatchingPlayer(partialName)
+    if partialName == "" then return nil end
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if string.lower(player.Name):sub(1, #partialName) == string.lower(partialName) or
+            string.lower(player.DisplayName):sub(1, #partialName) == string.lower(partialName) then
+            return player
+        end
+    end
+    return nil
+end
+
+-- Function to handle player name input
+local function onPlayerNameChanged()
+    local currentText = playerNameTextBox.Text
+	
+    if currentText ~= lastInputText then
+		local matchingPlayer = findMatchingPlayer(currentText)
+		if matchingPlayer then
+			playerNameTextBox.Text = matchingPlayer.DisplayName or matchingPlayer.Name
+			lastInputText = playerNameTextBox.Text
+		else
+			lastInputText = currentText
+		end
+	end
+end
+
+-- Connect the onPlayerNameChanged function to textbox focus lost event
+playerNameTextBox.FocusLost:Connect(onPlayerNameChanged)
+
+-- TP Logic (Corrected to teleport a studs behind, face target, and avoid obstacles)
+local function teleportToPlayer()
+    if not tpActive then
+        print("TP button is not active, not teleporting")
+        return
+    end
+
+    local targetPlayerName = playerNameTextBox.Text
+    if not targetPlayerName or targetPlayerName == "" then
+        warn("Please enter a player name")
+        return
+    end
+
+    local foundPlayer = findMatchingPlayer(targetPlayerName)
+    if not foundPlayer then
+        warn("Player not found with name:", targetPlayerName)
+        return
+    end
+
+    local otherHumanoidRootPart = foundPlayer.Character and foundPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not otherHumanoidRootPart then
+        warn("HumanoidRootPart not found for player:", foundPlayer.Name)
+        return
+    end
+
+    if otherHumanoidRootPart.Anchored then
+        warn("Target player's HumanoidRootPart is anchored. Will not teleport.")
+        return
+    end
+
+    -- Calculate the teleportation position
+    local directionToTarget = (otherHumanoidRootPart.Position - HumanoidRootPart.Position).unit
+    local targetPosition = otherHumanoidRootPart.Position - directionToTarget * tpTeleportStuds
+
+    -- Immediate teleportation to targetPosition
+    HumanoidRootPart.CFrame = CFrame.new(targetPosition, otherHumanoidRootPart.Position)
+    print("Teleported to within", tpTeleportStuds, "studs of", foundPlayer.Name)
+end
+
+-- TP Button Functionality
+tpButton.MouseButton1Click:Connect(function()
+    tpActive = not tpActive
+    tpButton.BackgroundColor3 = tpActive and Color3.new(0, 1, 0) or Color3.new(1, 0, 0)
+	
+	if tpActive then
+		if active then
+            onButtonPreviousState = active
+            active = false
+            onButton.BackgroundColor3 = Color3.new(1, 0, 0)
+			offButton.BackgroundColor3 = Color3.new(0, 1, 0)
+		end
+	else
+		if onButtonPreviousState then
+			active = true
+			onButton.BackgroundColor3 = Color3.new(0, 1, 0)
+			offButton.BackgroundColor3 = Color3.new(1, 0, 0)
+			onButtonPreviousState = false
+		end
+	end
+end)
+
+-- Avoid Players Logic (Corrected)
+local function avoidPlayers()
+    if not active then return end
+
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local otherHumanoidRootPart = player.Character.HumanoidRootPart
+            local distance = (HumanoidRootPart.Position - otherHumanoidRootPart.Position).Magnitude
+
+            -- Use a separate check for distance and facing direction
+            if distance < withinStuds then
+                if isFacingTarget(otherHumanoidRootPart) then  -- Check if facing for avoidance
+                    local newPosition
+                    if raycastEnabled then
+                        newPosition = getSafeTeleportPosition(otherHumanoidRootPart)
+                    else
+                        newPosition = otherHumanoidRootPart.Position - (HumanoidRootPart.Position - otherHumanoidRootPart.Position).unit * teleportStuds
+                    end
+
+                    if newPosition and isSafePosition(newPosition) then
+                        HumanoidRootPart.CFrame = CFrame.new(newPosition)
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- Update Logic in the Stepped Event
+RunService.Stepped:Connect(function()
+	if tpActive then
+		teleportToPlayer()
+    end
+    if active then  -- Run avoidPlayers only when 'On' is active
+        avoidPlayers()
+    end
+end)
+
+-- Button Functionality for On and Off
+onButton.MouseButton1Click:Connect(function()
+    active = true
+    onButton.BackgroundColor3 = Color3.new(0, 1, 0)
+    offButton.BackgroundColor3 = Color3.new(1, 0, 0)
+end)
+
+offButton.MouseButton1Click:Connect(function()
+    active = false
+    onButton.BackgroundColor3 = Color3.new(1, 0, 0)
+    offButton.BackgroundColor3 = Color3.new(0, 1, 0)
+end)
+
+-- Destroy GUI Logic
+destroyButton.MouseButton1Click:Connect(function()
+    active = false
+    tpActive = false
+    raycastEnabled = false
+    screenGui:Destroy()
+end)
+
+-- Adjust Distance Settings
+withinPlus.MouseButton1Click:Connect(function()
+    withinStuds = withinStuds + 1
+    withinLabel.Text = "Within Studs: " .. withinStuds
+end)
+
+withinMinus.MouseButton1Click:Connect(function()
+    withinStuds = math.max(1, withinStuds - 1)
+    withinLabel.Text = "Within Studs: " .. withinStuds
+end)
+
+teleportPlus.MouseButton1Click:Connect(function()
+    teleportStuds = teleportStuds + 1
+    teleportLabel.Text = "Teleport Studs: " .. teleportStuds
+end)
+
+teleportMinus.MouseButton1Click:Connect(function()
+    teleportStuds = math.max(10, teleportStuds - 1)
+    teleportLabel.Text = "Teleport Studs: " .. teleportStuds
+end)
+
+-- Enable Raycast Dodging
+enableRaycastButton.MouseButton1Click:Connect(function()
+    raycastEnabled = not raycastEnabled
+    enableRaycastButton.BackgroundColor3 = raycastEnabled and Color3.new(0, 1, 0) or Color3.new(1, 0, 0)
+    enableRaycastLabel.Text = "Dodging Mode: " .. (raycastEnabled and "On" or "Off")
+end)
