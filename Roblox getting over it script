@@ -93,7 +93,7 @@ local function updatePlatformPosition()
 	local cameraCFrame = camera.CFrame
 	local offset = cameraCFrame.LookVector * 18 -- Distance from camera
 	local targetPosition = cameraCFrame.Position + offset
-    local lowerOffset = Vector3.new(-1.5, -7.8, 0)  -- Offset downwards by 3 studs
+    local lowerOffset = Vector3.new(-1.5, -7.8, 0)  
 	
 	platform.CFrame = CFrame.new(targetPosition + lowerOffset)
 end
