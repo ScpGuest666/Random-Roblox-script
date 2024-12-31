@@ -1,0 +1,122 @@
+-- Services
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+-- Get Local Player
+local localPlayer = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+
+-- Create ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Parent = localPlayer:WaitForChild("PlayerGui")
+screenGui.ResetOnSpawn = false
+
+-- Create Frame
+local frame = Instance.new("Frame")
+frame.Parent = screenGui
+frame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+frame.Size = UDim2.new(0, 200, 0, 100)
+frame.Position = UDim2.new(0.5, -100, 0.5, -50)
+frame.Active = true
+frame.Draggable = true
+
+-- Create On Button
+local onButton = Instance.new("TextButton")
+onButton.Parent = frame
+onButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+onButton.Size = UDim2.new(0, 60, 0, 30)
+onButton.Position = UDim2.new(0, 20, 0, 20)
+onButton.Text = "On"
+onButton.TextScaled = true
+
+-- Create Off Button
+local offButton = Instance.new("TextButton")
+offButton.Parent = frame
+offButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+offButton.Size = UDim2.new(0, 60, 0, 30)
+offButton.Position = UDim2.new(0, 120, 0, 20)
+offButton.Text = "Off"
+offButton.TextScaled = true
+
+-- Create Destroy Button
+local destroyButton = Instance.new("TextButton")
+destroyButton.Parent = frame
+destroyButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+destroyButton.Size = UDim2.new(0, 160, 0, 30)
+destroyButton.Position = UDim2.new(0, 20, 0, 60)
+destroyButton.Text = "Destroy"
+destroyButton.TextScaled = true
+
+-- Create Status Indicator
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Parent = frame
+statusLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+statusLabel.Size = UDim2.new(0, 200, 0, 30)
+statusLabel.Position = UDim2.new(0, 0, 0, -30)
+statusLabel.Text = "Status: Off"
+statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+statusLabel.TextScaled = true
+
+-- Platform Variables
+local platform = nil
+local platformActive = false
+
+-- Function to create the platform
+local function createPlatform()
+	if platform then --Prevent creating multiple platforms
+		return
+	end
+	
+    platform = Instance.new("Part")
+    platform.Size = Vector3.new(5, 5, 5)
+    platform.BrickColor = BrickColor.Red()
+    platform.Anchored = true
+    platform.CanCollide = true
+    platform.Parent = workspace
+	platform.Name = "FollowPlatform"
+end
+
+-- Function to destroy the platform
+local function destroyPlatform()
+    if platform then
+        platform:Destroy()
+        platform = nil
+    end
+end
+
+-- Function to update platform position
+local function updatePlatformPosition()
+	if not platform or not platformActive then
+		return
+	end
+	
+	local cameraCFrame = camera.CFrame
+	local offset = cameraCFrame.LookVector * 13 -- Distance from camera
+	local targetPosition = cameraCFrame.Position + offset
+    local lowerOffset = Vector3.new(0, -3.45, 0)  -- Offset downwards
+	
+	platform.CFrame = CFrame.new(targetPosition + lowerOffset)
+end
+
+-- Connect to RenderStepped for smooth camera following
+RunService.RenderStepped:Connect(updatePlatformPosition)
+
+-- Button Functions
+onButton.MouseButton1Click:Connect(function()
+    statusLabel.Text = "Status: On"
+    statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+	platformActive = true
+	createPlatform()
+end)
+
+offButton.MouseButton1Click:Connect(function()
+	statusLabel.Text = "Status: Off"
+	statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+	platformActive = false
+	destroyPlatform()
+end)
+
+destroyButton.MouseButton1Click:Connect(function()
+    destroyPlatform()
+	screenGui:Destroy()
+end)
