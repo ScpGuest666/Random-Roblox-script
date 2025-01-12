@@ -147,7 +147,7 @@ local function spawnPlatform()
     spawnedPlatform.Size = Vector3.new(3, 1, 3)
     spawnedPlatform.BrickColor = BrickColor.Red()
     spawnedPlatform.Anchored = true
-    spawnedPlatform.CanCollide = true
+    spawnedPlatform.CanCollide = false -- Changed from 'true' to 'false'
     spawnedPlatform.Parent = workspace
 
     local offset = Vector3.new(0, 2.5, 0)
@@ -206,22 +206,50 @@ local function spawnPlatform()
     leftButton.Text = "Left"
     leftButton.TextScaled = true
     leftButton.Position = UDim2.new(0,0,0,0) -- Placed 10% to the left
+    
+    -- Keep track of the platform's target rotation
+    local targetRotation = 0
+    
+    --Update the platform's rotation
+    game:GetService("RunService").RenderStepped:Connect(function()
+		if not spawnedPlatform or not isPlatformActive then
+			return
+		end
 
-    forwardButton.MouseButton1Click:Connect(function()
-        if not isPlatformActive then
+		-- Get the camera's CFrame
+		local cameraCFrame = camera.CFrame
+		-- Get the camera's right vector
+		local cameraRight = cameraCFrame.RightVector
+
+		-- Use the Y component of the right vector to get the angle
+		targetRotation = math.atan2(cameraRight.X, cameraRight.Z)
+
+        --Create the new CFrame with the target rotation
+        local newCFrame = CFrame.new(spawnedPlatform.CFrame.Position) * CFrame.Angles(0, targetRotation, 0)
+
+        --Set the platform rotation
+		spawnedPlatform.CFrame = newCFrame
+    end)
+
+    local function movePlatform(direction)
+        if not isPlatformActive or not spawnedPlatform then
             return
         end
-        local char = player.Character or player.CharacterAdded:Wait()
-        if not char or not char:FindFirstChild("HumanoidRootPart") then return end
-        local hrp = char:FindFirstChild("HumanoidRootPart")
 
-        if not spawnedPlatform then
-            return
+        local offset
+        if direction == "forward" then
+            offset = camera.CFrame.LookVector * movementSpeed
+        elseif direction == "backward" then
+            offset = -camera.CFrame.LookVector * movementSpeed
+        elseif direction == "right" then
+            offset = camera.CFrame.RightVector * movementSpeed
+        elseif direction == "left" then
+            offset = -camera.CFrame.RightVector * movementSpeed
         end
-
+        
         local currentPlatformCFrame = spawnedPlatform.CFrame
-        local offset = camera.CFrame.LookVector * movementSpeed
-        local targetCFrame = currentPlatformCFrame + offset
+        -- Create a new target CFrame that combines translation and rotation
+        local targetCFrame = CFrame.new(currentPlatformCFrame.Position + offset) * CFrame.Angles(0, targetRotation, 0)
 
         local tweenInfo = TweenInfo.new(
             0.4,
@@ -239,108 +267,22 @@ local function spawnPlatform()
         currentTween:Play()
 
         camera.CameraSubject = spawnedPlatform
+    end
+
+    forwardButton.MouseButton1Click:Connect(function()
+        movePlatform("forward")
     end)
 
     backwardButton.MouseButton1Click:Connect(function()
-        if not isPlatformActive then
-            return
-        end
-        local char = player.Character or player.CharacterAdded:Wait()
-        if not char or not char:FindFirstChild("HumanoidRootPart") then return end
-        local hrp = char:FindFirstChild("HumanoidRootPart")
-
-        if not spawnedPlatform then
-            return
-        end
-
-        local currentPlatformCFrame = spawnedPlatform.CFrame
-        local offset = -camera.CFrame.LookVector * movementSpeed
-        local targetCFrame = currentPlatformCFrame + offset
-
-         local tweenInfo = TweenInfo.new(
-            0.4,
-            Enum.EasingStyle.Quad,
-            Enum.EasingDirection.Out,
-            0,
-            false,
-            0
-        )
-
-        if currentTween then
-            currentTween:Cancel()
-        end
-        currentTween = tweenService:Create(spawnedPlatform, tweenInfo, {CFrame = targetCFrame})
-        currentTween:Play()
-
-        camera.CameraSubject = spawnedPlatform
+        movePlatform("backward")
     end)
 
     rightButton.MouseButton1Click:Connect(function()
-        if not isPlatformActive then
-            return
-        end
-        local char = player.Character or player.CharacterAdded:Wait()
-        if not char or not char:FindFirstChild("HumanoidRootPart") then return end
-        local hrp = char:FindFirstChild("HumanoidRootPart")
-
-        if not spawnedPlatform then
-            return
-        end
-
-        local currentPlatformCFrame = spawnedPlatform.CFrame
-        local offset = camera.CFrame.RightVector * movementSpeed
-        local targetCFrame = currentPlatformCFrame + offset
-
-        local tweenInfo = TweenInfo.new(
-            0.4,
-            Enum.EasingStyle.Quad,
-            Enum.EasingDirection.Out,
-            0,
-            false,
-            0
-        )
-
-        if currentTween then
-            currentTween:Cancel()
-        end
-        currentTween = tweenService:Create(spawnedPlatform, tweenInfo, {CFrame = targetCFrame})
-        currentTween:Play()
-
-        camera.CameraSubject = spawnedPlatform
+        movePlatform("right")
     end)
 
     leftButton.MouseButton1Click:Connect(function()
-        if not isPlatformActive then
-            return
-        end
-        local char = player.Character or player.CharacterAdded:Wait()
-        if not char or not char:FindFirstChild("HumanoidRootPart") then return end
-        local hrp = char:FindFirstChild("HumanoidRootPart")
-
-        if not spawnedPlatform then
-            return
-        end
-
-        local currentPlatformCFrame = spawnedPlatform.CFrame
-        local offset = -camera.CFrame.RightVector * movementSpeed
-        local targetCFrame = currentPlatformCFrame + offset
-
-         local tweenInfo = TweenInfo.new(
-            0.4,
-            Enum.EasingStyle.Quad,
-            Enum.EasingDirection.Out,
-            0,
-            false,
-            0
-        )
-
-        if currentTween then
-            currentTween:Cancel()
-        end
-        currentTween = tweenService:Create(spawnedPlatform, tweenInfo, {CFrame = targetCFrame})
-        currentTween:Play()
-
-        camera.CameraSubject = spawnedPlatform
+        movePlatform("left")
     end)
 end
 
