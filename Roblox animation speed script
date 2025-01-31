@@ -30,6 +30,16 @@ offButton.Position = UDim2.new(0, 100, 0, 20)
 offButton.Text = "Off"
 offButton.TextScaled = true
 
+-- Create Idle Button
+local idleButton = Instance.new("TextButton")
+idleButton.Parent = frame
+idleButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0) -- Red indicates "off"
+idleButton.Size = UDim2.new(0, 60, 0, 30)
+idleButton.Position = UDim2.new(0, 180, 0, 20)
+idleButton.Text = "Idle"
+idleButton.TextScaled = true
+local isIdleActive = false
+
 -- Create Destroy Button
 local destroyButton = Instance.new("TextButton")
 destroyButton.Parent = frame
@@ -81,35 +91,60 @@ statusLabel.TextScaled = true
 local isAnimating = false
 local speedMultiplier = tonumber(speedBox.Text) or 2
 
+-- Function to modify animation speed
 local function modifyAnimationSpeed()
     while isAnimating do
         local character = game.Players.LocalPlayer.Character
         if character then
-            for _, anim in pairs(character:FindFirstChildOfClass("Humanoid"):GetPlayingAnimationTracks()) do
-                anim:AdjustSpeed(speedMultiplier)
+            local humanoid = character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                for _, anim in pairs(humanoid:GetPlayingAnimationTracks()) do
+                    if isIdleActive then
+                        -- If Idle button is ON and character is idle (not moving)
+                        if humanoid.MoveDirection.Magnitude == 0 then
+                            anim:AdjustSpeed(speedMultiplier) -- Apply speed to idle animation
+                        else
+                            anim:AdjustSpeed(1) -- Normal speed for moving animations
+                        end
+                    else
+                        -- If Idle button is OFF, apply speed to all animations
+                        anim:AdjustSpeed(speedMultiplier)
+                    end
+                end
             end
         end
-        wait(0.1) -- Reactivate every 0.1 seconds
+        wait(0.1) -- Check every 0.1 seconds
+    end
+end
+
+-- Start or stop the animation speed modification loop
+local function toggleAnimation(on)
+    if on then
+        if not isAnimating then
+            isAnimating = true
+            coroutine.wrap(modifyAnimationSpeed)() -- Run modifyAnimationSpeed in a coroutine
+        end
+    else
+        isAnimating = false
     end
 end
 
 -- Button Functions
 onButton.MouseButton1Click:Connect(function()
     speedMultiplier = tonumber(speedBox.Text) or 2
-    isAnimating = true
     statusLabel.Text = "Status: On"
     statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
-    modifyAnimationSpeed()
+    toggleAnimation(true)
 end)
 
 offButton.MouseButton1Click:Connect(function()
-    isAnimating = false
     statusLabel.Text = "Status: Off"
     statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+    toggleAnimation(false)
 end)
 
 destroyButton.MouseButton1Click:Connect(function()
-    isAnimating = false
+    toggleAnimation(false)
     screenGui:Destroy()
 end)
 
@@ -122,4 +157,16 @@ decreaseButton.MouseButton1Click:Connect(function()
     speedMultiplier = (tonumber(speedBox.Text) or 2) - 1
     if speedMultiplier < 0 then speedMultiplier = 0 end
     speedBox.Text = tostring(speedMultiplier)
+end)
+
+-- Idle Button Toggle Function
+idleButton.MouseButton1Click:Connect(function()
+    isIdleActive = not isIdleActive
+    if isIdleActive then
+        idleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0) -- Green indicates "on"
+        idleButton.Text = "Idle On"
+    else
+        idleButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0) -- Red indicates "off"
+        idleButton.Text = "Idle Off"
+    end
 end)
