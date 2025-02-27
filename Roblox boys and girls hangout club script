@@ -1,4 +1,4 @@
--- Create ScreenGui
+-- Create ScreenGui ✅ 
 local screenGui = Instance.new("ScreenGui")
 screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
 screenGui.ResetOnSpawn = false
@@ -232,7 +232,7 @@ player.CharacterAdded:Connect(function(newCharacter)
 end)
 
 
--- Create ScreenGui
+-- Create ScreenGui ✅ 
 local screenGui = Instance.new("ScreenGui")
 screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
 screenGui.ResetOnSpawn = false
@@ -315,15 +315,22 @@ local function teleportPlayerByName(partialName)
             local targetPlayer = findPlayerByName(partialName)
             if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
                 local playerRootPart = targetPlayer.Character.HumanoidRootPart
-                
+
                 -- Save the original position if not already saved
                 if not originalPositions[targetPlayer] then
                     originalPositions[targetPlayer] = playerRootPart.CFrame
                 end
 
-                local direction = (playerRootPart.Position - rootPart.Position).unit
-                local targetPosition = rootPart.Position + direction * 2
-                playerRootPart.CFrame = CFrame.new(targetPosition, rootPart.Position) * CFrame.Angles(0, math.rad(180), 0)
+                -- Calculate the position in front of the local player
+                local distance = 3  -- Adjusted distance to 3 studs
+                local targetPosition = rootPart.CFrame * CFrame.new(0, 0, -distance).Position
+
+                -- Calculate the rotation to make the target player face away from the local player (180 degrees)
+                local lookAtPosition = rootPart.Position
+                local upVector = Vector3.new(0, 1, 0) -- Keep the player upright
+                local newCFrame = CFrame.lookAt(targetPosition, lookAtPosition, upVector) * CFrame.Angles(0, math.rad(180), 0) -- Rotate 180 degrees
+
+                playerRootPart.CFrame = newCFrame
             end
         end
     end
