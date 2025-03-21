@@ -54,8 +54,7 @@ local controllerEnabled = false
 local movementDirection = {}
 
 -- Movement Speeds
-local forwardVelocity = 100
-local backwardVelocity = 100
+local forwardVelocity = 100  -- Controls both forward/backward magnitude
 local leftVelocity = 100
 local rightVelocity = 100
 local upVelocity = 50
@@ -507,7 +506,6 @@ table.insert(activeConnections, PitchButton.MouseButton1Click:Connect(function()
     end))
 end
 
--- Unified Input Handling
 local function handleInput()
     local character = game.Players.LocalPlayer.Character
     if not character then return end
@@ -515,70 +513,109 @@ local function handleInput()
     if not humanoid then return end
 
     if FlyEnabled and (humanoid.SeatPart or flightWithoutFlyEnabled) then
-
         local rootPart = character:FindFirstChild("HumanoidRootPart")
         if not rootPart then return end
-
         if not VelocityHandler then return end
 
-        local camera = workspace.CurrentCamera
-        local controlModule = require(game.Players.LocalPlayer.PlayerScripts:WaitForChild("PlayerModule"):WaitForChild("ControlModule"))
-
-        local velocity = Vector3.new()
         local gyro = rootPart:FindFirstChild(gyroHandlerName)
         local speed = tonumber(SpeedTextBox.Text) or 1
+        local velocity = Vector3.new()
 
-        if #movementDirection > 0 then
-            for _, direction in ipairs(movementDirection) do
-                if direction == "forward" then
-                    velocity = velocity + Vector3.new(0, 0, -forwardVelocity)
-                elseif direction == "backward" then
-                    velocity = velocity + Vector3.new(0, 0, backwardVelocity)
-                elseif direction == "left" then
-                    velocity = velocity + Vector3.new(-leftVelocity, 0, 0)
-                elseif direction == "right" then
-                    velocity = velocity + Vector3.new(rightVelocity, 0, 0)
-                elseif direction == "up" then
-                    velocity = velocity + Vector3.new(0, upVelocity, 0)
-                elseif direction == "down" then
-                    velocity = velocity + Vector3.new(0, -downVelocity, 0)
-                elseif direction == "rotateLeft" and gyro then
-                    if isAntiLockOn then
-                        gyro.CFrame = gyro.CFrame * CFrame.Angles(0, math.rad(-rotationSpeed), 0)
-                    else
-                        gyro.CFrame = gyro.CFrame * CFrame.Angles(0, math.rad(-rotationSpeed), 0)
-                    end
-                elseif direction == "rotateRight" and gyro then
-                    if isAntiLockOn then
-                        gyro.CFrame = gyro.CFrame * CFrame.Angles(0, math.rad(rotationSpeed), 0)
-                    else
-                        gyro.CFrame = gyro.CFrame * CFrame.Angles(0, math.rad(rotationSpeed), 0)
+        -- Calculate movement based on current orientation
+        local function getMovementCFrame()
+            if isPitchOn and gyro then
+                return gyro.CFrame
+            elseif gyro then
+                -- Flatten the orientation to horizontal plane
+                local lookVector = gyro.CFrame.LookVector
+                return CFrame.new(gyro.Parent.Position, gyro.Parent.Position + Vector3.new(lookVector.X, 0, lookVector.Z))
+            end
+            return rootPart.CFrame
+        end
+
+        local movementCFrame = getMovementCFrame()
+
+        for _, direction in ipairs(movementDirection) do
+            if direction == "forward" then
+                velocity += movementCFrame.LookVector * forwardVelocity
+            elseif direction == "backward" then
+                velocity += -movementCFrame.LookVector * forwardVelocity  -- Changed to use forwardVelocity
+            elseif direction == "left" then
+                velocity += movementCFrame.RightVector * -leftVelocity
+            elseif direction == "right" then
+                velocity += movementCFrame.RightVector * rightVelocity
+            elseif direction == "up" then
+                velocity += Vector3.new(0, upVelocity, 0)
+            elseif direction == "down" then
+                velocity += Vector3.new(0, -downVelocity, 0)
+            elseif direction == "rotateLeft" and gyro then
+                gyro.CFrame = gyro.CFrame * CFrame.Angles(0, math.rad(-rotationSpeed), 0)
+            elseif direction == "rotateRight" and gyro then
+                gyro.CFrame = gyro.CFrame * CFrame.Angles(0, math.rad(rotationSpeed), 0)
+            end
+        end
+
+      -- Combined movement handling
+        local controlModule = require(game.Players.LocalPlayer.PlayerScripts:WaitForChild("PlayerModule"):WaitForChild("ControlModule"))
+        local thumbstickDirection = controlModule:GetMoveVector()
+        
+        if #movementDirection > 0 or thumbstickDirection.Magnitude > 0 then
+            -- Handle both controller buttons AND thumbstick input
+            local combinedVelocity = velocity + (
+                movementCFrame.RightVector * thumbstickDirection.X * forwardVelocity * 2 +
+                movementCFrame.LookVector * -thumbstickDirection.Z * forwardVelocity * 2
+            )
+
+            if isAntiLockOn and humanoid.SeatPart then
+                local seatForward = humanoid.SeatPart.CFrame.LookVector
+                local seatRight = humanoid.SeatPart.CFrame.RightVector
+                local seatUp = humanoid.SeatPart.CFrame.UpVector
+                local seatVelocity = Vector3.new()
+
+                -- Calculate seat-relative movement
+                local seatForward = humanoid.SeatPart.CFrame.LookVector
+                local seatRight = humanoid.SeatPart.CFrame.RightVector
+                local seatUp = humanoid.SeatPart.CFrame.UpVector
+
+                -- Calculate seat-relative movement
+                local seatVelocity = Vector3.new()
+                for _, direction in ipairs(movementDirection) do
+                    if direction == "forward" then
+                        seatVelocity += seatForward * forwardVelocity
+                    elseif direction == "backward" then
+                        seatVelocity += -seatForward * forwardVelocity  -- Corrected: Use negative for backward
+                    elseif direction == "left" then
+                        seatVelocity += -seatRight * leftVelocity
+                    elseif direction == "right" then
+                        seatVelocity += seatRight * rightVelocity
+                    elseif direction == "up" then
+                        seatVelocity += seatUp * upVelocity
+                    elseif direction == "down" then
+                        seatVelocity += -seatUp * downVelocity
                     end
                 end
-            end
 
-            if isAntiLockOn then
-                VelocityHandler.Velocity = humanoid.SeatPart.CFrame:VectorToWorldSpace(velocity * speed)
+                    VelocityHandler.Velocity = seatVelocity * speed
             else
-                VelocityHandler.Velocity = velocity * speed
+                VelocityHandler.Velocity = combinedVelocity * speed
             end
-
         else
-            local thumbstickDirection = controlModule:GetMoveVector()
-            velocity = camera.CFrame.RightVector * thumbstickDirection.X * speed * 50
-                      - camera.CFrame.LookVector * thumbstickDirection.Z * speed * 50
-
-            VelocityHandler.Velocity = velocity
-
+            VelocityHandler.Velocity = Vector3.new()
         end
 
-        if isPitchOn and not isAntiLockOn and gyro then
-            gyro.CFrame = camera.CFrame
-        elseif gyro and not isPitchOn and not isAntiLockOn then
-           local lookVector = camera.CFrame.LookVector
-           gyro.CFrame = CFrame.new(gyro.Parent.Position, gyro.Parent.Position + Vector3.new(lookVector.X, 0, lookVector.Z))
-        end
 
+         -- Update gyro orientation to match camera rotation
+        if not isAntiLockOn then
+            local camera = workspace.CurrentCamera
+            if isPitchOn and gyro then
+                -- Full camera alignment including pitch
+                gyro.CFrame = camera.CFrame
+            elseif gyro then
+                -- Horizontal alignment only (yaw)
+                local flatLookVector = camera.CFrame.LookVector * Vector3.new(1, 0, 1)
+                gyro.CFrame = CFrame.new(gyro.Parent.Position, gyro.Parent.Position + flatLookVector)
+            end
+        end
 
     else
         if VelocityHandler then
