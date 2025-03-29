@@ -1,0 +1,127 @@
+-- Create ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+screenGui.ResetOnSpawn = false
+
+-- Create Frame
+local frame = Instance.new("Frame")
+frame.Parent = screenGui
+frame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+frame.Size = UDim2.new(0, 200, 0, 100)
+frame.Position = UDim2.new(0.5, -100, 0.5, -50)
+frame.Active = true
+frame.Draggable = true
+
+-- Create On Button
+local onButton = Instance.new("TextButton")
+onButton.Parent = frame
+onButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+onButton.Size = UDim2.new(0, 60, 0, 30)
+onButton.Position = UDim2.new(0, 20, 0, 20)
+onButton.Text = "On"
+onButton.TextScaled = true
+
+-- Create Off Button
+local offButton = Instance.new("TextButton")
+offButton.Parent = frame
+offButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+offButton.Size = UDim2.new(0, 60, 0, 30)
+offButton.Position = UDim2.new(0, 120, 0, 20)
+offButton.Text = "Off"
+offButton.TextScaled = true
+
+-- Create Destroy Button
+local destroyButton = Instance.new("TextButton")
+destroyButton.Parent = frame
+destroyButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+destroyButton.Size = UDim2.new(0, 160, 0, 30)
+destroyButton.Position = UDim2.new(0, 20, 0, 60)
+destroyButton.Text = "Destroy"
+destroyButton.TextScaled = true
+
+-- Create Status Indicator
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Parent = frame
+statusLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+statusLabel.Size = UDim2.new(0, 200, 0, 30)
+statusLabel.Position = UDim2.new(0, 0, 0, -30)
+statusLabel.Text = "WallHop: Off"
+statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+statusLabel.TextScaled = true
+
+-- Variables for Wallhop Functionality
+local toggle = false
+local InfiniteJumpEnabled = true
+local raycastParams = RaycastParams.new()
+raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+
+-- Precise wall detection function
+local function isNearWall()
+    if not game.Players.LocalPlayer.Character then return false end
+    local humanoidRootPart = game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not humanoidRootPart then return false end
+    
+    -- Update filter to ignore character
+    raycastParams.FilterDescendantsInstances = {game.Players.LocalPlayer.Character}
+    
+    -- Check in 4 directions (front, back, left, right)
+    local directions = {
+        humanoidRootPart.CFrame.LookVector,  -- Forward
+        -humanoidRootPart.CFrame.LookVector, -- Backward
+        humanoidRootPart.CFrame.RightVector, -- Right
+        -humanoidRootPart.CFrame.RightVector -- Left
+    }
+    
+    local detectionDistance = 3 -- Studs
+    
+    for _, direction in pairs(directions) do
+        local ray = workspace:Raycast(
+            humanoidRootPart.Position,
+            direction * detectionDistance,
+            raycastParams
+        )
+        if ray and ray.Instance then
+            return true
+        end
+    end
+    return false
+end
+
+-- Button Functions
+onButton.MouseButton1Click:Connect(function()
+    statusLabel.Text = "WallHop: On"
+    statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+    toggle = true
+end)
+
+offButton.MouseButton1Click:Connect(function()
+    statusLabel.Text = "WallHop: Off"
+    statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+    toggle = false
+end)
+
+destroyButton.MouseButton1Click:Connect(function()
+    screenGui:Destroy()
+end)
+
+-- Wallhop Function
+game:GetService("UserInputService").JumpRequest:Connect(function()
+    if toggle and isNearWall() then
+        if InfiniteJumpEnabled then
+            InfiniteJumpEnabled = false
+            local humanoid = game.Players.LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+            local rootPart = game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            
+            if humanoid and rootPart then
+                humanoid:ChangeState("Jumping")
+                
+                -- Rotation effect (only when near wall)
+                rootPart.CFrame = rootPart.CFrame * CFrame.Angles(0, -1, 0)
+                task.wait(0.2)
+                rootPart.CFrame = rootPart.CFrame * CFrame.Angles(0, 1, 0)
+            end
+            
+            InfiniteJumpEnabled = true
+        end
+    end
+end)
