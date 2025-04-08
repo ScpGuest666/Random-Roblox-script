@@ -57,11 +57,9 @@ local camera = workspace.CurrentCamera
 local forwardGui = nil
 local tweenService = game:GetService("TweenService")
 local currentTween = nil
-
--- Movement Speed Variable
 local movementSpeed = 10
 
--- Calculate positions for speed controls
+-- UI positioning values
 local speedControlsYPos = 100
 local speedLabelWidth = 100
 local buttonWidth = 30
@@ -88,7 +86,7 @@ minusButton.Position = UDim2.new(0, minusButtonXPos, 0, speedControlsYPos)
 minusButton.Text = "-"
 minusButton.TextScaled = true
 
--- Speed TextBox (Replaced TextLabel)
+-- Speed TextBox
 local speedTextBox = Instance.new("TextBox")
 speedTextBox.Parent = frame
 speedTextBox.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
@@ -99,233 +97,179 @@ speedTextBox.TextScaled = true
 speedTextBox.ClearTextOnFocus = false
 speedTextBox.PlaceholderText = "Enter speed"
 
--- Function to validate and update speed from TextBox
 local function updateSpeedFromTextBox()
-    local text = speedTextBox.Text
-    local number = tonumber(string.match(text, "%d+"))
-
-    if number and number >= 1 then
-        movementSpeed = number
-        speedTextBox.Text = "Speed: " .. movementSpeed
-    else
-        speedTextBox.Text = "Speed: " .. movementSpeed
-    end
+	local text = speedTextBox.Text
+	local number = tonumber(string.match(text, "%d+"))
+	if number and number >= 1 then
+		movementSpeed = number
+	end
+	speedTextBox.Text = "Speed: " .. movementSpeed
 end
 
--- Update speed when text changes and Enter is pressed
 speedTextBox.FocusLost:Connect(function(enterPressed)
-    if enterPressed then
-        updateSpeedFromTextBox()
-    end
+	if enterPressed then
+		updateSpeedFromTextBox()
+	end
 end)
 
 plusButton.MouseButton1Click:Connect(function()
-    movementSpeed = movementSpeed + 1
-    speedTextBox.Text = "Speed: " .. movementSpeed
+	movementSpeed += 1
+	speedTextBox.Text = "Speed: " .. movementSpeed
 end)
 
 minusButton.MouseButton1Click:Connect(function()
-    if movementSpeed > 1 then
-        movementSpeed = movementSpeed - 1
-        speedTextBox.Text = "Speed: " .. movementSpeed
-    end
+	if movementSpeed > 1 then
+		movementSpeed -= 1
+		speedTextBox.Text = "Speed: " .. movementSpeed
+	end
 end)
 
--- Function to spawn the platform
+-- Spawn platform
 local function spawnPlatform()
-    local char = player.Character or player.CharacterAdded:Wait()
-    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
-    local hrp = char:FindFirstChild("HumanoidRootPart")
+	local char = player.Character or player.CharacterAdded:Wait()
+	local hrp = char:FindFirstChild("HumanoidRootPart")
+	if not hrp then return end
 
-    if spawnedPlatform then
-        spawnedPlatform:Destroy()
-        spawnedPlatform = nil
-    end
+	if spawnedPlatform then spawnedPlatform:Destroy() end
 
-    spawnedPlatform = Instance.new("Part")
-    spawnedPlatform.Name = "RedPlatform"
-    spawnedPlatform.Size = Vector3.new(3, 1, 3)
-    spawnedPlatform.BrickColor = BrickColor.Red()
-    spawnedPlatform.Anchored = true
-    spawnedPlatform.CanCollide = false -- Changed from 'true' to 'false'
-    spawnedPlatform.Parent = workspace
+	spawnedPlatform = Instance.new("Part")
+	spawnedPlatform.Name = "RedPlatform"
+	spawnedPlatform.Size = Vector3.new(3, 1, 3)
+	spawnedPlatform.BrickColor = BrickColor.Red()
+	spawnedPlatform.Anchored = true
+	spawnedPlatform.CanCollide = false
+	spawnedPlatform.Transparency = 0
+	spawnedPlatform.Parent = workspace
 
-    local offset = Vector3.new(0, 2.5, 0)
-    spawnedPlatform.CFrame = CFrame.new(hrp.Position + offset)
+	spawnedPlatform.CFrame = CFrame.new(hrp.Position + Vector3.new(0, 2.5, 0))
+	camera.CameraSubject = spawnedPlatform
 
-    -- Set camera to follow platform
-    camera.CameraSubject = spawnedPlatform
+	-- GUI controls
+	forwardGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
+	forwardGui.ResetOnSpawn = false
 
-    --Create Forward Button GUI
-    forwardGui = Instance.new("ScreenGui")
-    forwardGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
-    forwardGui.ResetOnSpawn = false
+	local forwardFrame = Instance.new("Frame", forwardGui)
+	forwardFrame.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
+	forwardFrame.Size = UDim2.new(0, 140, 0, 70)
+	forwardFrame.Position = UDim2.new(0, 10, 1, -90)
+	forwardFrame.BorderSizePixel = 0
+	forwardFrame.Active = true -- Keep properties from original script
+	forwardFrame.Draggable = false -- Keep properties from original script
 
-    -- Create Forward Button Frame
-    local forwardFrame = Instance.new("Frame")
-    forwardFrame.Parent = forwardGui
-    forwardFrame.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
-    forwardFrame.Size = UDim2.new(0, 140, 0, 70) -- Increased width to fit buttons
-    forwardFrame.Position = UDim2.new(0, 10, 1, -90)
-    forwardFrame.Active = true
-    forwardFrame.Draggable = false
-    forwardFrame.BorderSizePixel = 0
+	-- Create Forward Button (Matching original script)
+	local forwardBtn = Instance.new("TextButton")
+	forwardBtn.Parent = forwardFrame
+	forwardBtn.BackgroundColor3 = Color3.fromRGB(150, 150, 150)
+	forwardBtn.Size = UDim2.new(0.38, 0, 0.5, 0) -- << SIZE CORRECTED TO MATCH ORIGINAL
+	forwardBtn.Position = UDim2.new(0.31, 0, 0, 0) -- Position from original
+	forwardBtn.Text = "Forward"
+	forwardBtn.TextScaled = true
 
-    -- Create Forward Button
-    local forwardButton = Instance.new("TextButton")
-    forwardButton.Parent = forwardFrame
-    forwardButton.BackgroundColor3 = Color3.fromRGB(150, 150, 150)
-    forwardButton.Size = UDim2.new(0.38, 0, 0.5, 0) -- Reduced width to 30%
-    forwardButton.Text = "Forward"
-    forwardButton.TextScaled = true
-    forwardButton.Position = UDim2.new(0.31,0,0,0) -- Placed 10% into the left
+	-- Create Backward Button (Matching original script)
+	local backwardBtn = Instance.new("TextButton")
+	backwardBtn.Parent = forwardFrame
+	backwardBtn.BackgroundColor3 = Color3.fromRGB(150, 150, 150)
+	backwardBtn.Size = UDim2.new(0.38, 0, 0.5, 0) -- << SIZE CORRECTED TO MATCH ORIGINAL
+	backwardBtn.Position = UDim2.new(0.31, 0, 0.5, 0) -- Position from original
+	backwardBtn.Text = "Backward"
+	backwardBtn.TextScaled = true
 
-    --Create Backward Button
-    local backwardButton = Instance.new("TextButton")
-    backwardButton.Parent = forwardFrame
-    backwardButton.BackgroundColor3 = Color3.fromRGB(150, 150, 150)
-    backwardButton.Size = UDim2.new(0.38, 0, 0.5, 0) -- Reduced width to 30%
-    backwardButton.Text = "Backward"
-    backwardButton.TextScaled = true
-    backwardButton.Position = UDim2.new(0.31,0,0.5,0) -- Placed 10% into the left
+	-- Create Left Button (Matching original script)
+	local leftBtn = Instance.new("TextButton")
+	leftBtn.Parent = forwardFrame
+	leftBtn.BackgroundColor3 = Color3.fromRGB(150, 150, 150)
+	leftBtn.Size = UDim2.new(0.3, 0, 1, 0) -- << SIZE CORRECTED TO MATCH ORIGINAL
+	leftBtn.Position = UDim2.new(0, 0, 0, 0) -- Position from original
+	leftBtn.Text = "Left"
+	leftBtn.TextScaled = true
 
-    -- Create Right Button
-    local rightButton = Instance.new("TextButton")
-    rightButton.Parent = forwardFrame
-    rightButton.BackgroundColor3 = Color3.fromRGB(150, 150, 150)
-    rightButton.Size = UDim2.new(0.3, 0, 1, 0) -- Increased height to full height
-    rightButton.Text = "Right"
-    rightButton.TextScaled = true
-    rightButton.Position = UDim2.new(0.7,0,0,0) -- Placed 10% to the right
+	-- Create Right Button (Matching original script)
+	local rightBtn = Instance.new("TextButton")
+	rightBtn.Parent = forwardFrame
+	rightBtn.BackgroundColor3 = Color3.fromRGB(150, 150, 150)
+	rightBtn.Size = UDim2.new(0.3, 0, 1, 0) -- << SIZE CORRECTED TO MATCH ORIGINAL
+	rightBtn.Position = UDim2.new(0.7, 0, 0, 0) -- Position from original
+	rightBtn.Text = "Right"
+	rightBtn.TextScaled = true
 
-    -- Create Left Button
-    local leftButton = Instance.new("TextButton")
-    leftButton.Parent = forwardFrame
-    leftButton.BackgroundColor3 = Color3.fromRGB(150, 150, 150)
-    leftButton.Size = UDim2.new(0.3, 0, 1, 0) -- Increased height to full height
-    leftButton.Text = "Left"
-    leftButton.TextScaled = true
-    leftButton.Position = UDim2.new(0,0,0,0) -- Placed 10% to the left
-    
-    -- Keep track of the platform's target rotation
-    local targetRotation = 0
-    
-    --Update the platform's rotation
-    game:GetService("RunService").RenderStepped:Connect(function()
-		if not spawnedPlatform or not isPlatformActive then
-			return
-		end
+	local targetRotation = 0
 
-		-- Get the camera's CFrame
-		local cameraCFrame = camera.CFrame
-		-- Get the camera's right vector
-		local cameraRight = cameraCFrame.RightVector
+	game:GetService("RunService").RenderStepped:Connect(function()
+		if not spawnedPlatform or not isPlatformActive then return end
 
-		-- Use the Y component of the right vector to get the angle
-		targetRotation = math.atan2(cameraRight.X, cameraRight.Z)
+		local camCF = camera.CFrame
+		targetRotation = math.atan2(camCF.RightVector.X, camCF.RightVector.Z)
+		local newCF = CFrame.new(spawnedPlatform.Position) * CFrame.Angles(0, targetRotation, 0)
+		spawnedPlatform.CFrame = newCF
 
-        --Create the new CFrame with the target rotation
-        local newCFrame = CFrame.new(spawnedPlatform.CFrame.Position) * CFrame.Angles(0, targetRotation, 0)
+		local dist = (spawnedPlatform.Position - camCF.Position).Magnitude
+		spawnedPlatform.Transparency = dist <= 10 and 1 or 0
+	end)
 
-        --Set the platform rotation
-		spawnedPlatform.CFrame = newCFrame
-    end)
+	local function movePlatform(dir)
+		if not isPlatformActive or not spawnedPlatform then return end
+		local dirVec = {
+			forward = camera.CFrame.LookVector,
+			backward = -camera.CFrame.LookVector,
+			right = camera.CFrame.RightVector,
+			left = -camera.CFrame.RightVector
+		}
+		local offset = dirVec[dir] * movementSpeed
+		local targetCF = CFrame.new(spawnedPlatform.Position + offset) * CFrame.Angles(0, targetRotation, 0)
 
-    local function movePlatform(direction)
-        if not isPlatformActive or not spawnedPlatform then
-            return
-        end
+		if currentTween then currentTween:Cancel() end
+		local tweenInfo = TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+		currentTween = tweenService:Create(spawnedPlatform, tweenInfo, {CFrame = targetCF})
+		currentTween:Play()
 
-        local offset
-        if direction == "forward" then
-            offset = camera.CFrame.LookVector * movementSpeed
-        elseif direction == "backward" then
-            offset = -camera.CFrame.LookVector * movementSpeed
-        elseif direction == "right" then
-            offset = camera.CFrame.RightVector * movementSpeed
-        elseif direction == "left" then
-            offset = -camera.CFrame.RightVector * movementSpeed
-        end
-        
-        local currentPlatformCFrame = spawnedPlatform.CFrame
-        -- Create a new target CFrame that combines translation and rotation
-        local targetCFrame = CFrame.new(currentPlatformCFrame.Position + offset) * CFrame.Angles(0, targetRotation, 0)
+		camera.CameraSubject = spawnedPlatform
+	end
 
-        local tweenInfo = TweenInfo.new(
-            0.4,
-            Enum.EasingStyle.Quad,
-            Enum.EasingDirection.Out,
-            0,
-            false,
-            0
-        )
-
-        if currentTween then
-            currentTween:Cancel()
-        end
-        currentTween = tweenService:Create(spawnedPlatform, tweenInfo, {CFrame = targetCFrame})
-        currentTween:Play()
-
-        camera.CameraSubject = spawnedPlatform
-    end
-
-    forwardButton.MouseButton1Click:Connect(function()
-        movePlatform("forward")
-    end)
-
-    backwardButton.MouseButton1Click:Connect(function()
-        movePlatform("backward")
-    end)
-
-    rightButton.MouseButton1Click:Connect(function()
-        movePlatform("right")
-    end)
-
-    leftButton.MouseButton1Click:Connect(function()
-        movePlatform("left")
-    end)
+	forwardBtn.MouseButton1Click:Connect(function() movePlatform("forward") end)
+	backwardBtn.MouseButton1Click:Connect(function() movePlatform("backward") end)
+	rightBtn.MouseButton1Click:Connect(function() movePlatform("right") end)
+	leftBtn.MouseButton1Click:Connect(function() movePlatform("left") end)
 end
 
+-- Destroy platform
 local function destroyPlatform()
-    if forwardGui then
-        forwardGui:Destroy()
-        forwardGui = nil
-    end
-
-    if spawnedPlatform then
-        -- Revert camera back to the character
-        if camera.CameraSubject == spawnedPlatform then
-            camera.CameraSubject = player.Character:FindFirstChild("Humanoid") or player.Character:FindFirstChild("HumanoidRootPart")
-        end
-        spawnedPlatform:Destroy()
-        spawnedPlatform = nil
-        currentTween = nil
-    end
+	if forwardGui then forwardGui:Destroy() end
+	if spawnedPlatform then
+		if camera.CameraSubject == spawnedPlatform then
+			local char = player.Character
+			if char then
+				camera.CameraSubject = char:FindFirstChild("Humanoid") or char:FindFirstChild("HumanoidRootPart")
+			end
+		end
+		spawnedPlatform:Destroy()
+		spawnedPlatform = nil
+		currentTween = nil
+	end
 end
 
--- Button Functions
+-- Button handlers
 onButton.MouseButton1Click:Connect(function()
-    if not isPlatformActive then
-        spawnPlatform()
-        isPlatformActive = true
-        statusLabel.Text = "Status: On"
-        statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
-    end
+	if not isPlatformActive then
+		spawnPlatform()
+		isPlatformActive = true
+		statusLabel.Text = "Status: On"
+		statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+	end
 end)
 
 offButton.MouseButton1Click:Connect(function()
-    if isPlatformActive then
-        destroyPlatform()
-        isPlatformActive = false
-        statusLabel.Text = "Status: Off"
-        statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
-    end
+	if isPlatformActive then
+		destroyPlatform()
+		isPlatformActive = false
+		statusLabel.Text = "Status: Off"
+		statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+	end
 end)
 
 destroyButton.MouseButton1Click:Connect(function()
-    if isPlatformActive then
-        destroyPlatform()
-        isPlatformActive = false
-    end
-    screenGui:Destroy()
+	if isPlatformActive then
+		destroyPlatform()
+		isPlatformActive = false
+	end
+	screenGui:Destroy()
 end)
