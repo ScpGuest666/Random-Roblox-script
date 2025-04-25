@@ -146,8 +146,8 @@ local function performFaceWallJump()
 
     if wallRayResult then
         -- === CONFIGURATION FOR JUMP BUTTON ROTATION ===
-        local maxInfluenceAngleRight = math.rad(-250) -- Max angle if camera is to the RIGHT
-        local maxInfluenceAngleLeft  = math.rad(100) -- Max angle if camera is to the LEFT
+        local maxInfluenceAngleRight = math.rad(20) -- Max angle if camera is to the RIGHT
+        local maxInfluenceAngleLeft  = math.rad(-100) -- Max angle if camera is to the LEFT
         -- ============================================
 
         local wallNormal = wallRayResult.Normal
@@ -290,8 +290,8 @@ jumpConnection = UserInputService.JumpRequest:Connect(function()
         InfiniteJumpEnabled = false -- Start debounce
 
         -- === CONFIGURATION FOR MAIN JUMP ROTATION (Mirrors Jump Button) ===
-        local maxInfluenceAngleRight = math.rad(-250) -- Max angle if camera is to the RIGHT
-        local maxInfluenceAngleLeft  = math.rad(100) -- Max angle if camera is to the LEFT
+        local maxInfluenceAngleRight = math.rad(20) -- Max angle if camera is to the RIGHT
+        local maxInfluenceAngleLeft  = math.rad(-100) -- Max angle if camera is to the LEFT
         -- ==================================================================
 
         -- 1. Calculate Base Direction Away from Wall
