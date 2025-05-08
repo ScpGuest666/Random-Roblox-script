@@ -83,13 +83,13 @@ autoButton.Text = "Auto"
 autoButton.TextScaled = true
 local autoToggle = false -- State variable for Auto button
 
--- Create Status Indicator -- <<< RENAMED HERE >>>
+-- Create Status Indicator
 local statusLabel = Instance.new("TextLabel")
 statusLabel.Parent = frame
 statusLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 statusLabel.Size = UDim2.new(0, 200, 0, 30)
 statusLabel.Position = UDim2.new(0, 0, 0, -30)
-statusLabel.Text = "WallHop V4: Off" -- <<< Initial Text Changed
+statusLabel.Text = "WallHop V4: Off"
 statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
 statusLabel.TextScaled = true
 
@@ -112,7 +112,7 @@ local selectedBrickColor = nil -- Variable to store the selected BrickColor
 
 -- Variables for Wallhop Functionality
 local wallhopToggle = false
-local InfiniteJumpEnabled = true -- Debounce for ALL jumps (manual and auto)
+local InfiniteJumpEnabled = true -- Debounce for non-button jumps (manual and auto)
 local raycastParams = RaycastParams.new()
 raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
 local jumpConnection = nil
@@ -160,10 +160,14 @@ end
 -- ============================================================== --
 
 -- ======================================================================== --
--- Reusable Core Wall Jump Execution Function (Unchanged Logic)
+-- Reusable Core Wall Jump Execution Function (MODIFIED AS PER REQUEST)
 -- ======================================================================== --
 local function executeWallJump(wallRayResult, jumpType) -- jumpType for debug print ("Manual", "Button", "Auto")
-    if not InfiniteJumpEnabled then return end -- Respect debounce
+    -- Skip debounce check ONLY for button-triggered jumps
+    if jumpType ~= "Button" and not InfiniteJumpEnabled then
+        -- print("executeWallJump: Debounce active for non-button jump, type: " .. jumpType) -- Optional debug
+        return
+    end
 
     local character = player.Character
     local humanoid = character and character:FindFirstChildOfClass("Humanoid")
@@ -171,11 +175,14 @@ local function executeWallJump(wallRayResult, jumpType) -- jumpType for debug pr
     local camera = Workspace.CurrentCamera
 
     if not (humanoid and rootPart and camera and humanoid:GetState() ~= Enum.HumanoidStateType.Dead and wallRayResult) then
-        -- print("executeWallJump: Invalid state or no wall result.") -- Less spammy print
+        -- print("executeWallJump: Invalid state or no wall result.")
         return
     end
 
-    InfiniteJumpEnabled = false -- Start debounce FOR ALL JUMPS
+    -- Only disable debounce for non-button jumps
+    if jumpType ~= "Button" then
+        InfiniteJumpEnabled = false -- Start debounce FOR non-button JUMPS
+    end
 
     local maxInfluenceAngleRight = math.rad(20)
     local maxInfluenceAngleLeft  = math.rad(-100)
@@ -238,8 +245,11 @@ local function executeWallJump(wallRayResult, jumpType) -- jumpType for debug pr
          print("Rotated back towards wall after jump (".. (jumpType or "Unknown") .. ").")
     end
 
-    task.wait(0.1)
-    InfiniteJumpEnabled = true
+    -- Only re-enable debounce for non-button jumps
+    if jumpType ~= "Button" then
+        task.wait(0.1)
+        InfiniteJumpEnabled = true
+    end
 end
 -- ======================================================================== --
 
@@ -256,15 +266,15 @@ local function performFaceWallJump()
 end
 -- ======================================================================== --
 
--- Button Functions -- <<< RENAMED HERE >>>
+-- Button Functions
 onButton.MouseButton1Click:Connect(function()
-    statusLabel.Text = "WallHop V4: On" -- <<< Text Changed
+    statusLabel.Text = "WallHop V4: On"
     statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
     wallhopToggle = true
 end)
 
 offButton.MouseButton1Click:Connect(function()
-    statusLabel.Text = "WallHop V4: Off" -- <<< Text Changed
+    statusLabel.Text = "WallHop V4: Off"
     statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
     wallhopToggle = false
 end)
@@ -413,7 +423,9 @@ end)
 -- Auto Jump Heartbeat Loop
 autoJumpConnection = RunService.Heartbeat:Connect(function(deltaTime)
     if not autoToggle then return end
-    if not InfiniteJumpEnabled then return end
+    -- The check for InfiniteJumpEnabled will happen inside executeWallJump for "Auto" type
+    -- if not InfiniteJumpEnabled then return end -- This specific line can be removed here if preferred,
+                                               -- as executeWallJump will handle it for "Auto"
     if not selectedBrickColor then return end
     if not wallhopToggle then return end -- Check main toggle too
 
@@ -426,7 +438,6 @@ autoJumpConnection = RunService.Heartbeat:Connect(function(deltaTime)
     if wallRayResult and wallRayResult.Instance then
         local hitPart = wallRayResult.Instance
         if hitPart:IsA("BasePart") and hitPart.BrickColor == selectedBrickColor then
-             -- print("Auto Jump Triggered: Found matching wall color (" .. hitPart.BrickColor.Name .. ")") -- Less spammy print
              executeWallJump(wallRayResult, "Auto")
         end
     end
@@ -455,6 +466,7 @@ end)
 -- Main Wallhop Function (Spacebar) - Uses executeWallJump
 jumpConnection = UserInputService.JumpRequest:Connect(function()
     if not wallhopToggle then return end -- Only check main toggle
+    -- The check for InfiniteJumpEnabled will happen inside executeWallJump for "Manual" type
 
     local wallRayResult = getWallRaycastResult()
     if wallRayResult then
