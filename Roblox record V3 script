@@ -396,54 +396,63 @@ local function deserializePlatformData(jsonData)
     uiListLayout.Padding = UDim.new(0, 5)
 
     -- Load red platforms (updated movement processing)
-    for _, platformInfo in ipairs(data.redPlatforms) do
-        local platform = Instance.new("Part")
-        platform.Size = Vector3.new(5, 1, 5)
-        platform.Position = Vector3.new(platformInfo.position.X, platformInfo.position.Y, platformInfo.position.Z)
-        platform.Anchored = true
-        platform.BrickColor = BrickColor.Red()
-        platform.CanCollide = false
-        platform.Parent = workspace
+    if data.redPlatforms then
+        for _, platformInfo in ipairs(data.redPlatforms) do
+            local platform = Instance.new("Part")
+            platform.Size = Vector3.new(5, 1, 5)
+            platform.Position = Vector3.new(platformInfo.position.X, platformInfo.position.Y, platformInfo.position.Z)
+            platform.Anchored = true
+            platform.BrickColor = BrickColor.Red()
+            platform.CanCollide = false
+            platform.Parent = workspace
 
-        -- Convert serialized movement data back to proper Vector3 formats
-        local restoredMovements = {}
-        if platformInfo.movements then
-            for _, movement in ipairs(platformInfo.movements) do
-                table.insert(restoredMovements, {
-                    position = Vector3.new(movement.position.X, movement.position.Y, movement.position.Z),
-                    orientation = Vector3.new(movement.orientation.X, movement.orientation.Y, movement.orientation.Z),
-                    isJumping = movement.isJumping
-                })
+            -- Convert serialized movement data back to proper Vector3 formats
+            local restoredMovements = {}
+            if platformInfo.movements then
+                for _, movement in ipairs(platformInfo.movements) do
+                    table.insert(restoredMovements, {
+                        position = Vector3.new(movement.position.X, movement.position.Y, movement.position.Z),
+                        orientation = Vector3.new(movement.orientation.X, movement.orientation.Y, movement.orientation.Z),
+                        isJumping = movement.isJumping
+                    })
+                end
             end
+
+            platformData[platform] = restoredMovements  -- Store converted movements
+
+            addTextLabelToPlatform(platform, #platforms + 1)
+            table.insert(platforms, platform)
+
+            platformCounter += 1
+            addPlatformToScrollFrame("Platform " .. platformCounter)
         end
-
-        platformData[platform] = restoredMovements  -- Store converted movements
-
-        addTextLabelToPlatform(platform, #platforms + 1)
-        table.insert(platforms, platform)
-
-        platformCounter += 1
-        addPlatformToScrollFrame("Platform " .. platformCounter)
     end
+
 
     -- Load yellow platforms and mappings
-    for i, yellowInfo in ipairs(data.yellowPlatforms) do
-        local yellowPlatform = Instance.new("Part")
-        yellowPlatform.Size = Vector3.new(5, 1, 5)
-        yellowPlatform.Position = Vector3.new(yellowInfo.position.X, yellowInfo.position.Y, yellowInfo.position.Z)
-        yellowPlatform.Anchored = true
-        yellowPlatform.BrickColor = BrickColor.Yellow()
-        yellowPlatform.CanCollide = false
-        yellowPlatform.Parent = workspace
+    if data.yellowPlatforms then
+        for i, yellowInfo in ipairs(data.yellowPlatforms) do
+            local yellowPlatform = Instance.new("Part")
+            yellowPlatform.Size = Vector3.new(5, 1, 5)
+            yellowPlatform.Position = Vector3.new(yellowInfo.position.X, yellowInfo.position.Y, yellowInfo.position.Z)
+            yellowPlatform.Anchored = true
+            yellowPlatform.BrickColor = BrickColor.Yellow()
+            yellowPlatform.CanCollide = false
+            yellowPlatform.Parent = workspace
 
-        addTextLabelToPlatform(yellowPlatform, data.mappings[i])
-        table.insert(yellowPlatforms, yellowPlatform)
-
-        -- Rebuild yellowToRedMapping
-        if data.mappings[i] then
-            yellowToRedMapping[yellowPlatform] = platforms[data.mappings[i]]
+            if data.mappings and data.mappings[i] then
+                addTextLabelToPlatform(yellowPlatform, data.mappings[i])
+                -- Rebuild yellowToRedMapping using loaded platforms
+                if platforms[data.mappings[i]] then
+                    yellowToRedMapping[yellowPlatform] = platforms[data.mappings[i]]
+                else
+                     warn("Mapping points to non-existent red platform index:", data.mappings[i])
+                end
+            end
+             table.insert(yellowPlatforms, yellowPlatform)
         end
     end
+
 
     scrollFrame.CanvasSize = UDim2.new(0, 0, 0, #platforms * 30)
     statusLabel.Text = "Status: Platform data loaded"
@@ -638,7 +647,10 @@ deleteButton.MouseButton1Click:Connect(function()
         if not table.find(platforms, redPlatform) then
             yellowPlatform:Destroy()
             yellowToRedMapping[yellowPlatform] = nil
-            table.remove(yellowPlatforms, table.find(yellowPlatforms, yellowPlatform))
+            local index = table.find(yellowPlatforms, yellowPlatform)
+            if index then
+                 table.remove(yellowPlatforms, index)
+            end
         end
     end
 end)
@@ -779,12 +791,110 @@ loadButton.TextScaled = true
 
 -- Modify the load button to handle combined chunks and URL loading
 loadButton.MouseButton1Click:Connect(function()
+    local input = pasteTextBox.Text
 
-    local loadingChunks = {}
+    -- Check for empty input (after trimming whitespace)
+    if input:gsub("%s", "") == "" then
+        statusLabel.Text = "Status: No data to load"
+        statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+        return -- Stop if no input
+    end
 
-    -- If we have loading chunks, combine them
-    if #loadingChunks > 0 then
-        -- Combine all chunks into one data structure
+    local loadedSuccessfully = false
+
+    -- Check if input is a URL
+    if input:match("^https?://") then
+        statusLabel.Text = "Loading 0%"
+        local url = input
+        local success, response = pcall(function()
+            return game:HttpGet(url, true, function(content, contentLength)
+                local progress = math.floor((#content/contentLength)*100)
+                statusLabel.Text = "Loading "..progress.."%"
+            end)
+        end)
+
+        if success then
+            -- Try to handle stacked JSON objects from URL
+            local combinedData = {
+                redPlatforms = {},
+                yellowPlatforms = {},
+                mappings = {}
+            }
+            
+            local redPlatformOffset = 0
+            local successfulParsing = false
+            
+            -- Split the response by lines or potential JSON objects
+            for jsonStr in response:gmatch("[^\r\n]+") do
+                local parseSuccess, chunk = pcall(function()
+                    return HttpService:JSONDecode(jsonStr)
+                end)
+                
+                -- Check if it's a valid chunk format
+                if parseSuccess and type(chunk) == "table" and type(chunk.redPlatforms) == "table" then
+                    successfulParsing = true
+                    
+                    -- Add all red platforms
+                    for _, platform in ipairs(chunk.redPlatforms) do
+                        table.insert(combinedData.redPlatforms, platform)
+                    end
+                    
+                    -- Add all yellow platforms with adjusted mappings
+                    if type(chunk.yellowPlatforms) == "table" then
+                        for i, yellowPlatform in ipairs(chunk.yellowPlatforms) do
+                            table.insert(combinedData.yellowPlatforms, yellowPlatform)
+                            -- Adjust the mapping to account for the offset
+                            if type(chunk.mappings) == "table" and chunk.mappings[i] then
+                                table.insert(combinedData.mappings, chunk.mappings[i] + redPlatformOffset)
+                            end
+                        end
+                    end
+                    
+                    -- Update offset for next chunk
+                    redPlatformOffset = redPlatformOffset + #chunk.redPlatforms
+                end
+            end
+            
+            if successfulParsing then
+                 -- Only clear if we successfully parsed *at least one* chunk
+                if #platforms > 0 or #yellowPlatforms > 0 then
+                    for _, platform in ipairs(platforms) do platform:Destroy() end
+                    for _, yellowPlatform in ipairs(yellowPlatforms) do yellowPlatform:Destroy() end
+                    platforms = {}
+                    yellowPlatforms = {}
+                    platformData = {}
+                    yellowToRedMapping = {}
+                    platformCounter = 0
+                    scrollFrame:ClearAllChildren()
+                    local uiListLayout = Instance.new("UIListLayout")
+                    uiListLayout.Parent = scrollFrame
+                    uiListLayout.Padding = UDim.new(0, 5)
+                    scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+                end
+
+                -- Convert combined data to JSON and load
+                local combinedJson = HttpService:JSONEncode(combinedData)
+                deserializePlatformData(combinedJson) -- This function handles its own validation/errors
+                loadedSuccessfully = true -- Indicate success
+            else
+                -- If stacked parsing failed, try loading as a single JSON object
+                local successDeserialize = pcall(deserializePlatformData, response) -- deserializePlatformData has internal validation
+
+                if successDeserialize then
+                    -- deserializePlatformData handles clearing if successful
+                     loadedSuccessfully = true -- Indicate success
+                end
+            end
+        else
+            statusLabel.Text = "Load failed: "..tostring(response):sub(1,50)
+            statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+            return -- Stop if URL fetch fails
+        end
+    else
+        -- Not a URL, treat as direct JSON input
+        local inputJson = input
+        
+        -- Try to handle stacked JSON objects
         local combinedData = {
             redPlatforms = {},
             yellowPlatforms = {},
@@ -792,197 +902,84 @@ loadButton.MouseButton1Click:Connect(function()
         }
         
         local redPlatformOffset = 0
+        local successfulParsing = false
         
-        for _, chunk in ipairs(loadingChunks) do
-            -- Add all red platforms
-            for _, platform in ipairs(chunk.redPlatforms) do
-                table.insert(combinedData.redPlatforms, platform)
-            end
-            
-            -- Add all yellow platforms with adjusted mappings
-            for i, yellowPlatform in ipairs(chunk.yellowPlatforms) do
-                table.insert(combinedData.yellowPlatforms, yellowPlatform)
-                -- Adjust the mapping to account for the offset
-                table.insert(combinedData.mappings, chunk.mappings[i] + redPlatformOffset)
-            end
-            
-            -- Update offset for next chunk
-            redPlatformOffset = redPlatformOffset + #chunk.redPlatforms
-        end
-        
-        -- Convert to JSON and load
-        local combinedJson = HttpService:JSONEncode(combinedData)
-        deserializePlatformData(combinedJson)
-        
-        -- Clear the loading chunks
-        loadingChunks = {}
-        statusLabel.Text = "Combined chunks loaded successfully"
-        statusLabel.TextColor3 = Color3.fromRGB(0, 255,0)
-    else
-        -- Handle stacked JSON objects
-        local input = pasteTextBox.Text
-        
-        -- Clear existing platforms FIRST
-        if #platforms > 0 or #yellowPlatforms > 0 then
-            -- Destroy physical parts
-            for _, platform in ipairs(platforms) do
-                platform:Destroy()
-            end
-            for _, yellowPlatform in ipairs(yellowPlatforms) do
-                yellowPlatform:Destroy()
-            end
-            
-            -- Reset all data structures
-            platforms = {}
-            yellowPlatforms = {}
-            platformData = {}
-            yellowToRedMapping = {}
-            platformCounter = 0
-            
-            -- Clear scroll list
-            scrollFrame:ClearAllChildren()
-            local uiListLayout = Instance.new("UIListLayout")
-            uiListLayout.Parent = scrollFrame
-            uiListLayout.Padding = UDim.new(0, 5)
-            scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
-            
-            statusLabel.Text = "Status: Cleared old platforms"
-            statusLabel.TextColor3 = Color3.fromRGB(255, 165, 0)
-            task.wait(0.5) -- Give visual feedback
-        end
-        
-        -- Check if input is a URL
-        if input:match("^https?://") then
-            statusLabel.Text = "Loading 0%"
-            local url = input
-            local success, response = pcall(function()
-                return game:HttpGet(url, true, function(content, contentLength)
-                    local progress = math.floor((#content/contentLength)*100)
-                    statusLabel.Text = "Loading "..progress.."%"
-                end)
+        -- Split the input by lines or potential JSON objects
+        for jsonStr in inputJson:gmatch("[^\r\n]+") do
+            local success, chunk = pcall(function()
+                return HttpService:JSONDecode(jsonStr)
             end)
-
-            if success then
-                -- Try to handle stacked JSON objects from URL
-                local combinedData = {
-                    redPlatforms = {},
-                    yellowPlatforms = {},
-                    mappings = {}
-                }
+            
+            -- Check if it's a valid chunk format
+            if success and type(chunk) == "table" and type(chunk.redPlatforms) == "table" then
+                successfulParsing = true
                 
-                local redPlatformOffset = 0
-                local successfulParsing = false
+                -- Add all red platforms
+                for _, platform in ipairs(chunk.redPlatforms) do
+                    table.insert(combinedData.redPlatforms, platform)
+                end
                 
-                -- Split the response by lines or potential JSON objects
-                for jsonStr in response:gmatch("[^\r\n]+") do
-                    local parseSuccess, chunk = pcall(function()
-                        return HttpService:JSONDecode(jsonStr)
-                    end)
-                    
-                    if parseSuccess and type(chunk) == "table" and chunk.redPlatforms then
-                        successfulParsing = true
-                        
-                        -- Add all red platforms
-                        for _, platform in ipairs(chunk.redPlatforms) do
-                            table.insert(combinedData.redPlatforms, platform)
+                -- Add all yellow platforms with adjusted mappings
+                 if type(chunk.yellowPlatforms) == "table" then
+                    for i, yellowPlatform in ipairs(chunk.yellowPlatforms) do
+                        table.insert(combinedData.yellowPlatforms, yellowPlatform)
+                        -- Adjust the mapping to account for the offset
+                        if type(chunk.mappings) == "table" and chunk.mappings[i] then
+                            table.insert(combinedData.mappings, chunk.mappings[i] + redPlatformOffset)
                         end
-                        
-                        -- Add all yellow platforms with adjusted mappings
-                        for i, yellowPlatform in ipairs(chunk.yellowPlatforms or {}) do
-                            table.insert(combinedData.yellowPlatforms, yellowPlatform)
-                            -- Adjust the mapping to account for the offset
-                            if chunk.mappings and chunk.mappings[i] then
-                                table.insert(combinedData.mappings, chunk.mappings[i] + redPlatformOffset)
-                            end
-                        end
-                        
-                        -- Update offset for next chunk
-                        redPlatformOffset = redPlatformOffset + #chunk.redPlatforms
                     end
                 end
                 
-                if successfulParsing then
-                    -- Convert to JSON and load the combined data
-                    local combinedJson = HttpService:JSONEncode(combinedData)
-                    deserializePlatformData(combinedJson)
-                    statusLabel.Text = "Stacked platform data from URL loaded successfully"
-                    statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
-                else
-                    -- Try loading as a single JSON object as fallback
-                    local deserializeSuccess = pcall(function()
-                        deserializePlatformData(response)
-                    end)
-                    
-                    if deserializeSuccess then
-                        statusLabel.Text = "Platform data from URL loaded successfully"
-                        statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
-                    else
-                        statusLabel.Text = "Failed to parse platform data from URL"
-                        statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
-                    end
-                end
-            else
-                statusLabel.Text = "Load failed: "..tostring(response):sub(1,50)
-                statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
-            end
-        else
-            if input ~= "" then
-                -- Try to handle stacked JSON objects
-                local combinedData = {
-                    redPlatforms = {},
-                    yellowPlatforms = {},
-                    mappings = {}
-                }
-                
-                local redPlatformOffset = 0
-                local successfulParsing = false
-                
-                -- Split the input by lines or potential JSON objects
-                for jsonStr in input:gmatch("[^\r\n]+") do
-                    local success, chunk = pcall(function()
-                        return HttpService:JSONDecode(jsonStr)
-                    end)
-                    
-                    if success and type(chunk) == "table" and chunk.redPlatforms then
-                        successfulParsing = true
-                        
-                        -- Add all red platforms
-                        for _, platform in ipairs(chunk.redPlatforms) do
-                            table.insert(combinedData.redPlatforms, platform)
-                        end
-                        
-                        -- Add all yellow platforms with adjusted mappings
-                        for i, yellowPlatform in ipairs(chunk.yellowPlatforms or {}) do
-                            table.insert(combinedData.yellowPlatforms, yellowPlatform)
-                            -- Adjust the mapping to account for the offset
-                            if chunk.mappings and chunk.mappings[i] then
-                                table.insert(combinedData.mappings, chunk.mappings[i] + redPlatformOffset)
-                            end
-                        end
-                        
-                        -- Update offset for next chunk
-                        redPlatformOffset = redPlatformOffset + #chunk.redPlatforms
-                    end
-                end
-                
-                if successfulParsing then
-                    -- Convert to JSON and load the combined data
-                    local combinedJson = HttpService:JSONEncode(combinedData)
-                    deserializePlatformData(combinedJson)
-                    statusLabel.Text = "Stacked platform data loaded successfully"
-                    statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
-                else
-                    -- Try loading as a single JSON object as fallback
-                    local success = pcall(function()
-                        deserializePlatformData(input)
-                    end)
-                    
-                    if not success then
-                        statusLabel.Text = "Failed to parse platform data"
-                        statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
-                    end
-                end
+                -- Update offset for next chunk
+                redPlatformOffset = redPlatformOffset + #chunk.redPlatforms
             end
         end
+        
+        if successfulParsing then
+            -- Only clear if we successfully parsed *at least one* chunk
+            if #platforms > 0 or #yellowPlatforms > 0 then
+                for _, platform in ipairs(platforms) do platform:Destroy() end
+                for _, yellowPlatform in ipairs(yellowPlatforms) do yellowPlatform:Destroy() end
+                platforms = {}
+                yellowPlatforms = {}
+                platformData = {}
+                yellowToRedMapping = {}
+                platformCounter = 0
+                 scrollFrame:ClearAllChildren()
+                local uiListLayout = Instance.new("UIListLayout")
+                uiListLayout.Parent = scrollFrame
+                uiListLayout.Padding = UDim.new(0, 5)
+                 scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+            end
+
+            -- Convert combined data to JSON and load
+            local combinedJson = HttpService:JSONEncode(combinedData)
+            deserializePlatformData(combinedJson) -- This function handles its own validation/errors
+            loadedSuccessfully = true -- Indicate success
+        else
+            -- If stacked parsing failed, try loading as a single JSON object
+            local successDeserialize = pcall(deserializePlatformData, inputJson) -- deserializePlatformData has internal validation
+
+            if successDeserialize then
+                -- deserializePlatformData handles clearing if successful
+                loadedSuccessfully = true -- Indicate success
+            end
+        end
+    end
+
+    -- Final status update based on whether anything was loaded
+    if loadedSuccessfully then
+        statusLabel.Text = "Status: Platform data loaded"
+        statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+    else
+        -- If deserializePlatformData itself failed (handled internally), 
+        -- its status message is already shown. If the input was just invalid 
+        -- and didn't match URL/stacked/single JSON, show a generic parse error.
+         -- This check might be redundant if deserializePlatformData always sets status
+         -- but it's a fallback in case the initial parsing attempts fail.
+         if statusLabel.Text == "Status: Idle" or statusLabel.TextColor3 == Color3.fromRGB(0,0,0) then
+             statusLabel.Text = "Status: Failed to parse data"
+             statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+         end
     end
 end)
