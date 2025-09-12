@@ -94,6 +94,7 @@ local currentReplayThread = nil
 local shouldStopReplay = false
 local currentPlatformIndex = 0
 local totalPlatformsToPlay = 0
+local currentRecordingPlatform = nil -- Track the platform currently being recorded
 
 -- Pathfinding service
 local PathfindingService = game:GetService("PathfindingService")
@@ -388,6 +389,7 @@ local function deserializePlatformData(jsonData)
     yellowPlatforms = {}
     yellowToRedMapping = {}
     platformCounter = 0
+    currentRecordingPlatform = nil -- Reset this too
 
     -- Clear scroll frame and recreate UIListLayout
     scrollFrame:ClearAllChildren()
@@ -473,6 +475,7 @@ player.CharacterAdded:Connect(function(newCharacter)
         yellowPlatforms = {}
         platformData = {}
         yellowToRedMapping = {}
+        currentRecordingPlatform = nil -- Reset on character added
         scrollFrame:ClearAllChildren()
         local uiListLayout = Instance.new("UIListLayout")
         uiListLayout.Parent = scrollFrame
@@ -548,6 +551,7 @@ recordButton.MouseButton1Click:Connect(function()
 
         table.insert(platforms, platform)
         platformData[platform] = {}
+        currentRecordingPlatform = platform -- Set the current recording platform
 
         addPlatformToScrollFrame("Platform " .. platformCounter)
         scrollFrame.CanvasSize = UDim2.new(0, 0, 0, #platforms * 30)
@@ -555,8 +559,16 @@ recordButton.MouseButton1Click:Connect(function()
         -- Start recording movement, orientation, and jump state
         spawn(function()
             while recording do
+                -- Check if the current recording platform still exists
+                if not currentRecordingPlatform or not currentRecordingPlatform.Parent then
+                    recording = false
+                    statusLabel.Text = "Error: Missing Red Platform (Recording Stopped)"
+                    statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+                    break -- Exit the recording loop
+                end
+
                 if isCharacterMoving() then
-                    table.insert(platformData[platform], {
+                    table.insert(platformData[currentRecordingPlatform], { -- Use currentRecordingPlatform
                         position = character.PrimaryPart.Position,
                         orientation = character.PrimaryPart.Orientation,
                         isJumping = humanoid.Jump -- Record jump state
@@ -570,6 +582,15 @@ end)
 
 stopRecordButton.MouseButton1Click:Connect(function()
     if recording then
+        -- Check if the current recording platform still exists before stopping
+        if not currentRecordingPlatform or not currentRecordingPlatform.Parent then
+            recording = false -- Ensure recording stops
+            statusLabel.Text = "Error: Missing Red Platform (Cannot Stop Record)"
+            statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+            currentRecordingPlatform = nil -- Clear the reference
+            return -- Prevent spawning yellow platform
+        end
+
         recording = false
         statusLabel.Text = "Status: Stopped Recording"
         statusLabel.TextColor3 = Color3.fromRGB(255, 165, 0)
@@ -586,7 +607,8 @@ stopRecordButton.MouseButton1Click:Connect(function()
         addTextLabelToPlatform(yellowPlatform, platformCounter)
 
         table.insert(yellowPlatforms, yellowPlatform)
-        yellowToRedMapping[yellowPlatform] = platforms[#platforms] -- Map yellow platform to the last red platform
+        yellowToRedMapping[yellowPlatform] = currentRecordingPlatform -- Map yellow platform to the last red platform
+        currentRecordingPlatform = nil -- Clear the reference after stopping
     end
 end)
 
@@ -617,6 +639,7 @@ destroyButton.MouseButton1Click:Connect(function()
     platformData = {}
     yellowToRedMapping = {}
     platformCounter = 0
+    currentRecordingPlatform = nil -- Reset this
     screenGui:Destroy()
 end)
 
@@ -624,6 +647,15 @@ deleteButton.MouseButton1Click:Connect(function()
     -- Delete the last red platform
     if #platforms > 0 then
         local lastPlatform = platforms[#platforms]
+        
+        -- Check if the platform being deleted is the one currently being recorded
+        if recording and lastPlatform == currentRecordingPlatform then
+            recording = false -- Stop recording immediately
+            statusLabel.Text = "Error: Missing Red Platform (Recording Stopped)"
+            statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+            currentRecordingPlatform = nil -- Clear the reference
+        end
+
         lastPlatform:Destroy()
         cleanupPlatform(lastPlatform)  -- Removes from platforms array
 
@@ -865,6 +897,7 @@ loadButton.MouseButton1Click:Connect(function()
                     platformData = {}
                     yellowToRedMapping = {}
                     platformCounter = 0
+                    currentRecordingPlatform = nil -- Reset this too
                     scrollFrame:ClearAllChildren()
                     local uiListLayout = Instance.new("UIListLayout")
                     uiListLayout.Parent = scrollFrame
@@ -945,6 +978,7 @@ loadButton.MouseButton1Click:Connect(function()
                 platformData = {}
                 yellowToRedMapping = {}
                 platformCounter = 0
+                currentRecordingPlatform = nil -- Reset this too
                  scrollFrame:ClearAllChildren()
                 local uiListLayout = Instance.new("UIListLayout")
                 uiListLayout.Parent = scrollFrame
