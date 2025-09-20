@@ -1,0 +1,457 @@
+-- Wait for player to load
+local PlayerService = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+
+local player = PlayerService.LocalPlayer
+if not player then
+    player = PlayerService.PlayerAdded:Wait()
+end
+
+-- Wait for player GUI to be ready
+player:WaitForChild("PlayerGui")
+
+-- Create ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Parent = player.PlayerGui
+screenGui.ResetOnSpawn = false
+screenGui.Name = "VehicleFlyGui"
+
+-- Create Frame
+local frame = Instance.new("Frame")
+frame.Parent = screenGui
+frame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+frame.Size = UDim2.new(0, 200, 0, 130) -- Increased height for new button
+frame.Position = UDim2.new(0.3, 0, 0.5, -65) -- Adjusted position
+frame.Active = true
+frame.Draggable = true
+
+-- Create Toggle Button
+local toggleButton = Instance.new("TextButton")
+toggleButton.Parent = frame
+toggleButton.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+toggleButton.Size = UDim2.new(0, 180, 0, 30)
+toggleButton.Position = UDim2.new(0, 10, 0, 20)
+toggleButton.Text = "System: Off"
+toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleButton.TextScaled = true
+
+-- Create Friendly Button
+local friendlyButton = Instance.new("TextButton")
+friendlyButton.Parent = frame
+friendlyButton.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+friendlyButton.Size = UDim2.new(0, 180, 0, 30)
+friendlyButton.Position = UDim2.new(0, 10, 0, 60)
+friendlyButton.Text = "Friendly: Off"
+friendlyButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+friendlyButton.TextScaled = true
+
+-- Create Destroy Button
+local destroyButton = Instance.new("TextButton")
+destroyButton.Parent = frame
+destroyButton.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+destroyButton.Size = UDim2.new(0, 180, 0, 30)
+destroyButton.Position = UDim2.new(0, 10, 0, 100)
+destroyButton.Text = "Destroy"
+destroyButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+destroyButton.TextScaled = true
+
+-- Create Status Indicator
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Parent = frame
+statusLabel.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+statusLabel.Size = UDim2.new(0, 200, 0, 30)
+statusLabel.Position = UDim2.new(0, 0, 0, -30)
+statusLabel.Text = "Status: Offline"
+statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+statusLabel.TextScaled = true
+
+-- Global Variables
+local activeConnections = {}
+local proximityConnection = nil
+local autoSwingConnection = nil
+local systemActive = false
+local friendlyModeActive = false
+local equippedSword = nil
+
+local teleportedPlayers = {}
+local TELEPORT_RANGE = 20
+local TELEPORT_OFFSET = CFrame.new(2, 0, -3)
+local TELEPORT_DURATION = 1
+
+-- Function to find first tool
+local function findFirstAvailableTool(character)
+    local backpack = player:FindFirstChild("Backpack")
+    if backpack then
+        for _, tool in ipairs(backpack:GetChildren()) do
+            if tool:IsA("Tool") then
+                return tool
+            end
+        end
+    end
+    if character then
+        for _, tool in ipairs(character:GetChildren()) do
+            if tool:IsA("Tool") then
+                return tool
+            end
+        end
+    end
+    return nil
+end
+
+-- Auto swing
+local function startAutoSwing(sword)
+    if autoSwingConnection then
+        autoSwingConnection:Disconnect()
+    end
+    if sword then
+        autoSwingConnection = RunService.Heartbeat:Connect(function()
+            sword:Activate()
+        end)
+    end
+end
+
+local function stopAutoSwing()
+    if autoSwingConnection then
+        autoSwingConnection:Disconnect()
+        autoSwingConnection = nil
+    end
+end
+
+-- Equip sword
+local function equipSword(character)
+    if not character then return end
+    local backpack = player:FindFirstChild("Backpack")
+    if not backpack then return end
+
+    if equippedSword then
+        if equippedSword.Parent == character then
+            if not autoSwingConnection then
+                startAutoSwing(equippedSword)
+            end
+            return
+        elseif equippedSword.Parent == backpack then
+            equippedSword.Parent = character
+            startAutoSwing(equippedSword)
+            return
+        else
+            equippedSword = nil
+            stopAutoSwing()
+        end
+    end
+
+    local swordToEquip = findFirstAvailableTool(character)
+    if swordToEquip then
+        if swordToEquip.Parent ~= character then
+            swordToEquip.Parent = character
+        end
+        equippedSword = swordToEquip
+        startAutoSwing(equippedSword)
+    else
+        equippedSword = nil
+        stopAutoSwing()
+    end
+end
+
+-- Unequip sword
+local function unequipSword(character)
+    if not character then return end
+    local backpack = player:FindFirstChild("Backpack")
+    if not backpack then return end
+
+    if equippedSword then
+        if equippedSword.Parent == character then
+            stopAutoSwing()
+            equippedSword.Parent = backpack
+        elseif equippedSword.Parent == backpack then
+            stopAutoSwing()
+        else
+            stopAutoSwing()
+            equippedSword = nil
+        end
+    else
+        stopAutoSwing()
+    end
+end
+
+-- Distance helper
+local function getDistance(p1, p2)
+    local char1, char2 = p1.Character, p2.Character
+    if not char1 or not char2 then return math.huge end
+    local hrp1, hrp2 = char1:FindFirstChild("HumanoidRootPart"), char2:FindFirstChild("HumanoidRootPart")
+    if not hrp1 or not hrp2 then return math.huge end
+    return (hrp1.Position - hrp2.Position).Magnitude
+end
+
+-- Teleport logic
+local function teleportPlayerToLocal(targetPlayer)
+    local character, targetCharacter = player.Character, targetPlayer.Character
+    if not character or not targetCharacter then return end
+    local localRoot = character:FindFirstChild("HumanoidRootPart")
+    local targetRoot = targetCharacter:FindFirstChild("HumanoidRootPart")
+    if not localRoot or not targetRoot then return end
+
+    local targetPos = (localRoot.CFrame * TELEPORT_OFFSET).Position
+    local lookAt = localRoot.Position
+    
+    -- Calculate the CFrame to look at the local player, then rotate 180 degrees
+    local desiredCFrame = CFrame.lookAt(targetPos, lookAt) * CFrame.Angles(0, math.pi, 0) -- Rotate 180 degrees around Y-axis
+
+    if (targetRoot.Position - targetPos).Magnitude > 0.02 then
+        targetRoot.CFrame = desiredCFrame
+    end
+end
+
+local function returnPlayerToOriginal(targetPlayer)
+    local playerData = teleportedPlayers[targetPlayer]
+    if playerData and playerData.originalCFrame then
+        local targetCharacter = targetPlayer.Character
+        if targetCharacter then
+            local targetRoot = targetCharacter:FindFirstChild("HumanoidRootPart")
+            if targetRoot then
+                targetRoot.CFrame = playerData.originalCFrame
+            end
+        end
+    end
+end
+
+local function stopTeleportCycle(targetPlayer)
+    local playerData = teleportedPlayers[targetPlayer]
+    if playerData then
+        if playerData.teleportTimer then
+            task.cancel(playerData.teleportTimer)
+        end
+        returnPlayerToOriginal(targetPlayer)
+        teleportedPlayers[targetPlayer] = nil
+    end
+end
+
+local function startTeleportCycle(targetPlayer)
+    if not systemActive then return end
+    if teleportedPlayers[targetPlayer] and teleportedPlayers[targetPlayer].isTeleporting then
+        return
+    end
+    local targetCharacter = targetPlayer.Character
+    if not targetCharacter then return end
+    local targetRoot = targetCharacter:FindFirstChild("HumanoidRootPart")
+    if not targetRoot then return end
+
+    if not teleportedPlayers[targetPlayer] then
+        teleportedPlayers[targetPlayer] = { originalCFrame = targetRoot.CFrame, teleportTimer = nil, isTeleporting = false }
+    else
+        teleportedPlayers[targetPlayer].originalCFrame = targetRoot.CFrame
+    end
+
+    local playerData = teleportedPlayers[targetPlayer]
+    playerData.isTeleporting = true
+
+    local function cycleStep()
+        if not systemActive or not playerData.isTeleporting or not targetPlayer.Character then
+            stopTeleportCycle(targetPlayer)
+            return
+        end
+        teleportPlayerToLocal(targetPlayer)
+        task.wait(TELEPORT_DURATION)
+        if not systemActive or not playerData.isTeleporting or not targetPlayer.Character then
+            stopTeleportCycle(targetPlayer)
+            return
+        end
+        returnPlayerToOriginal(targetPlayer)
+        local distance = getDistance(player, targetPlayer)
+        if distance <= TELEPORT_RANGE then
+            playerData.teleportTimer = task.delay(0.1, cycleStep)
+        else
+            stopTeleportCycle(targetPlayer)
+        end
+    end
+
+    playerData.teleportTimer = task.delay(0.1, cycleStep)
+end
+
+-- Proximity checks
+local function checkProximity()
+    local character = player.Character
+    if not character then return end
+    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+    if not humanoidRootPart then return end
+
+    local playersInRange = false
+    local currentPlayersInRange = {}
+
+    for _, otherPlayer in pairs(PlayerService:GetPlayers()) do
+        if otherPlayer ~= player and otherPlayer.Character then
+            -- ✅ FIXED FRIENDLY CHECK
+            if friendlyModeActive and player:IsFriendsWith(otherPlayer.UserId) then
+                if teleportedPlayers[otherPlayer] then
+                    stopTeleportCycle(otherPlayer)
+                end
+                continue
+            end
+
+            local distance = getDistance(player, otherPlayer)
+            if distance <= TELEPORT_RANGE then
+                playersInRange = true
+                table.insert(currentPlayersInRange, otherPlayer)
+                if not teleportedPlayers[otherPlayer] or not teleportedPlayers[otherPlayer].isTeleporting then
+                    startTeleportCycle(otherPlayer)
+                end
+            end
+        end
+    end
+
+    if playersInRange then
+        equipSword(character)
+    else
+        unequipSword(character)
+    end
+
+    for p, _ in pairs(teleportedPlayers) do
+        local found = false
+        for _, inRangeP in ipairs(currentPlayersInRange) do
+            if p == inRangeP then
+                found = true
+                break
+            end
+        end
+        if friendlyModeActive and player:IsFriendsWith(p.UserId) then
+            found = false
+        end
+        if not found then
+            stopTeleportCycle(p)
+        end
+    end
+end
+
+-- Toggle system
+local function toggleSystem()
+    systemActive = not systemActive
+    if systemActive then
+        statusLabel.Text = "Status: Online"
+        statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+        toggleButton.Text = "System: On"
+        toggleButton.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+        if proximityConnection then
+            proximityConnection:Disconnect()
+        end
+        proximityConnection = RunService.Heartbeat:Connect(checkProximity)
+        checkProximity()
+    else
+        statusLabel.Text = "Status: Offline"
+        statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+        toggleButton.Text = "System: Off"
+        toggleButton.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
+        if proximityConnection then
+            proximityConnection:Disconnect()
+            proximityConnection = nil
+        end
+        if player.Character then
+            unequipSword(player.Character)
+        end
+        stopAutoSwing()
+        for p, _ in pairs(teleportedPlayers) do
+            stopTeleportCycle(p)
+        end
+    end
+end
+
+-- Toggle Friendly
+local function toggleFriendlyMode()
+    friendlyModeActive = not friendlyModeActive
+    if friendlyModeActive then
+        friendlyButton.Text = "Friendly: On"
+        friendlyButton.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+    else
+        friendlyButton.Text = "Friendly: Off"
+        friendlyButton.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
+    end
+    if systemActive then
+        checkProximity()
+    end
+end
+
+-- Cleanup
+local function cleanup()
+    if player.Character then
+        pcall(function() unequipSword(player.Character) end)
+    end
+    pcall(stopAutoSwing)
+    for p, _ in pairs(teleportedPlayers) do
+        pcall(function() stopTeleportCycle(p) end)
+    end
+    for _, connection in pairs(activeConnections) do
+        if connection and connection.Disconnect then
+            pcall(function() connection:Disconnect() end)
+        end
+    end
+    activeConnections = {}
+    if proximityConnection then
+        pcall(function() proximity:Disconnect() end)
+        proximityConnection = nil
+    end
+    if screenGui and screenGui.Parent then
+        screenGui:Destroy()
+    end
+end
+
+-- Connections
+local conn1 = toggleButton.MouseButton1Click:Connect(toggleSystem)
+local conn2 = friendlyButton.MouseButton1Click:Connect(toggleFriendlyMode)
+local conn3 = destroyButton.MouseButton1Click:Connect(cleanup)
+table.insert(activeConnections, conn1)
+table.insert(activeConnections, conn2)
+table.insert(activeConnections, conn3)
+
+local function onCharacterAdded(character)
+    task.wait(0.1)
+    if systemActive then
+        checkProximity()
+    else
+        unequipSword(character)
+        stopAutoSwing()
+    end
+end
+
+local respawnConn = player.CharacterAdded:Connect(onCharacterAdded)
+table.insert(activeConnections, respawnConn)
+if player.Character then
+    onCharacterAdded(player.Character)
+end
+
+local function onOtherPlayerRemoving(otherPlayer)
+    if teleportedPlayers[otherPlayer] then
+        stopTeleportCycle(otherPlayer)
+    end
+end
+
+local function onOtherPlayerCharacterRemoving(otherPlayerCharacter)
+    local otherPlayer = PlayerService:GetPlayerFromCharacter(otherPlayerCharacter)
+    if otherPlayer and teleportedPlayers[otherPlayer] then
+        stopTeleportCycle(otherPlayer)
+    end
+end
+
+local playerRemovingConn = PlayerService.PlayerRemoving:Connect(onOtherPlayerRemoving)
+table.insert(activeConnections, playerRemovingConn)
+
+for _, p in pairs(PlayerService:GetPlayers()) do
+    if p ~= player then
+        local charRemovingConn = p.CharacterRemoving:Connect(function(char)
+            onOtherPlayerCharacterRemoving(char)
+        end)
+        table.insert(activeConnections, charRemovingConn)
+    end
+end
+
+local playerAddedConn = PlayerService.PlayerAdded:Connect(function(newPlayer)
+    if newPlayer ~= player then
+        local charRemovingConn = newPlayer.CharacterRemoving:Connect(function(char)
+            onOtherPlayerCharacterRemoving(char)
+        end)
+        table.insert(activeConnections, charRemovingConn)
+    end
+end)
+table.insert(activeConnections, playerAddedConn)
+
+-- Initial button states
+toggleButton.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
+friendlyButton.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
