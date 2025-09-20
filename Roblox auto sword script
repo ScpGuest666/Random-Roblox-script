@@ -21,8 +21,8 @@ screenGui.Name = "VehicleFlyGui"
 local frame = Instance.new("Frame")
 frame.Parent = screenGui
 frame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-frame.Size = UDim2.new(0, 200, 0, 130) -- Increased height for new button
-frame.Position = UDim2.new(0.3, 0, 0.5, -65) -- Adjusted position
+frame.Size = UDim2.new(0, 200, 0, 130)
+frame.Position = UDim2.new(0.3, 0, 0.5, -65)
 frame.Active = true
 frame.Draggable = true
 
@@ -79,6 +79,33 @@ local TELEPORT_RANGE = 20
 local TELEPORT_OFFSET = CFrame.new(2, 0, -3)
 local TELEPORT_DURATION = 1
 
+-- Helper function to check if player is alive
+local function isPlayerAlive(player)
+    local character = player.Character
+    if not character then return false end
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    return humanoid and humanoid.Health > 0
+end
+
+-- Helper function to check if player has forcefield
+local function hasForceField(player)
+    local character = player.Character
+    if not character then return false end
+    
+    for _, child in ipairs(character:GetChildren()) do
+        if child:IsA("ForceField") then
+            return true
+        end
+    end
+    
+    return false
+end
+
+-- Helper function to check if player can be teleported
+local function canTeleportPlayer(player)
+    return isPlayerAlive(player) and not hasForceField(player)
+end
+
 -- Function to find first tool
 local function findFirstAvailableTool(character)
     local backpack = player:FindFirstChild("Backpack")
@@ -89,6 +116,7 @@ local function findFirstAvailableTool(character)
             end
         end
     end
+
     if character then
         for _, tool in ipairs(character:GetChildren()) do
             if tool:IsA("Tool") then
@@ -96,6 +124,7 @@ local function findFirstAvailableTool(character)
             end
         end
     end
+
     return nil
 end
 
@@ -104,6 +133,7 @@ local function startAutoSwing(sword)
     if autoSwingConnection then
         autoSwingConnection:Disconnect()
     end
+
     if sword then
         autoSwingConnection = RunService.Heartbeat:Connect(function()
             sword:Activate()
@@ -185,6 +215,8 @@ end
 
 -- Teleport logic
 local function teleportPlayerToLocal(targetPlayer)
+    if not canTeleportPlayer(player) or not canTeleportPlayer(targetPlayer) then return end
+    
     local character, targetCharacter = player.Character, targetPlayer.Character
     if not character or not targetCharacter then return end
     local localRoot = character:FindFirstChild("HumanoidRootPart")
@@ -194,8 +226,7 @@ local function teleportPlayerToLocal(targetPlayer)
     local targetPos = (localRoot.CFrame * TELEPORT_OFFSET).Position
     local lookAt = localRoot.Position
     
-    -- Calculate the CFrame to look at the local player, then rotate 180 degrees
-    local desiredCFrame = CFrame.lookAt(targetPos, lookAt) * CFrame.Angles(0, math.pi, 0) -- Rotate 180 degrees around Y-axis
+    local desiredCFrame = CFrame.lookAt(targetPos, lookAt) * CFrame.Angles(0, math.pi, 0)
 
     if (targetRoot.Position - targetPos).Magnitude > 0.02 then
         targetRoot.CFrame = desiredCFrame
@@ -231,6 +262,9 @@ local function startTeleportCycle(targetPlayer)
     if teleportedPlayers[targetPlayer] and teleportedPlayers[targetPlayer].isTeleporting then
         return
     end
+    
+    if not canTeleportPlayer(player) or not canTeleportPlayer(targetPlayer) then return end
+    
     local targetCharacter = targetPlayer.Character
     if not targetCharacter then return end
     local targetRoot = targetCharacter:FindFirstChild("HumanoidRootPart")
@@ -246,16 +280,19 @@ local function startTeleportCycle(targetPlayer)
     playerData.isTeleporting = true
 
     local function cycleStep()
-        if not systemActive or not playerData.isTeleporting or not targetPlayer.Character then
+        if not systemActive or not playerData.isTeleporting or not targetPlayer.Character or not canTeleportPlayer(player) or not canTeleportPlayer(targetPlayer) then
             stopTeleportCycle(targetPlayer)
             return
         end
+        
         teleportPlayerToLocal(targetPlayer)
         task.wait(TELEPORT_DURATION)
-        if not systemActive or not playerData.isTeleporting or not targetPlayer.Character then
+        
+        if not systemActive or not playerData.isTeleporting or not targetPlayer.Character or not canTeleportPlayer(player) or not canTeleportPlayer(targetPlayer) then
             stopTeleportCycle(targetPlayer)
             return
         end
+        
         returnPlayerToOriginal(targetPlayer)
         local distance = getDistance(player, targetPlayer)
         if distance <= TELEPORT_RANGE then
@@ -271,7 +308,15 @@ end
 -- Proximity checks
 local function checkProximity()
     local character = player.Character
-    if not character then return end
+    if not character or not canTeleportPlayer(player) then 
+        -- If player is dead or has forcefield, stop all teleport cycles and unequip sword
+        for p, _ in pairs(teleportedPlayers) do
+            stopTeleportCycle(p)
+        end
+        unequipSword(character)
+        return 
+    end
+    
     local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
     if not humanoidRootPart then return end
 
@@ -280,7 +325,6 @@ local function checkProximity()
 
     for _, otherPlayer in pairs(PlayerService:GetPlayers()) do
         if otherPlayer ~= player and otherPlayer.Character then
-            -- ✅ FIXED FRIENDLY CHECK
             if friendlyModeActive and player:IsFriendsWith(otherPlayer.UserId) then
                 if teleportedPlayers[otherPlayer] then
                     stopTeleportCycle(otherPlayer)
@@ -289,7 +333,7 @@ local function checkProximity()
             end
 
             local distance = getDistance(player, otherPlayer)
-            if distance <= TELEPORT_RANGE then
+            if distance <= TELEPORT_RANGE and canTeleportPlayer(otherPlayer) then
                 playersInRange = true
                 table.insert(currentPlayersInRange, otherPlayer)
                 if not teleportedPlayers[otherPlayer] or not teleportedPlayers[otherPlayer].isTeleporting then
@@ -313,9 +357,11 @@ local function checkProximity()
                 break
             end
         end
+        
         if friendlyModeActive and player:IsFriendsWith(p.UserId) then
             found = false
         end
+        
         if not found then
             stopTeleportCycle(p)
         end
@@ -385,7 +431,7 @@ local function cleanup()
     end
     activeConnections = {}
     if proximityConnection then
-        pcall(function() proximity:Disconnect() end)
+        pcall(function() proximityConnection:Disconnect() end)
         proximityConnection = nil
     end
     if screenGui and screenGui.Parent then
