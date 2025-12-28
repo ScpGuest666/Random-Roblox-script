@@ -258,6 +258,11 @@ local function addPlatformToScrollFrame(platformName)
                 return
             end
 
+            -- FIX: Check if we are already at the destination to avoid halting
+            if (rootPart.Position - destination).Magnitude < 3 then
+                return
+            end
+
             local path = calculatePath(rootPart.Position, destination)
 
             if path.Status == Enum.PathStatus.Success then
@@ -292,10 +297,15 @@ local function addPlatformToScrollFrame(platformName)
                 local currentPlatform = platforms[i]
                 
                 -- PHASE 1: Walk to platform using pathfinding (NO FORCE MOVEMENT)
-                stopForceMovement() -- Ensure force movement is off during pathfinding
-                walkToPlatform(currentPlatform.Position + Vector3.new(0, 3, 0))
+                local rootPart = character:WaitForChild("HumanoidRootPart")
+                local targetPos = currentPlatform.Position + Vector3.new(0, 3, 0)
                 
-                if shouldStopReplay then break end -- Check if replay was stopped during pathfinding
+                if (rootPart.Position - targetPos).Magnitude >= 3 then
+                    stopForceMovement() 
+                    walkToPlatform(targetPos)
+                end
+                
+                if shouldStopReplay then break end 
 
                 local movements = platformData[currentPlatform]
                 if movements then
@@ -348,23 +358,15 @@ local function addPlatformToScrollFrame(platformName)
                             game:GetService("RunService").Heartbeat:Wait()
                         end
                     end
-                    stopForceMovement() -- Deactivate force movement after interpolation for this platform
                 end
-                wait(0.5) -- Small pause between platforms
-                currentPlatformIndex += 1 -- Move to next platform index
+                currentPlatformIndex += 1 
             end
             
-            -- Final cleanup after all platforms are processed or replay is stopped
-            if not shouldStopReplay then
-                statusLabel.Text = "Status: Completed all platforms"
-                statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
-                task.wait(1)
-            end
-            
+            -- Final cleanup: Transition immediately to Idle
             replaying = false
             statusLabel.Text = "Status: Idle"
             statusLabel.TextColor3 = Color3.fromRGB(0, 0, 0)
-            stopForceMovement() -- Ensure force movement is off when replay completely ends
+            stopForceMovement() 
         end
 
         -- Start new replay in a tracked thread
@@ -479,7 +481,7 @@ local function deserializePlatformData(jsonData)
     yellowToRedMapping = {}
     platformData = {}
     platformCounter = 0
-    currentRecordingPlatform = nil -- Reset this too
+    currentRecordingPlatform = nil 
 
     -- Clear scroll frame and recreate UIListLayout
     scrollFrame:ClearAllChildren()
@@ -487,7 +489,7 @@ local function deserializePlatformData(jsonData)
     uiListLayout.Parent = scrollFrame
     uiListLayout.Padding = UDim.new(0, 5)
 
-    -- Load red platforms (updated movement processing)
+    -- Load red platforms
     if data.redPlatforms then
         for _, platformInfo in ipairs(data.redPlatforms) do
             local platform = Instance.new("Part")
@@ -498,7 +500,6 @@ local function deserializePlatformData(jsonData)
             platform.CanCollide = false
             platform.Parent = workspace
 
-            -- Convert serialized movement data back to proper Vector3 formats
             local restoredMovements = {}
             if platformInfo.movements then
                 for _, movement in ipairs(platformInfo.movements) do
@@ -510,16 +511,13 @@ local function deserializePlatformData(jsonData)
                 end
             end
 
-            platformData[platform] = restoredMovements  -- Store converted movements
-
+            platformData[platform] = restoredMovements 
             addTextLabelToPlatform(platform, #platforms + 1)
             table.insert(platforms, platform)
-
             platformCounter += 1
             addPlatformToScrollFrame("Platform " .. platformCounter)
         end
     end
-
 
     -- Load yellow platforms and mappings
     if data.yellowPlatforms then
@@ -534,17 +532,13 @@ local function deserializePlatformData(jsonData)
 
             if data.mappings and data.mappings[i] then
                 addTextLabelToPlatform(yellowPlatform, data.mappings[i])
-                -- Rebuild yellowToRedMapping using loaded platforms
                 if platforms[data.mappings[i]] then
                     yellowToRedMapping[yellowPlatform] = platforms[data.mappings[i]]
-                else
-                     warn("Mapping points to non-existent red platform index:", data.mappings[i])
                 end
             end
              table.insert(yellowPlatforms, yellowPlatform)
         end
     end
-
 
     scrollFrame.CanvasSize = UDim2.new(0, 0, 0, #platforms * 30)
     statusLabel.Text = "Status: Platform data loaded"
@@ -554,12 +548,11 @@ end
 -- Handle character respawn or reset
 player.CharacterAdded:Connect(function(newCharacter)
     character = newCharacter
-    humanoid = newCharacter:WaitForChild("Humanoid") -- Get Humanoid for new character
+    humanoid = newCharacter:WaitForChild("Humanoid")
     lastPosition = nil
     statusLabel.Text = "Status: Idle"
     statusLabel.TextColor3 = Color3.fromRGB(0, 0, 0)
 
-    -- Re-setup force movement character listener for new character
     for _, connection in ipairs(allConnections) do
         connection:Disconnect()
     end
@@ -572,19 +565,18 @@ player.CharacterAdded:Connect(function(newCharacter)
         yellowPlatforms = {}
         platformData = {}
         yellowToRedMapping = {}
-        currentRecordingPlatform = nil -- Reset on character added
+        currentRecordingPlatform = nil 
         scrollFrame:ClearAllChildren()
         local uiListLayout = Instance.new("UIListLayout")
         uiListLayout.Parent = scrollFrame
         uiListLayout.Padding = UDim.new(0, 5)
         scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
     end
-    -- Ensure force movement is off after character reset
     stopForceMovement()
-    shouldStopReplay = true -- Stop any ongoing replay
+    shouldStopReplay = true 
     replaying = false
     if currentReplayThread then
-        task.cancel(currentReplayThread) -- Cancel the replay thread
+        task.cancel(currentReplayThread)
         currentReplayThread = nil
     end
 end)
@@ -593,8 +585,6 @@ end)
 if player.Character then
     setupCharacterForce(player.Character)
 end
--- The CharacterAdded connection for force movement is already handled above in player.CharacterAdded:Connect
-
 
 -- Button Functions
 recordButton.MouseButton1Click:Connect(function()
@@ -605,14 +595,11 @@ recordButton.MouseButton1Click:Connect(function()
 
         if #yellowPlatforms > 0 then
             local lastYellowPlatform = yellowPlatforms[#yellowPlatforms]
-            -- Walk to the last yellow platform using pathfinding
             local humanoidCurrent = character:WaitForChild("Humanoid")
             local rootPart = character:WaitForChild("HumanoidRootPart")
 
-            -- Ensure the Humanoid is alive and can move
             if humanoidCurrent and humanoidCurrent.Health > 0 then
                 local path = calculatePath(rootPart.Position, lastYellowPlatform.Position + Vector3.new(0, 3, 0))
-
                 if path.Status == Enum.PathStatus.Success then
                     local waypoints = path:GetWaypoints()
                     for _, waypoint in ipairs(waypoints) do
@@ -623,16 +610,12 @@ recordButton.MouseButton1Click:Connect(function()
                         humanoidCurrent.MoveToFinished:Wait()
                     end
                 else
-                    -- Fallback: Directly move to the destination if pathfinding fails
                     humanoidCurrent:MoveTo(lastYellowPlatform.Position + Vector3.new(0, 3, 0))
                     humanoidCurrent.MoveToFinished:Wait()
                 end
-            else
-                -- Handle cases where humanoid or HumanoidRootPart are missing or invalid
-                warn("Humanoid or HumanoidRootPart is missing or invalid.")
             end
         else
-           character:SetPrimaryPartCFrame(CFrame.new(character.PrimaryPart.Position)) -- Added to prevent errors when no yellow platforms available
+           character:SetPrimaryPartCFrame(CFrame.new(character.PrimaryPart.Position))
         end
 
         platformCounter += 1
@@ -645,35 +628,30 @@ recordButton.MouseButton1Click:Connect(function()
         platform.CanCollide = false
         platform.Parent = workspace
 
-        -- Add text label to the platform
         addTextLabelToPlatform(platform, platformCounter)
-
         table.insert(platforms, platform)
         platformData[platform] = {}
-        currentRecordingPlatform = platform -- Set the current recording platform
+        currentRecordingPlatform = platform 
 
         addPlatformToScrollFrame("Platform " .. platformCounter)
         scrollFrame.CanvasSize = UDim2.new(0, 0, 0, #platforms * 30)
 
-        -- Start recording movement, orientation, and jump state
         spawn(function()
             while recording do
-                -- Check if the current recording platform still exists
                 if not currentRecordingPlatform or not currentRecordingPlatform.Parent then
                     recording = false
                     statusLabel.Text = "Error: Missing Red Platform (Recording Stopped)"
                     statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
-                    break -- Exit the recording loop
+                    break 
                 end
-
                 if isCharacterMoving() then
-                    table.insert(platformData[currentRecordingPlatform], { -- Use currentRecordingPlatform
+                    table.insert(platformData[currentRecordingPlatform], {
                         position = character.PrimaryPart.Position,
                         orientation = character.PrimaryPart.Orientation,
-                        isJumping = humanoid.Jump -- Record jump state
+                        isJumping = humanoid.Jump 
                     })
                 end
-                game:GetService("RunService").Heartbeat:Wait() -- Use Heartbeat for recording
+                game:GetService("RunService").Heartbeat:Wait()
             end
         end)
     end
@@ -681,15 +659,13 @@ end)
 
 stopRecordButton.MouseButton1Click:Connect(function()
     if recording then
-        -- Check if the current recording platform still exists before stopping
         if not currentRecordingPlatform or not currentRecordingPlatform.Parent then
-            recording = false -- Ensure recording stops
+            recording = false 
             statusLabel.Text = "Error: Missing Red Platform (Cannot Stop Record)"
             statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
-            currentRecordingPlatform = nil -- Clear the reference
-            return -- Prevent spawning yellow platform
+            currentRecordingPlatform = nil 
+            return 
         end
-
         recording = false
         statusLabel.Text = "Status: Stopped Recording"
         statusLabel.TextColor3 = Color3.fromRGB(255, 165, 0)
@@ -702,90 +678,57 @@ stopRecordButton.MouseButton1Click:Connect(function()
         yellowPlatform.CanCollide = false
         yellowPlatform.Parent = workspace
 
-        -- Add text label to the yellow platform
         addTextLabelToPlatform(yellowPlatform, platformCounter)
-
         table.insert(yellowPlatforms, yellowPlatform)
-        yellowToRedMapping[yellowPlatform] = currentRecordingPlatform -- Map yellow platform to the last red platform
-        currentRecordingPlatform = nil -- Clear the reference after stopping
+        yellowToRedMapping[yellowPlatform] = currentRecordingPlatform 
+        currentRecordingPlatform = nil 
     end
 end)
 
 destroyButton.MouseButton1Click:Connect(function()
-    for _, platform in ipairs(platforms) do
-        platform:Destroy()
-    end
-    for _, yellowPlatform in ipairs(yellowPlatforms) do
-        yellowPlatform:Destroy()
-    end
-    platforms = {}
-    yellowPlatforms = {}
-    platformData = {}
-    yellowToRedMapping = {}
-    platformCounter = 0
-    currentRecordingPlatform = nil -- Reset this
-    
-    -- Cleanup force movement connections as well
+    for _, platform in ipairs(platforms) do platform:Destroy() end
+    for _, yellowPlatform in ipairs(yellowPlatforms) do yellowPlatform:Destroy() end
+    platforms = {}; yellowPlatforms = {}; platformData = {}; yellowToRedMapping = {}; platformCounter = 0; currentRecordingPlatform = nil
     stopForceMovement()
-    for _, connection in ipairs(allConnections) do
-        connection:Disconnect()
-    end
+    for _, connection in ipairs(allConnections) do connection:Disconnect() end
     allConnections = {}
-
     screenGui:Destroy()
 end)
 
 deleteButton.MouseButton1Click:Connect(function()
-    -- Delete the last red platform
     if #platforms > 0 then
         local lastPlatform = platforms[#platforms]
-        
-        -- Check if the platform being deleted is the one currently being recorded
         if recording and lastPlatform == currentRecordingPlatform then
-            recording = false -- Stop recording immediately
+            recording = false 
             statusLabel.Text = "Error: Missing Red Platform (Recording Stopped)"
             statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
-            currentRecordingPlatform = nil -- Clear the reference
+            currentRecordingPlatform = nil 
         end
-
         lastPlatform:Destroy()
-        cleanupPlatform(lastPlatform)  -- Removes from platforms array
-
-        -- Delete corresponding button (only TextButtons)
+        cleanupPlatform(lastPlatform) 
         local buttons = {}
         for _, child in ipairs(scrollFrame:GetChildren()) do
-            if child:IsA("TextButton") then
-                table.insert(buttons, child)
-            end
+            if child:IsA("TextButton") then table.insert(buttons, child) end
         end
-        if #buttons > 0 then
-            buttons[#buttons]:Destroy()
-        end
-
+        if #buttons > 0 then buttons[#buttons]:Destroy() end
         platformCounter -= 1
         scrollFrame.CanvasSize = UDim2.new(0, 0, 0, #platforms * 30)
     end
-
-    -- Cleanup yellow platforms
     for yellowPlatform, redPlatform in pairs(yellowToRedMapping) do
         if not table.find(platforms, redPlatform) then
             yellowPlatform:Destroy()
             yellowToRedMapping[yellowPlatform] = nil
             local index = table.find(yellowPlatforms, yellowPlatform)
-            if index then
-                 table.remove(yellowPlatforms, index)
-            end
+            if index then table.remove(yellowPlatforms, index) end
         end
     end
 end)
 
--- First, add these variables to your variables section at the top
 local saveChunks = {}
 local currentChunkIndex = 0
 local totalChunks = 0
-local CHUNK_SIZE = 20 -- This is the number of platforms per chunk, adjust based on your clipboard size limits
+local CHUNK_SIZE = 20 
 
--- Replace your existing saveButton.MouseButton1Click with this:
 local saveButton = Instance.new("TextButton")
 saveButton.Parent = frame
 saveButton.BackgroundColor3 = Color3.fromRGB(100, 255, 100)
@@ -795,74 +738,44 @@ saveButton.Text = "Save"
 saveButton.TextScaled = true
 
 saveButton.MouseButton1Click:Connect(function()
-    -- First, serialize all platform data
     local jsonData = serializePlatformData()
-    
-    -- Check if data is too large for clipboard
-    if #jsonData > 190000 then -- Around the limit for most clipboards
-        -- Split the data into chunks based on platforms
+    if #jsonData > 190000 then 
         local allData = HttpService:JSONDecode(jsonData)
         saveChunks = {}
-        
-        -- Calculate how many chunks we need
         local redPlatformsCount = #allData.redPlatforms
         totalChunks = math.ceil(redPlatformsCount / CHUNK_SIZE)
-        
-        -- Create chunks of platform data
         for chunkIndex = 1, totalChunks do
             local startIndex = (chunkIndex-1) * CHUNK_SIZE + 1
             local endIndex = math.min(chunkIndex * CHUNK_SIZE, redPlatformsCount)
-            
-            -- Create a chunk with the appropriate platforms
-            local chunk = {
-                redPlatforms = {},
-                yellowPlatforms = {},
-                mappings = {}
-            }
-            
-            -- Add red platforms for this chunk
+            local chunk = {redPlatforms = {}, yellowPlatforms = {}, mappings = {}}
             for i = startIndex, endIndex do
-                if i <= redPlatformsCount then
-                    table.insert(chunk.redPlatforms, allData.redPlatforms[i])
-                end
+                if i <= redPlatformsCount then table.insert(chunk.redPlatforms, allData.redPlatforms[i]) end
             end
-            
-            -- Find and add only the yellow platforms that map to these red platforms
             for i, mapping in ipairs(allData.mappings) do
                 if mapping >= startIndex and mapping <= endIndex then
                     table.insert(chunk.yellowPlatforms, allData.yellowPlatforms[i])
-                    -- Adjust the mapping to be relative to the chunk
                     table.insert(chunk.mappings, mapping - startIndex + 1)
                 end
             end
-            
-            -- Add the chunk
             saveChunks[chunkIndex] = HttpService:JSONEncode(chunk)
         end
-        
-        -- Save the first chunk
         currentChunkIndex = 1
         setclipboard(saveChunks[currentChunkIndex])
-        statusLabel.Text = string.format("Chunk %d/%d copied. Save it, then press Save again for next chunk", 
-                                        currentChunkIndex, totalChunks)
+        statusLabel.Text = string.format("Chunk %d/%d copied. Save it, then press Save again for next chunk", currentChunkIndex, totalChunks)
         statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
     else
-        -- If data fits in clipboard, just save it directly
         setclipboard(jsonData)
         statusLabel.Text = "Platform data copied to clipboard"
         statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
-        saveChunks = {}  -- Clear any previous chunks
-        currentChunkIndex = 0
-        totalChunks = 0
+        saveChunks = {}; currentChunkIndex = 0; totalChunks = 0
     end
 end)
 
--- Add a new button for navigating chunks
 local nextChunkButton = Instance.new("TextButton")
 nextChunkButton.Parent = frame
 nextChunkButton.BackgroundColor3 = Color3.fromRGB(100, 200, 255)
 nextChunkButton.Size = UDim2.new(0, 90, 0, 30)
-nextChunkButton.Position = UDim2.new(0, 120, 0, 90)  -- Next to the save button
+nextChunkButton.Position = UDim2.new(0, 120, 0, 90)
 nextChunkButton.Text = "Next Chunk"
 nextChunkButton.TextScaled = true
 
@@ -870,8 +783,7 @@ nextChunkButton.MouseButton1Click:Connect(function()
     if #saveChunks > 0 and currentChunkIndex < totalChunks then
         currentChunkIndex = currentChunkIndex + 1
         setclipboard(saveChunks[currentChunkIndex])
-        statusLabel.Text = string.format("Chunk %d/%d copied. Save it before continuing", 
-                                        currentChunkIndex, totalChunks)
+        statusLabel.Text = string.format("Chunk %d/%d copied. Save it before continuing", currentChunkIndex, totalChunks)
         statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
     elseif currentChunkIndex == totalChunks then
         statusLabel.Text = "All chunks have been copied"
@@ -882,51 +794,61 @@ nextChunkButton.MouseButton1Click:Connect(function()
     end
 end)
 
--- TextLabel for instructions
 local pasteLabel = Instance.new("TextLabel")
 pasteLabel.Parent = screenGui
 pasteLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 pasteLabel.Size = UDim2.new(0, 200, 0, 30)
-pasteLabel.Position = UDim2.new(0, 10, 0, 140) -- Adjust position as needed
+pasteLabel.Position = UDim2.new(0, 10, 0, 140)
 pasteLabel.Text = "Paste Platform Data Here"
 pasteLabel.TextColor3 = Color3.fromRGB(0, 0, 0)
 pasteLabel.TextScaled = true
+pasteLabel.Visible = false 
 
--- TextBox for pasting platform data
 local pasteTextBox = Instance.new("TextBox")
 pasteTextBox.Parent = screenGui
 pasteTextBox.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 pasteTextBox.Size = UDim2.new(0, 200, 0, 50)
-pasteTextBox.Position = UDim2.new(0, 10, 0, 170) -- Adjust position as needed
+pasteTextBox.Position = UDim2.new(0, 10, 0, 170)
 pasteTextBox.Text = ""
 pasteTextBox.PlaceholderText = "Paste JSON data here"
-pasteTextBox.ClearTextOnFocus = false
+pasteTextBox.ClearTextOnFocus = true 
 pasteTextBox.MultiLine = true
 pasteTextBox.TextScaled = true
+pasteTextBox.Visible = false 
 
--- Load Button: Paste and deserialize platform data from the TextBox
 local loadButton = Instance.new("TextButton")
 loadButton.Parent = screenGui
 loadButton.BackgroundColor3 = Color3.fromRGB(255, 255, 100)
 loadButton.Size = UDim2.new(0, 90, 0, 30)
-loadButton.Position = UDim2.new(0, 10, 0, 230) -- Adjust position as needed
+loadButton.Position = UDim2.new(0, 10, 0, 230)
 loadButton.Text = "Load"
 loadButton.TextScaled = true
+loadButton.Visible = false 
 
--- Modify the load button to handle combined chunks and URL loading
+local toggleButton = Instance.new("TextButton")
+toggleButton.Parent = frame
+toggleButton.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
+toggleButton.Size = UDim2.new(0, 30, 0, 20)
+toggleButton.Position = UDim2.new(0, 10, 0, 175) 
+toggleButton.Text = "+"
+toggleButton.TextScaled = true
+
+toggleButton.MouseButton1Click:Connect(function()
+    local isVisible = not pasteLabel.Visible
+    pasteLabel.Visible = isVisible
+    pasteTextBox.Visible = isVisible
+    loadButton.Visible = isVisible
+    toggleButton.Text = isVisible and "-" or "+"
+end)
+
 loadButton.MouseButton1Click:Connect(function()
     local input = pasteTextBox.Text
-
-    -- Check for empty input (after trimming whitespace)
     if input:gsub("%s", "") == "" then
         statusLabel.Text = "Status: No data to load"
         statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
-        return -- Stop if no input
+        return 
     end
-
     local loadedSuccessfully = false
-
-    -- Check if input is a URL
     if input:match("^https?://") then
         statusLabel.Text = "Loading 0%"
         local url = input
@@ -936,176 +858,80 @@ loadButton.MouseButton1Click:Connect(function()
                 statusLabel.Text = "Loading "..progress.."%"
             end)
         end)
-
         if success then
-            -- Try to handle stacked JSON objects from URL
-            local combinedData = {
-                redPlatforms = {},
-                yellowPlatforms = {},
-                mappings = {}
-            }
-            
+            local combinedData = {redPlatforms = {}, yellowPlatforms = {}, mappings = {}}
             local redPlatformOffset = 0
             local successfulParsing = false
-            
-            -- Split the response by lines or potential JSON objects
             for jsonStr in response:gmatch("[^\r\n]+") do
-                local parseSuccess, chunk = pcall(function()
-                    return HttpService:JSONDecode(jsonStr)
-                end)
-                
-                -- Check if it's a valid chunk format
+                local parseSuccess, chunk = pcall(function() return HttpService:JSONDecode(jsonStr) end)
                 if parseSuccess and type(chunk) == "table" and type(chunk.redPlatforms) == "table" then
                     successfulParsing = true
-                    
-                    -- Add all red platforms
-                    for _, platform in ipairs(chunk.redPlatforms) do
-                        table.insert(combinedData.redPlatforms, platform)
-                    end
-                    
-                    -- Add all yellow platforms with adjusted mappings
+                    for _, platform in ipairs(chunk.redPlatforms) do table.insert(combinedData.redPlatforms, platform) end
                     if type(chunk.yellowPlatforms) == "table" then
                         for i, yellowPlatform in ipairs(chunk.yellowPlatforms) do
                             table.insert(combinedData.yellowPlatforms, yellowPlatform)
-                            -- Adjust the mapping to account for the offset
-                            if type(chunk.mappings) == "table" and chunk.mappings[i] then
-                                table.insert(combinedData.mappings, chunk.mappings[i] + redPlatformOffset)
-                            end
+                            if type(chunk.mappings) == "table" and chunk.mappings[i] then table.insert(combinedData.mappings, chunk.mappings[i] + redPlatformOffset) end
                         end
                     end
-                    
-                    -- Update offset for next chunk
                     redPlatformOffset = redPlatformOffset + #chunk.redPlatforms
                 end
             end
-            
             if successfulParsing then
-                 -- Only clear if we successfully parsed *at least one* chunk
                 if #platforms > 0 or #yellowPlatforms > 0 then
                     for _, platform in ipairs(platforms) do platform:Destroy() end
                     for _, yellowPlatform in ipairs(yellowPlatforms) do yellowPlatform:Destroy() end
-                    platforms = {}
-                    yellowPlatforms = {}
-                    platformData = {}
-                    yellowToRedMapping = {}
-                    platformCounter = 0
-                    currentRecordingPlatform = nil -- Reset this too
-                    scrollFrame:ClearAllChildren()
-                    local uiListLayout = Instance.new("UIListLayout")
-                    uiListLayout.Parent = scrollFrame
-                    uiListLayout.Padding = UDim.new(0, 5)
-                    scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+                    platforms = {}; yellowPlatforms = {}; platformData = {}; yellowToRedMapping = {}; platformCounter = 0; currentRecordingPlatform = nil
+                    scrollFrame:ClearAllChildren(); local uiListLayout = Instance.new("UIListLayout"); uiListLayout.Parent = scrollFrame; uiListLayout.Padding = UDim.new(0, 5); scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
                 end
-
-                -- Convert combined data to JSON and load
-                local combinedJson = HttpService:JSONEncode(combinedData)
-                deserializePlatformData(combinedJson) -- This function handles its own validation/errors
-                loadedSuccessfully = true -- Indicate success
+                deserializePlatformData(HttpService:JSONEncode(combinedData))
+                loadedSuccessfully = true
             else
-                -- If stacked parsing failed, try loading as a single JSON object
-                local successDeserialize = pcall(deserializePlatformData, response) -- deserializePlatformData has internal validation
-
-                if successDeserialize then
-                    -- deserializePlatformData handles clearing if successful
-                     loadedSuccessfully = true -- Indicate success
-                end
+                local successDeserialize = pcall(deserializePlatformData, response)
+                if successDeserialize then loadedSuccessfully = true end
             end
         else
             statusLabel.Text = "Load failed: "..tostring(response):sub(1,50)
             statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
-            return -- Stop if URL fetch fails
+            return 
         end
     else
-        -- Not a URL, treat as direct JSON input
         local inputJson = input
-        
-        -- Try to handle stacked JSON objects
-        local combinedData = {
-            redPlatforms = {},
-            yellowPlatforms = {},
-            mappings = {}
-        }
-        
+        local combinedData = {redPlatforms = {}, yellowPlatforms = {}, mappings = {}}
         local redPlatformOffset = 0
         local successfulParsing = false
-        
-        -- Split the input by lines or potential JSON objects
         for jsonStr in inputJson:gmatch("[^\r\n]+") do
-            local success, chunk = pcall(function()
-                return HttpService:JSONDecode(jsonStr)
-            end)
-            
-            -- Check if it's a valid chunk format
+            local success, chunk = pcall(function() return HttpService:JSONDecode(jsonStr) end)
             if success and type(chunk) == "table" and type(chunk.redPlatforms) == "table" then
                 successfulParsing = true
-                
-                -- Add all red platforms
-                for _, platform in ipairs(chunk.redPlatforms) do
-                    table.insert(combinedData.redPlatforms, platform)
-                end
-                
-                -- Add all yellow platforms with adjusted mappings
-                 if type(chunk.yellowPlatforms) == "table" then
+                for _, platform in ipairs(chunk.redPlatforms) do table.insert(combinedData.redPlatforms, platform) end
+                if type(chunk.yellowPlatforms) == "table" then
                     for i, yellowPlatform in ipairs(chunk.yellowPlatforms) do
                         table.insert(combinedData.yellowPlatforms, yellowPlatform)
-                        -- Adjust the mapping to account for the offset
-                        if type(chunk.mappings) == "table" and chunk.mappings[i] then
-                            table.insert(combinedData.mappings, chunk.mappings[i] + redPlatformOffset)
-                        end
+                        if type(chunk.mappings) == "table" and chunk.mappings[i] then table.insert(combinedData.mappings, chunk.mappings[i] + redPlatformOffset) end
                     end
                 end
-                
-                -- Update offset for next chunk
                 redPlatformOffset = redPlatformOffset + #chunk.redPlatforms
             end
         end
-        
         if successfulParsing then
-            -- Only clear if we successfully parsed *at least one* chunk
             if #platforms > 0 or #yellowPlatforms > 0 then
                 for _, platform in ipairs(platforms) do platform:Destroy() end
                 for _, yellowPlatform in ipairs(yellowPlatforms) do yellowPlatform:Destroy() end
-                platforms = {}
-                yellowPlatforms = {}
-                platformData = {}
-                yellowToRedMapping = {}
-                platformCounter = 0
-                currentRecordingPlatform = nil -- Reset this too
-                 scrollFrame:ClearAllChildren()
-                local uiListLayout = Instance.new("UIListLayout")
-                uiListLayout.Parent = scrollFrame
-                uiListLayout.Padding = UDim.new(0, 5)
-                 scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+                platforms = {}; yellowPlatforms = {}; platformData = {}; yellowToRedMapping = {}; platformCounter = 0; currentRecordingPlatform = nil
+                scrollFrame:ClearAllChildren(); local uiListLayout = Instance.new("UIListLayout"); uiListLayout.Parent = scrollFrame; uiListLayout.Padding = UDim.new(0, 5); scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
             end
-
-            -- Convert combined data to JSON and load
-            local combinedJson = HttpService:JSONEncode(combinedData)
-            deserializePlatformData(combinedJson) -- This function handles its own validation/errors
-            loadedSuccessfully = true -- Indicate success
+            deserializePlatformData(HttpService:JSONEncode(combinedData))
+            loadedSuccessfully = true
         else
-            -- If stacked parsing failed, try loading as a single JSON object
-            local successDeserialize = pcall(deserializePlatformData, inputJson) -- deserializePlatformData has internal validation
-
-            if successDeserialize then
-                -- deserializePlatformData handles clearing if successful
-                loadedSuccessfully = true -- Indicate success
-            end
+            local successDeserialize = pcall(deserializePlatformData, inputJson)
+            if successDeserialize then loadedSuccessfully = true end
         end
     end
-
-    -- Final status update based on whether anything was loaded
     if loadedSuccessfully then
         statusLabel.Text = "Status: Platform data loaded"
         statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
-    else
-        -- If deserializePlatformData itself failed (handled internally), 
-        -- its status message is already shown. If the input was just invalid 
-        -- and didn't match URL/stacked/single JSON, show a generic parse error.
-         -- This check might be redundant if deserializePlatformData always sets status
-         -- but it's a fallback in case the initial parsing attempts fail.
-         if statusLabel.Text == "Status: Idle" or statusLabel.TextColor3 == Color3.fromRGB(0,0,0) then
-             statusLabel.Text = "Status: Failed to parse data"
-             statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
-         end
+    elseif statusLabel.Text == "Status: Idle" or statusLabel.TextColor3 == Color3.fromRGB(0,0,0) then
+        statusLabel.Text = "Status: Failed to parse data"
+        statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
     end
 end)
