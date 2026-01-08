@@ -12,13 +12,12 @@ frame.Position = UDim2.new(0.5, -100, 0.5, -75)
 frame.Active = true
 frame.Draggable = true
 
--- Platform Variables - Separated tracking
+-- Platform & State Variables
 local movablePlatform = nil
-local lockedPlatform = nil
-local isMovableActive = false
-local isLockedActive = false
+local isPlatformSpawned = false -- Tracks if "On" has been pressed
+local isControllingPlatform = false -- Tracks the Switch state (Camera/Controls)
 
--- Platform Variables
+-- Player/Service Variables
 local player = game.Players.LocalPlayer
 local camera = workspace.CurrentCamera
 local forwardGui = nil
@@ -26,9 +25,7 @@ local tweenService = game:GetService("TweenService")
 local currentTween = nil
 local movementSpeed = 10
 local runService = game:GetService("RunService")
-local renderSteppedConnection = nil -- Shared connection variable
-local lockedRenderConnection = nil -- Separate connection for locked platform
-local switchEnabled = false -- NEW: Tracks if the switch functionality is enabled
+local renderSteppedConnection = nil 
 
 -- UI positioning values
 local speedControlsYPos = 100
@@ -68,39 +65,8 @@ speedTextBox.TextScaled = true
 speedTextBox.ClearTextOnFocus = false
 speedTextBox.PlaceholderText = "Enter speed"
 
--- Modified destroyPlatform function
-local function destroyPlatform()
-    -- Destroy both platforms and connections
-    if movablePlatform then
-        movablePlatform:Destroy()
-        movablePlatform = nil
-    end
-    if lockedPlatform then
-        lockedPlatform:Destroy()
-        lockedPlatform = nil
-    end
-    isMovableActive = false
-    isLockedActive = false
-
-    -- Disconnect RenderStepped if it's active
-    if renderSteppedConnection then
-        renderSteppedConnection:Disconnect()
-        renderSteppedConnection = nil
-    end
-
-    --Disconnect Locked Rendered stepped
-    if lockedRenderConnection then
-        lockedRenderConnection:Disconnect()
-        lockedRenderConnection = nil
-    end
-
-    -- destroy gui
-    if forwardGui then
-        forwardGui:Destroy()
-        forwardGui = nil
-    end
-
-    -- Reset Camera Subject
+-- Helper to reset camera to character
+local function resetCameraToCharacter()
     local char = player.Character
     if char then
         local hrp = char:FindFirstChild("HumanoidRootPart")
@@ -109,17 +75,40 @@ local function destroyPlatform()
     end
 end
 
--- Function to spawn the MOVABLE platform (for ON button)
+-- Global Destroy Function
+local function destroyPlatform()
+    -- Destroy Platform
+    if movablePlatform then
+        movablePlatform:Destroy()
+        movablePlatform = nil
+    end
+    
+    isPlatformSpawned = false
+    isControllingPlatform = false
+
+    -- Disconnect Connection
+    if renderSteppedConnection then
+        renderSteppedConnection:Disconnect()
+        renderSteppedConnection = nil
+    end
+
+    -- Destroy Movement GUI
+    if forwardGui then
+        forwardGui:Destroy()
+        forwardGui = nil
+    end
+
+    resetCameraToCharacter()
+end
+
+-- Spawn Green Platform
 local function spawnMovablePlatform()
     local char = player.Character or player.CharacterAdded:Wait()
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return false end
 
-    -- Only destroy existing movable platform
-    if movablePlatform then
-        movablePlatform:Destroy()
-        movablePlatform = nil
-    end
+    -- Cleanup existing if any
+    if movablePlatform then movablePlatform:Destroy() end
 
     movablePlatform = Instance.new("Part")
     movablePlatform.Name = "MovablePlatform"
@@ -129,13 +118,15 @@ local function spawnMovablePlatform()
     movablePlatform.CanCollide = false
     movablePlatform.Transparency = 0
     movablePlatform.Parent = workspace
-
     movablePlatform.CFrame = CFrame.new(hrp.Position + Vector3.new(0, 2.5, 0))
+    
+    -- Set Camera
     camera.CameraSubject = movablePlatform
 
-    -- GUI controls for movement
+    -- Create Movement GUI
     forwardGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
     forwardGui.ResetOnSpawn = false
+    forwardGui.Enabled = true -- Visible by default
 
     local forwardFrame = Instance.new("Frame", forwardGui)
     forwardFrame.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
@@ -143,53 +134,49 @@ local function spawnMovablePlatform()
     forwardFrame.Position = UDim2.new(0, 10, 1, -90)
     forwardFrame.BorderSizePixel = 0
     forwardFrame.Active = true
-    forwardFrame.Draggable = false
 
     local forwardBtn = Instance.new("TextButton", forwardFrame)
-    forwardBtn.BackgroundColor3 = Color3.fromRGB(150, 150, 150)
     forwardBtn.Size = UDim2.new(0.38, 0, 0.5, 0); forwardBtn.Position = UDim2.new(0.31, 0, 0, 0)
     forwardBtn.Text = "Forward"; forwardBtn.TextScaled = true
 
     local backwardBtn = Instance.new("TextButton", forwardFrame)
-    backwardBtn.BackgroundColor3 = Color3.fromRGB(150, 150, 150)
     backwardBtn.Size = UDim2.new(0.38, 0, 0.5, 0); backwardBtn.Position = UDim2.new(0.31, 0, 0.5, 0)
     backwardBtn.Text = "Backward"; backwardBtn.TextScaled = true
 
     local leftBtn = Instance.new("TextButton", forwardFrame)
-    leftBtn.BackgroundColor3 = Color3.fromRGB(150, 150, 150)
     leftBtn.Size = UDim2.new(0.3, 0, 1, 0); leftBtn.Position = UDim2.new(0, 0, 0, 0)
     leftBtn.Text = "Left"; leftBtn.TextScaled = true
 
     local rightBtn = Instance.new("TextButton", forwardFrame)
-    rightBtn.BackgroundColor3 = Color3.fromRGB(150, 150, 150)
     rightBtn.Size = UDim2.new(0.3, 0, 1, 0); rightBtn.Position = UDim2.new(0.7, 0, 0, 0)
     rightBtn.Text = "Right"; rightBtn.TextScaled = true
 
     local targetRotation = 0
 
-    -- Connect RenderStepped for MOVABLE platform updates
+    -- RenderStepped for Rotation and Transparency
     renderSteppedConnection = runService.RenderStepped:Connect(function()
-        -- Check if the connection should still be active for a movable platform
-        if not movablePlatform or not isMovableActive then
-            if renderSteppedConnection then
-                 renderSteppedConnection:Disconnect()
-                 renderSteppedConnection = nil
-            end
+        if not movablePlatform or not isPlatformSpawned then
+            if renderSteppedConnection then renderSteppedConnection:Disconnect() end
             return
         end
 
-        -- Update rotation based on camera
-        local camCF = camera.CFrame
-        targetRotation = math.atan2(camCF.RightVector.X, camCF.RightVector.Z)
-        movablePlatform.CFrame = CFrame.new(movablePlatform.Position) * CFrame.Angles(0, targetRotation, 0)
+        -- Only rotate platform if we are actively controlling it
+        if isControllingPlatform then
+            local camCF = camera.CFrame
+            targetRotation = math.atan2(camCF.RightVector.X, camCF.RightVector.Z)
+            movablePlatform.CFrame = CFrame.new(movablePlatform.Position) * CFrame.Angles(0, targetRotation, 0)
+        end
 
-        -- Update transparency based on distance
+        -- Transparency logic
         local dist = (movablePlatform.Position - camera.CFrame.Position).Magnitude
         movablePlatform.Transparency = dist <= 10 and 1 or 0
     end)
 
+    -- Movement Logic
     local function movePlatform(dir)
-        if not isMovableActive or not movablePlatform then return end
+        -- Only allow movement if we are controlling the platform
+        if not isPlatformSpawned or not movablePlatform or not isControllingPlatform then return end
+        
         local dirVec = {
             forward = camera.CFrame.LookVector, backward = -camera.CFrame.LookVector,
             right = camera.CFrame.RightVector, left = -camera.CFrame.RightVector
@@ -201,6 +188,7 @@ local function spawnMovablePlatform()
         local tweenInfo = TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
         currentTween = tweenService:Create(movablePlatform, tweenInfo, {CFrame = targetCF})
         currentTween:Play()
+        
         camera.CameraSubject = movablePlatform
     end
 
@@ -209,105 +197,45 @@ local function spawnMovablePlatform()
     rightBtn.MouseButton1Click:Connect(function() movePlatform("right") end)
     leftBtn.MouseButton1Click:Connect(function() movePlatform("left") end)
 
-    return true -- Return true on success
-end
-
--- Modified spawnLockedPlatform function
-local function spawnLockedPlatform()
-    local char = player.Character or player.CharacterAdded:Wait()
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return false end
-
-    -- Only destroy existing locked platform
-    if lockedPlatform then
-        lockedPlatform:Destroy()
-        lockedPlatform = nil
-    end
-
-    lockedPlatform = Instance.new("Part")
-    lockedPlatform.Name = "LockedPlatform"
-    lockedPlatform.Size = Vector3.new(3, 1, 3)
-    lockedPlatform.BrickColor = BrickColor.Red()
-    lockedPlatform.Anchored = true
-    lockedPlatform.CanCollide = false
-    lockedPlatform.Transparency = 0
-    lockedPlatform.Parent = workspace
-
-    lockedPlatform.Position = hrp.Position + Vector3.new(0, 5, 0)
-
-    -- Maintain separate render connection for locked platform
-    lockedRenderConnection = runService.RenderStepped:Connect(function()
-        if not lockedPlatform or not isLockedActive then
-            if lockedRenderConnection then
-                lockedRenderConnection:Disconnect()
-                lockedRenderConnection = nil
-            end
-            return
-        end
-        local dist = (lockedPlatform.Position - camera.CFrame.Position).Magnitude
-        lockedPlatform.Transparency = dist <= 10 and 1 or 0
-    end)
-
     return true
 end
 
--- Function to focus camera on locked platform
-local function focusCameraOnLockedPlatform()
-    if lockedPlatform and isLockedActive then
-        camera.CameraSubject = lockedPlatform
-    end
-end
-
--- Button dimensions and spacing
-local buttonWidth = 60
+-- Button Layout
+local mainButtonWidth = 50
 local buttonHeight = 30
 local buttonSpacing = 10
-local frameWidth = 200 -- Assuming frame width from the original script
-
--- Calculate starting position for buttons to center them horizontally
-local totalButtonWidth = (buttonWidth * 4) + (buttonSpacing * 3)
+local totalButtonWidth = (mainButtonWidth * 3) + (buttonSpacing * 2)
 local startX = (frameWidth - totalButtonWidth) / 2
-
--- Vertical position for the buttons (adjust as needed)
 local startY = 20
 
 -- On Button
 local onButton = Instance.new("TextButton")
 onButton.Parent = frame
 onButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-onButton.Size = UDim2.new(0, buttonWidth, 0, buttonHeight)
+onButton.Size = UDim2.new(0, mainButtonWidth, 0, buttonHeight)
 onButton.Position = UDim2.new(0, startX, 0, startY)
 onButton.Text = "On"
 onButton.TextScaled = true
-
--- Lock Button
-local lockButton = Instance.new("TextButton")
-lockButton.Parent = frame
-lockButton.BackgroundColor3 = Color3.fromRGB(0, 150, 255) -- Light Blue color for Lock
-lockButton.Size = UDim2.new(0, buttonWidth, 0, buttonHeight)
-lockButton.Position = UDim2.new(0, startX + buttonWidth + buttonSpacing, 0, startY)
-lockButton.Text = "Lock"
-lockButton.TextScaled = true
 
 -- Off Button
 local offButton = Instance.new("TextButton")
 offButton.Parent = frame
 offButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-offButton.Size = UDim2.new(0, buttonWidth, 0, buttonHeight)
-offButton.Position = UDim2.new(0, startX + (buttonWidth * 2) + (buttonSpacing * 2), 0, startY)
+offButton.Size = UDim2.new(0, mainButtonWidth, 0, buttonHeight)
+offButton.Position = UDim2.new(0, startX + mainButtonWidth + buttonSpacing, 0, startY)
 offButton.Text = "Off"
 offButton.TextScaled = true
 
--- Switch Button (NEW)
+-- Switch Button
 local switchButton = Instance.new("TextButton")
 switchButton.Parent = frame
 switchButton.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
-switchButton.Size = UDim2.new(0, buttonWidth, 0, buttonHeight)
-switchButton.Position = UDim2.new(0, startX + (buttonWidth * 3) + (buttonSpacing * 3), 0, startY)
+switchButton.Size = UDim2.new(0, mainButtonWidth, 0, buttonHeight)
+switchButton.Position = UDim2.new(0, startX + (mainButtonWidth * 2) + (buttonSpacing * 2), 0, startY)
 switchButton.Text = "Switch"
 switchButton.TextScaled = true
 
--- Create Destroy Button
+-- Destroy Button
 local destroyButton = Instance.new("TextButton")
 destroyButton.Parent = frame
 destroyButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
@@ -316,7 +244,7 @@ destroyButton.Position = UDim2.new(0, 20, 0, 60)
 destroyButton.Text = "Destroy"
 destroyButton.TextScaled = true
 
--- Create Status Indicator
+-- Status Label
 local statusLabel = Instance.new("TextLabel")
 statusLabel.Parent = frame
 statusLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
@@ -326,6 +254,7 @@ statusLabel.Text = "Status: Off"
 statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
 statusLabel.TextScaled = true
 
+-- Speed Logic
 local function updateSpeedFromTextBox()
     local text = speedTextBox.Text
     local number = tonumber(string.match(text, "%d+"))
@@ -336,147 +265,90 @@ local function updateSpeedFromTextBox()
 end
 
 speedTextBox.FocusLost:Connect(function(enterPressed)
-    if enterPressed then
-        updateSpeedFromTextBox()
-    end
+    if enterPressed then updateSpeedFromTextBox() end
 end)
 
-plusButton.MouseButton1Click:Connect(function()
-    if isMovableActive then -- Only allow speed change for movable platform
-        movementSpeed += 1
-        speedTextBox.Text = "Speed: " .. movementSpeed
-    end
-end)
-
-minusButton.MouseButton1Click:Connect(function()
-    if isMovableActive then -- Only allow speed change for movable platform
-        if movementSpeed > 1 then
-            movementSpeed -= 1
-            speedTextBox.Text = "Speed: " .. movementSpeed
-        end
-    end
-end)
-
--- Modified Lock Button handler
-lockButton.MouseButton1Click:Connect(function()
-    if isLockedActive then
-        -- Destroy only locked platform
-        if lockedPlatform then
-            lockedPlatform:Destroy()
-            lockedPlatform = nil
-        end
-        isLockedActive = false
-        statusLabel.Text = "Status: " .. (isMovableActive and "On" or "Off")
-        if lockedRenderConnection then
-                lockedRenderConnection:Disconnect()
-                lockedRenderConnection = nil
-        end
-    else
-        -- Spawn locked platform without affecting movable
-        local success = spawnLockedPlatform()
-        if success then
-            isLockedActive = true
-            statusLabel.Text = "Status: " .. (isMovableActive and "On + Locked" or "Locked")
-            if switchEnabled then
-                focusCameraOnLockedPlatform()
-            end
-        end
-    end
-end)
-
--- Modified On Button handler
+-- On Button Handler
 onButton.MouseButton1Click:Connect(function()
-    if not isMovableActive then
+    if not isPlatformSpawned then
         local success = spawnMovablePlatform()
         if success then
-            isMovableActive = true
-            statusLabel.Text = "Status: " .. (isLockedActive and "On + Locked" or "On")
+            isPlatformSpawned = true
+            isControllingPlatform = true -- Default to controlling it when spawned
+            
+            -- Update Switch Button Visuals
+            switchButton.Text = "Switch (On)"
+            switchButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+            
+            statusLabel.Text = "Status: On"
             statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
         end
     end
 end)
 
--- Modified Off Button handler
+-- Off Button Handler
 offButton.MouseButton1Click:Connect(function()
-    if isMovableActive then
-        -- Destroy only movable platform
-        if movablePlatform then
-            movablePlatform:Destroy()
-            movablePlatform = nil
-        end
-        isMovableActive = false
-        statusLabel.Text = "Status: " .. (isLockedActive and "Locked" or "Off")
+    if isPlatformSpawned then
+        destroyPlatform() -- Completely removes platform and GUI
+        
+        -- Reset Switch Button Visuals
+        switchButton.Text = "Switch"
+        switchButton.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
+        
+        statusLabel.Text = "Status: Off"
         statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
-
-         -- Reset Camera Subject to the Humanoid
-        local char = player.Character
-        if char then
-            local hrp = char:FindFirstChild("HumanoidRootPart")
-            local humanoid = char:FindFirstChild("Humanoid")
-            camera.CameraSubject = humanoid or hrp
-        end
-
-        -- destroy gui
-        if forwardGui then
-            forwardGui:Destroy()
-            forwardGui = nil
-        end
     end
 end)
 
--- Switch Button Logic (NEW)
+-- Switch Button Logic
 switchButton.MouseButton1Click:Connect(function()
-    switchEnabled = not switchEnabled -- Toggle the switch state
+    -- Only work if the platform actually exists
+    if not isPlatformSpawned or not movablePlatform then return end
 
-    if switchEnabled then
-        switchButton.Text = "Switch (On)" -- Show the switch is on
-        switchButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0) --Turn button green
-        if lockedPlatform and isLockedActive then
-            focusCameraOnLockedPlatform() -- Focus camera if already locked
+    isControllingPlatform = not isControllingPlatform
+
+    if isControllingPlatform then
+        -- SWITCH ON: Control Platform
+        switchButton.Text = "Switch (On)"
+        switchButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+        
+        -- Camera to Platform
+        camera.CameraSubject = movablePlatform
+        
+        -- Show Movement Buttons
+        if forwardGui then
+            forwardGui.Enabled = true
         end
     else
-        switchButton.Text = "Switch" -- Show the switch is off
-        switchButton.BackgroundColor3 = Color3.fromRGB(200, 200, 200) --turn button grey
-        -- Reset the camera subject when switch is turned off
-         local char = player.Character
-        if char then
-            local hrp = char:FindFirstChild("HumanoidRootPart")
-            local humanoid = char:FindFirstChild("Humanoid")
-            camera.CameraSubject = humanoid or hrp
+        -- SWITCH OFF: Control Character
+        switchButton.Text = "Switch"
+        switchButton.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
+        
+        -- Camera to Character
+        resetCameraToCharacter()
+        
+        -- Hide Movement Buttons (Temporarily)
+        if forwardGui then
+            forwardGui.Enabled = false
         end
     end
 end)
 
+-- Destroy Button (Cleans up everything)
 destroyButton.MouseButton1Click:Connect(function()
-    destroyPlatform() -- This destroys either platform type
+    destroyPlatform()
     screenGui:Destroy()
 end)
 
--- plusButton.MouseButton1Click:Connect(function()
---     if isMovableActive then -- Only allow speed change for movable platform
---         movementSpeed += 1
---         speedTextBox.Text = "Speed: " .. movementSpeed
---     end
--- end)
-
--- minusButton.MouseButton1Click:Connect(function()
---     if isMovableActive then -- Only allow speed change for movable platform
---         if movementSpeed > 1 then
---             movementSpeed -= 1
---             speedTextBox.Text = "Speed: " .. movementSpeed
---         end
---     end
--- end)
-
 plusButton.MouseButton1Click:Connect(function()
-    if isMovableActive then
+    if isPlatformSpawned then
         movementSpeed = movementSpeed + 1
         speedTextBox.Text = "Speed: " .. tostring(movementSpeed)
     end
 end)
 
 minusButton.MouseButton1Click:Connect(function()
-    if isMovableActive then
+    if isPlatformSpawned then
         movementSpeed = math.max(1, movementSpeed - 1)
         speedTextBox.Text = "Speed: " .. tostring(movementSpeed)
     end
