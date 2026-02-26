@@ -1,0 +1,193 @@
+-- Services
+local PlayerService = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Lighting = game:GetService("Lighting")
+
+local player = PlayerService.LocalPlayer
+if not player then
+    player = PlayerService.PlayerAdded:Wait()
+end
+
+player:WaitForChild("PlayerGui")
+
+-- Variables for State
+local zoomEnabled = false
+local cameraConnection = nil
+local tpWalkSpeed = 0.2 -- 20% of 1 (Natural speed)
+
+-- Store Original Settings (To ensure the Destroy button works perfectly)
+local originalSettings = {
+    FogEnd = Lighting.FogEnd,
+    FogStart = Lighting.FogStart,
+    Brightness = Lighting.Brightness,
+    ClockTime = Lighting.ClockTime,
+    Ambient = Lighting.Ambient,
+    OutdoorAmbient = Lighting.OutdoorAmbient,
+    GlobalShadows = Lighting.GlobalShadows,
+    Exposure = Lighting.ExposureCompensation,
+    CameraMaxZoom = player.CameraMaxZoomDistance,
+    CameraMinZoom = player.CameraMinZoomDistance,
+    CameraMode = player.CameraMode,
+    Occlusion = player.DevCameraOcclusionMode
+}
+
+-- Create ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Parent = player.PlayerGui
+screenGui.ResetOnSpawn = false
+screenGui.Name = "UltraVisionUnlockerV7"
+
+-- Create Frame
+local frame = Instance.new("Frame")
+frame.Parent = screenGui
+frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+frame.Size = UDim2.new(0, 200, 0, 100)
+frame.Position = UDim2.new(0.3, 0, 0.5, -50)
+frame.Active = true
+frame.Draggable = true
+frame.BorderSizePixel = 2
+
+-- Create On Button
+local onButton = Instance.new("TextButton")
+onButton.Parent = frame
+onButton.BackgroundColor3 = Color3.fromRGB(60, 120, 60)
+onButton.Size = UDim2.new(0, 80, 0, 30)
+onButton.Position = UDim2.new(0, 10, 0, 20)
+onButton.Text = "On"
+onButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+onButton.TextScaled = true
+
+-- Create Off Button
+local offButton = Instance.new("TextButton")
+offButton.Parent = frame
+offButton.BackgroundColor3 = Color3.fromRGB(120, 60, 60)
+offButton.Size = UDim2.new(0, 80, 0, 30)
+offButton.Position = UDim2.new(0, 110, 0, 20)
+offButton.Text = "Off"
+offButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+offButton.TextScaled = true
+
+-- Create Destroy Button
+local destroyButton = Instance.new("TextButton")
+destroyButton.Parent = frame
+destroyButton.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+destroyButton.Size = UDim2.new(0, 160, 0, 30)
+destroyButton.Position = UDim2.new(0, 20, 0, 60)
+destroyButton.Text = "Destroy"
+destroyButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+destroyButton.TextScaled = true
+
+-- Create Status Indicator
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Parent = frame
+statusLabel.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+statusLabel.Size = UDim2.new(0, 200, 0, 30)
+statusLabel.Position = UDim2.new(0, 0, 0, -30)
+statusLabel.Text = "Vision: Default"
+statusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+statusLabel.TextScaled = true
+
+-- Function to Clear Fog and Enable 25% Brightness
+local function clearVisuals()
+    -- Fog Removal
+    Lighting.FogEnd = 1000000
+    Lighting.FogStart = 0
+    
+    -- 25% Brightness Settings
+    Lighting.Brightness = 0.5 -- Low intensity
+    Lighting.ClockTime = 14
+    Lighting.GlobalShadows = false
+    Lighting.Ambient = Color3.new(0.25, 0.25, 0.25) -- Dim grey
+    Lighting.OutdoorAmbient = Color3.new(0.25, 0.25, 0.25)
+    Lighting.ExposureCompensation = 0.25 -- Subtle boost
+    
+    -- Disable Atmosphere and PostEffects
+    for _, effect in pairs(Lighting:GetChildren()) do
+        if effect:IsA("Atmosphere") then
+            effect.Density = 0
+        elseif effect:IsA("PostEffect") or effect:IsA("Clouds") then
+            effect.Enabled = false
+        end
+    end
+end
+
+-- Function to Restore Original Game Visuals
+local function restoreVisuals()
+    Lighting.FogEnd = originalSettings.FogEnd
+    Lighting.FogStart = originalSettings.FogStart
+    Lighting.Brightness = originalSettings.Brightness
+    Lighting.ClockTime = originalSettings.ClockTime
+    Lighting.GlobalShadows = originalSettings.GlobalShadows
+    Lighting.Ambient = originalSettings.Ambient
+    Lighting.OutdoorAmbient = originalSettings.OutdoorAmbient
+    Lighting.ExposureCompensation = originalSettings.Exposure
+    
+    for _, effect in pairs(Lighting:GetChildren()) do
+        if effect:IsA("Atmosphere") then
+            effect.Density = 0.3
+        elseif effect:IsA("PostEffect") or effect:IsA("Clouds") then
+            effect.Enabled = true
+        end
+    end
+end
+
+-- Main Loop Function
+local function startOverride()
+    if cameraConnection then cameraConnection:Disconnect() end
+    
+    cameraConnection = RunService.RenderStepped:Connect(function()
+        if zoomEnabled then
+            -- 1. Camera Logic (999 Zoom + Wall Clip)
+            player.CameraMaxZoomDistance = 999
+            player.CameraMinZoomDistance = 0.5
+            player.CameraMode = Enum.CameraMode.Classic
+            player.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Invisicam
+            
+            -- 2. Visual Logic (25% Brightness)
+            clearVisuals()
+            
+            -- 3. TPWalk Logic (Speed 0.2)
+            local char = player.Character
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            local root = char and char:FindFirstChild("HumanoidRootPart")
+            
+            if hum and root and hum.MoveDirection.Magnitude > 0 then
+                root.CFrame = root.CFrame + (hum.MoveDirection * tpWalkSpeed)
+            end
+        end
+    end)
+end
+
+-- Stop and Reset Function
+local function stopOverride()
+    zoomEnabled = false
+    if cameraConnection then
+        cameraConnection:Disconnect()
+        cameraConnection = nil
+    end
+    
+    -- Restore original game state
+    player.CameraMaxZoomDistance = originalSettings.CameraMaxZoom
+    player.CameraMode = originalSettings.CameraMode
+    player.DevCameraOcclusionMode = originalSettings.Occlusion
+    restoreVisuals()
+end
+
+-- Button Logic
+onButton.MouseButton1Click:Connect(function()
+    zoomEnabled = true
+    statusLabel.Text = "VISION + TPWALK"
+    statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+    startOverride()
+end)
+
+offButton.MouseButton1Click:Connect(function()
+    statusLabel.Text = "Vision: Default"
+    statusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    stopOverride()
+end)
+
+destroyButton.MouseButton1Click:Connect(function()
+    stopOverride()
+    screenGui:Destroy()
+end)
