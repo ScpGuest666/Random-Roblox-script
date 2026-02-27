@@ -1,0 +1,759 @@
+-- Wait for player to load
+local PlayerService = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local player = PlayerService.LocalPlayer or PlayerService.PlayerAdded:Wait()
+
+-- Wait for player GUI
+player:WaitForChild("PlayerGui")
+
+-- Create ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Parent = player.PlayerGui
+screenGui.ResetOnSpawn = false
+screenGui.Name = "GuiVersion2"
+
+-- Create Main Frame
+local mainFrame = Instance.new("Frame")
+mainFrame.Parent = screenGui
+mainFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+mainFrame.Size = UDim2.new(0, 200, 0, 100)
+mainFrame.Position = UDim2.new(0.3, 0, 0.5, -50)
+mainFrame.Active = true
+mainFrame.Draggable = true 
+
+-- Helper function to create native TextButtons
+local function createButton(name, text, size, pos)
+    local btn = Instance.new("TextButton")
+    btn.Name = name
+    btn.Parent = mainFrame
+    btn.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+    btn.Size = size
+    btn.Position = pos
+    btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.TextScaled = true
+    btn.Font = Enum.Font.SourceSansBold
+    return btn
+end
+
+-- Create the Buttons
+local toggleAutoBtn = createButton("ToggleAutoBtn", "Auto: Off", UDim2.new(0, 85, 0, 25), UDim2.new(0, 10, 0, 10))
+local toggleEspBtn = createButton("ToggleEspBtn", "ESP: Off", UDim2.new(0, 85, 0, 25), UDim2.new(0, 105, 0, 10))
+local ringBtn = createButton("RingBtn", "TP Ring", UDim2.new(0, 85, 0, 25), UDim2.new(0, 10, 0, 40))
+local exitBtn = createButton("ExitBtn", "TP Exit", UDim2.new(0, 85, 0, 25), UDim2.new(0, 105, 0, 40))
+local destroyBtn = createButton("DestroyBtn", "Destroy", UDim2.new(0, 180, 0, 20), UDim2.new(0, 10, 0, 70))
+
+-- Status Indicator
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Parent = mainFrame
+statusLabel.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+statusLabel.Size = UDim2.new(0, 200, 0, 30)
+statusLabel.Position = UDim2.new(0, 0, 0, -30)
+statusLabel.Text = "Status: Offline"
+statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+statusLabel.TextScaled = true
+
+-- Map/Chapter Indicator
+local modeLabel = Instance.new("TextLabel")
+modeLabel.Parent = mainFrame
+modeLabel.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+modeLabel.Size = UDim2.new(0, 200, 0, 20)
+modeLabel.Position = UDim2.new(0, 0, 0, -50)
+modeLabel.Text = "Map: Detecting..."
+modeLabel.TextColor3 = Color3.fromRGB(255, 215, 0) 
+modeLabel.TextScaled = true
+modeLabel.Font = Enum.Font.SourceSansBold
+
+-------------------------------------------------------------------------
+-- CONFIGURATION & GLOBALS
+-------------------------------------------------------------------------
+local SAFE_DISTANCE = 55       
+local Y_LEVEL_TOLERANCE = 15   
+local currentMapMode = "Detecting..."
+local knownHarmlessMonsters = {} 
+
+-------------------------------------------------------------------------
+-- HELPER FUNCTIONS
+-------------------------------------------------------------------------
+
+-- UPDATED: Handles Ch1/3 Ring, and Ch2/Ch4 Orb+Statue
+local function getRingPiece()
+    
+    -- PRIORITY 1: ORB NEAR STATUE (Chapter 2 & Chapter 4)
+    if currentMapMode == "Chapter 2" or currentMapMode == "Chapter 4" then
+        local potentialOrbs = {}
+        local potentialStatues = {}
+
+        for _, obj in pairs(workspace:GetDescendants()) do
+            if obj:IsA("BasePart") or obj:IsA("Model") then
+                local n = string.lower(obj.Name)
+                if string.find(n, "orb") then
+                    -- Filter out UI or Scripts named Orb
+                    if not string.find(n, "gui") and not string.find(n, "script") then
+                        table.insert(potentialOrbs, obj)
+                    end
+                elseif string.find(n, "statue") then
+                    table.insert(potentialStatues, obj)
+                end
+            end
+        end
+
+        -- Find an Orb that is close to a Statue
+        for _, orb in pairs(potentialOrbs) do
+            local orbPos = orb:IsA("Model") and (orb.PrimaryPart and orb.PrimaryPart.Position) or (orb:IsA("BasePart") and orb.Position)
+            if orbPos then
+                for _, statue in pairs(potentialStatues) do
+                    local statuePos = statue:IsA("Model") and (statue.PrimaryPart and statue.PrimaryPart.Position) or (statue:IsA("BasePart") and statue.Position)
+                    if statuePos then
+                        if (orbPos - statuePos).Magnitude < 35 then -- Increased range slightly to 35
+                            return orb:IsA("Model") and (orb.PrimaryPart or orb:FindFirstChildWhichIsA("BasePart")) or orb
+                        end
+                    end
+                end
+            end
+        end
+        
+        -- Fallback for Chapter 4: If no statue found, just return the Orb (if unique)
+        if currentMapMode == "Chapter 4" and #potentialOrbs > 0 then
+             local orb = potentialOrbs[1]
+             return orb:IsA("Model") and (orb.PrimaryPart or orb:FindFirstChildWhichIsA("BasePart")) or orb
+        end
+    end
+
+    -- PRIORITY 2: STANDARD RING PIECE (Chapter 1, 3, etc)
+    for _, obj in pairs(workspace:GetDescendants()) do
+        if (string.find(obj.Name, "Ring") and string.find(obj.Name, "Piece")) or obj.Name == "RingPiece" then
+            if obj:IsA("BasePart") then return obj end
+            if obj:IsA("Model") then return obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart") end
+        end
+    end
+
+    return nil
+end
+
+local function isHarmless(monsterModel)
+    if knownHarmlessMonsters[monsterModel] then return true end
+    
+    if currentMapMode == "Chapter 1" then
+        local ring = getRingPiece()
+        local root = monsterModel:FindFirstChild("HumanoidRootPart") or monsterModel.PrimaryPart
+        
+        if ring and root then
+            if (root.Position - ring.Position).Magnitude < 50 then
+                knownHarmlessMonsters[monsterModel] = true
+                return true
+            end
+        end
+    end
+    
+    return false
+end
+
+-------------------------------------------------------------------------
+-- CHAPTER / MODE DETECTION
+-------------------------------------------------------------------------
+
+local function detectGameMode()
+    if game.PlaceId == 95211388186571 then
+        return "Chapter 3"
+    end
+
+    local success, info = pcall(function()
+        return game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId)
+    end)
+    
+    if success and info then
+        local name = string.lower(info.Name)
+        if string.find(name, "lobby") or string.find(name, "hub") then
+            return "Lobby"
+        elseif string.find(name, "pvp") or string.find(name, "player vs") then
+            return "PvP Match"
+        elseif string.find(name, "chapter 1") or string.find(name, "monkey") then
+            return "Chapter 1"
+        elseif string.find(name, "chapter 2") or string.find(name, "elementary") or string.find(name, "agatha") then
+            return "Chapter 2"
+        elseif string.find(name, "chapter 3") or string.find(name, "sewage") or string.find(name, "sewer") then
+            return "Chapter 3"
+        elseif string.find(name, "chapter 4") or string.find(name, "mascot") or string.find(name, "joy") then
+            return "Chapter 4"
+        end
+    end
+    
+    local teamsService = game:GetService("Teams")
+    if teamsService then
+        local teams = teamsService:GetChildren()
+        if #teams >= 2 then
+            for _, team in pairs(teams) do
+                local tName = string.lower(team.Name)
+                if string.find(tName, "monster") or string.find(tName, "mortal") or string.find(tName, "runner") then
+                    return "PvP Match"
+                end
+            end
+        end
+    end
+    
+    for _, obj in pairs(workspace:GetChildren()) do 
+        local n = string.lower(obj.Name)
+        if string.find(n, "pvp") then return "PvP Match" end
+        if string.find(n, "lobby") then return "Lobby" end
+    end
+    
+    for _, obj in pairs(workspace:GetDescendants()) do
+        if obj:IsA("Model") and obj:FindFirstChild("Humanoid") and not PlayerService:GetPlayerFromCharacter(obj) then
+            local n = string.lower(obj.Name)
+            if string.find(n, "monkey") then return "Chapter 1" end
+            if string.find(n, "agatha") then return "Chapter 2" end
+            if string.find(n, "duck") or string.find(n, "watcher") then return "Chapter 3" end
+            if string.find(n, "mascot") or string.find(n, "joy") or string.find(n, "lucky") or string.find(n, "hangry") or string.find(n, "penny") then return "Chapter 4" end
+        end
+    end
+    
+    local shards = {}
+    for _, obj in pairs(workspace:GetDescendants()) do
+        if obj:IsA("BasePart") or obj:IsA("Model") then
+            local name = string.lower(obj.Name)
+            if string.find(name, "shard") or string.find(name, "soul") or string.find(name, "spirit") then
+                if not string.find(name, "gui") and not string.find(name, "script") and not string.find(name, "sound") then
+                     if not obj:FindFirstAncestorOfClass("Model") or obj:FindFirstAncestorOfClass("Model") ~= player.Character then
+                         table.insert(shards, obj)
+                     end
+                end
+            end
+        end
+    end
+    
+    if #shards == 0 then
+        return "Lobby"
+    end
+    
+    return "Unknown (ID: " .. tostring(game.PlaceId) .. ")"
+end
+
+task.spawn(function()
+    while true do
+        if not mainFrame.Parent then break end 
+        currentMapMode = detectGameMode()
+        modeLabel.Text = "Map: " .. currentMapMode
+        task.wait(5) 
+    end
+end)
+
+-------------------------------------------------------------------------
+-- ESP / VISUALS LOGIC
+-------------------------------------------------------------------------
+
+local espEnabled = false
+local espFolder = Instance.new("Folder")
+espFolder.Name = "ESP_Visuals"
+espFolder.Parent = screenGui
+
+local activeESPs = {} 
+
+local function isDoorClosed(obj)
+    local openTag = obj:FindFirstChild("Open") or obj:FindFirstChild("IsOpen") or obj:FindFirstChild("Opened")
+    if openTag and openTag:IsA("BoolValue") and openTag.Value == true then return false end
+
+    local prompt = obj:FindFirstChildWhichIsA("ProximityPrompt", true)
+    if prompt and prompt.Enabled == false then return false end
+
+    if obj:IsA("BasePart") then
+        if obj.Transparency >= 0.9 or obj.CanCollide == false then return false end
+    end
+    return true
+end
+
+local function activateESP()
+    if espEnabled then return end
+    espEnabled = true
+    toggleEspBtn.Text = "ESP: On"
+    
+    task.spawn(function()
+        while espEnabled do
+            for obj, visual in pairs(activeESPs) do
+                if not obj or not obj.Parent then
+                    visual:Destroy()
+                    activeESPs[obj] = nil
+                elseif visual:IsA("BillboardGui") and not isDoorClosed(obj) then
+                    visual:Destroy()
+                    activeESPs[obj] = nil
+                elseif visual.Parent == nil then
+                    activeESPs[obj] = nil
+                end
+            end
+
+            for _, obj in pairs(workspace:GetDescendants()) do
+                if not espEnabled then break end 
+                
+                local objName = string.lower(obj.Name)
+
+                -- 1. SHARD ESP (Green Box)
+                if (string.find(objName, "shard") or string.find(objName, "soul") or string.find(objName, "spirit")) then
+                    if (obj:IsA("Model") or obj:IsA("BasePart")) and not string.find(objName, "gui") and not string.find(objName, "script") then
+                        if not activeESPs[obj] then
+                            local adornPart = obj:IsA("Model") and (obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")) or obj
+                            if adornPart then
+                                local box = Instance.new("BoxHandleAdornment")
+                                box.Adornee = adornPart
+                                box.Size = adornPart.Size + Vector3.new(0.5, 0.5, 0.5)
+                                box.Color3 = Color3.fromRGB(0, 255, 0) 
+                                box.Transparency = 0.4
+                                box.AlwaysOnTop = true
+                                box.ZIndex = 5
+                                box.Parent = espFolder
+                                activeESPs[obj] = box
+                            end
+                        end
+                    end
+                end
+
+                -- 2. RING PIECE ESP (Gold Box)
+                if (string.find(objName, "ring") and string.find(objName, "piece")) or string.find(objName, "ringpiece") or string.find(objName, "orb") then
+                    if (obj:IsA("Model") or obj:IsA("BasePart")) and not string.find(objName, "gui") and not string.find(objName, "script") then
+                        if not activeESPs[obj] then
+                            local adornPart = obj:IsA("Model") and (obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")) or obj
+                            if adornPart then
+                                local box = Instance.new("BoxHandleAdornment")
+                                box.Adornee = adornPart
+                                box.Size = adornPart.Size + Vector3.new(0.5, 0.5, 0.5)
+                                box.Color3 = Color3.fromRGB(255, 215, 0) 
+                                box.Transparency = 0.4
+                                box.AlwaysOnTop = true
+                                box.ZIndex = 5
+                                box.Parent = espFolder
+                                activeESPs[obj] = box
+                            end
+                        end
+                    end
+                end
+
+                -- 3. EXIT PORTAL ESP (Blue Box)
+                if string.find(objName, "portal") or (string.find(objName, "exit") and not string.find(objName, "btn")) then
+                    if (obj:IsA("Model") or obj:IsA("BasePart")) and not string.find(objName, "gui") and not string.find(objName, "script") then
+                        local adornPart = obj:IsA("Model") and (obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")) or obj
+                        if adornPart and adornPart:IsA("BasePart") then
+                            if adornPart.Size.X <= 20 and adornPart.Size.Y <= 20 and adornPart.Size.Z <= 20 then
+                                if not activeESPs[obj] then
+                                    local box = Instance.new("BoxHandleAdornment")
+                                    box.Adornee = adornPart
+                                    box.Size = adornPart.Size + Vector3.new(0.5, 0.5, 0.5)
+                                    box.Color3 = Color3.fromRGB(0, 150, 255) 
+                                    box.Transparency = 0.4
+                                    box.AlwaysOnTop = true
+                                    box.ZIndex = 5
+                                    box.Parent = espFolder
+                                    activeESPs[obj] = box
+                                end
+                            end
+                        end
+                    end
+                end
+
+                -- 4. THREAT ESP (Red Highlight)
+                local isThreat = false
+                if obj:IsA("Model") and obj ~= player.Character then
+                    if obj:FindFirstChild("Humanoid") then isThreat = true end
+                    if string.find(objName, "agatha") or string.find(objName, "teacher") then isThreat = true end 
+                end
+
+                if isThreat then
+                    if not isHarmless(obj) then
+                        if not activeESPs[obj] then
+                            local highlight = Instance.new("Highlight")
+                            highlight.Adornee = obj
+                            highlight.FillColor = Color3.fromRGB(255, 0, 0) 
+                            highlight.OutlineColor = Color3.fromRGB(255, 255, 255) 
+                            highlight.FillTransparency = 0.5
+                            highlight.OutlineTransparency = 0
+                            highlight.Parent = espFolder
+                            activeESPs[obj] = highlight
+                        end
+                    else
+                        if activeESPs[obj] then
+                            activeESPs[obj]:Destroy()
+                            activeESPs[obj] = nil
+                        end
+                    end
+                end
+                
+                -- 5. DOOR ESP (Cyan Text)
+                local isDoorTarget = false
+                local adornee = obj
+                
+                if string.find(objName, "door") or string.find(objName, "gate") or string.find(objName, "grate") then
+                    if obj:IsA("Model") or obj:IsA("Folder") then isDoorTarget = true
+                    elseif obj:IsA("BasePart") then
+                        local pName = string.lower(obj.Parent.Name)
+                        if not (string.find(pName, "door") or string.find(pName, "gate") or string.find(pName, "grate")) then isDoorTarget = true end
+                    end
+                end
+                
+                if obj:IsA("ProximityPrompt") then
+                    local action = string.lower(obj.ActionText)
+                    local objectTxt = string.lower(obj.ObjectText)
+                    if string.find(action, "open") or string.find(action, "unlock") or string.find(objectTxt, "door") or string.find(objectTxt, "gate") then
+                        isDoorTarget = true
+                        adornee = obj.Parent 
+                    end
+                end
+                
+                if isDoorTarget and adornee and isDoorClosed(adornee) then
+                    if not activeESPs[adornee] then
+                        local billboard = Instance.new("BillboardGui")
+                        billboard.Adornee = adornee
+                        billboard.Size = UDim2.new(4, 0, 1.5, 0) 
+                        billboard.StudsOffset = Vector3.new(0, 2, 0) 
+                        billboard.AlwaysOnTop = true
+                        
+                        local textLabel = Instance.new("TextLabel")
+                        textLabel.Parent = billboard
+                        textLabel.Size = UDim2.new(1, 0, 1, 0)
+                        textLabel.BackgroundTransparency = 1
+                        textLabel.Text = "🚪 Door"
+                        textLabel.TextColor3 = Color3.fromRGB(0, 255, 255) 
+                        textLabel.TextStrokeTransparency = 0 
+                        textLabel.TextScaled = true
+                        
+                        billboard.Parent = espFolder
+                        activeESPs[adornee] = billboard
+                    end
+                end
+            end
+            task.wait(0.5) 
+        end
+        
+        for obj, visual in pairs(activeESPs) do
+            if visual and visual.Parent then visual:Destroy() end
+        end
+        table.clear(activeESPs)
+    end)
+end
+
+local function deactivateESP()
+    espEnabled = false
+    toggleEspBtn.Text = "ESP: Off"
+end
+
+-------------------------------------------------------------------------
+-- TELEPORT / GAME LOGIC
+-------------------------------------------------------------------------
+
+local isCollecting = false
+local originalPosition = nil 
+local collectedPositions = {} 
+local failedLures = {} 
+
+local activeShards = {}
+local cachedEnemies = {}
+local lastEnemyScan = 0
+
+local function getRoot()
+    local char = player.Character or player.CharacterAdded:Wait()
+    return char:WaitForChild("HumanoidRootPart", 5)
+end
+
+local function get2DDistance(pos1, pos2)
+    return Vector2.new(pos1.X - pos2.X, pos1.Z - pos2.Z).Magnitude
+end
+
+local function scanForShards()
+    local shards = {}
+    for _, obj in pairs(workspace:GetDescendants()) do
+        if obj:IsA("BasePart") or obj:IsA("Model") then
+            local name = string.lower(obj.Name)
+            if string.find(name, "shard") or string.find(name, "soul") or string.find(name, "spirit") then
+                if not string.find(name, "gui") and not string.find(name, "script") and not string.find(name, "sound") then
+                     if not obj:FindFirstAncestorOfClass("Model") or obj:FindFirstAncestorOfClass("Model") ~= player.Character then
+                         if obj:IsA("BasePart") then
+                            table.insert(shards, obj)
+                         elseif obj:IsA("Model") then
+                            local part = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")
+                            if part then table.insert(shards, part) end
+                         end
+                     end
+                end
+            end
+        end
+    end
+    return shards
+end
+
+local function getEnemies()
+    local now = tick()
+    if now - lastEnemyScan > 0.2 then 
+        cachedEnemies = {}
+        for _, obj in pairs(workspace:GetDescendants()) do
+            local isEnemy = false
+            local name = string.lower(obj.Name)
+            
+            if obj:IsA("Model") and obj ~= player.Character then
+                if obj:FindFirstChild("Humanoid") then isEnemy = true end
+                if string.find(name, "agatha") or string.find(name, "teacher") then isEnemy = true end
+            end
+
+            if isEnemy then
+                if not isHarmless(obj) then
+                    local root = obj:FindFirstChild("HumanoidRootPart") or obj.PrimaryPart
+                    if root then table.insert(cachedEnemies, root) end
+                end
+            end
+        end
+        lastEnemyScan = now
+    end
+    return cachedEnemies
+end
+
+local function getThreats(targetPosition)
+    local threats = {}
+    local enemies = getEnemies()
+    for _, enemyRoot in pairs(enemies) do
+        local dist2D = get2DDistance(enemyRoot.Position, targetPosition)
+        local yDist = math.abs(enemyRoot.Position.Y - targetPosition.Y)
+        if dist2D < SAFE_DISTANCE and yDist < Y_LEVEL_TOLERANCE then
+            table.insert(threats, enemyRoot)
+        end
+    end
+    return threats
+end
+
+local function isSafe(targetPosition)
+    return #getThreats(targetPosition) == 0
+end
+
+local function getSafestCollectedPosition(currentY)
+    local bestPos = originalPosition and originalPosition.Position or Vector3.new(0,0,0)
+    local maxDist = -1
+    local enemies = getEnemies()
+    
+    for _, pos in ipairs(collectedPositions) do
+        if math.abs(pos.Y - currentY) < Y_LEVEL_TOLERANCE then
+            local closestEnemyDist = 99999
+            for _, enemy in pairs(enemies) do
+                local d = get2DDistance(pos, enemy.Position)
+                if d < closestEnemyDist then closestEnemyDist = d end
+            end
+            
+            if closestEnemyDist > maxDist then
+                maxDist = closestEnemyDist
+                bestPos = pos
+            end
+        end
+    end
+    return bestPos
+end
+
+local function getExitPortal()
+    for _, obj in pairs(workspace:GetDescendants()) do
+        local objName = string.lower(obj.Name)
+        if string.find(objName, "portal") or (string.find(objName, "exit") and not string.find(objName, "btn")) then
+            if obj:IsA("BasePart") or obj:IsA("Model") then
+                local part = obj:IsA("Model") and (obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")) or obj
+                if part and part:IsA("BasePart") then
+                    if part.Size.X <= 20 and part.Size.Y <= 20 and part.Size.Z <= 20 then
+                        return part
+                    end
+                end
+            end
+        end
+    end
+    return nil
+end
+
+local function startCollection()
+    if isCollecting then return end 
+    isCollecting = true
+    toggleAutoBtn.Text = "Auto: On"
+    
+    local root = getRoot()
+    if root then
+        originalPosition = root.CFrame 
+        table.insert(collectedPositions, originalPosition.Position) 
+    end
+
+    statusLabel.Text = "Status: Scanning Map..."
+    statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+
+    activeShards = scanForShards()
+
+    task.spawn(function()
+        local retryCount = 0
+        
+        while isCollecting do
+            local rootPart = getRoot()
+            if not rootPart then break end
+
+            for i = #activeShards, 1, -1 do
+                local s = activeShards[i]
+                if not s or not s.Parent then
+                    table.remove(activeShards, i)
+                end
+            end
+
+            if #activeShards == 0 then
+                activeShards = scanForShards()
+                if #activeShards == 0 then
+                    retryCount = retryCount + 1
+                    if retryCount > 5 then break else
+                        statusLabel.Text = "Status: Searching... ("..retryCount.."/5)"
+                        task.wait(0.5) 
+                        continue
+                    end
+                else
+                    retryCount = 0
+                end
+            end
+
+            local safeShards = {}
+            local guardedShards = {}
+            
+            for _, shard in ipairs(activeShards) do
+                if shard.Parent then
+                    if isSafe(shard.Position) then
+                        table.insert(safeShards, shard)
+                    else
+                        table.insert(guardedShards, shard)
+                    end
+                end
+            end
+
+            if #safeShards > 0 then
+                activeSafeSpot = nil 
+                
+                table.sort(safeShards, function(a, b)
+                    return get2DDistance(a.Position, rootPart.Position) < get2DDistance(b.Position, rootPart.Position)
+                end)
+                
+                local target = safeShards[1]
+                rootPart.CFrame = target.CFrame
+                table.insert(collectedPositions, target.Position) 
+                
+                for i, s in ipairs(activeShards) do
+                    if s == target then table.remove(activeShards, i) break end
+                end
+                task.wait(0.05)
+                
+            else
+                statusLabel.Text = "Status: Waiting for clear path..."
+                statusLabel.TextColor3 = Color3.fromRGB(255, 165, 0)
+                
+                local needNewSpot = true
+                
+                if activeSafeSpot then
+                    local stillSafe = true
+                    local enemies = getEnemies()
+                    for _, enemy in pairs(enemies) do
+                        local dist = get2DDistance(activeSafeSpot, enemy.Position)
+                        local yDist = math.abs(activeSafeSpot.Y - enemy.Position.Y)
+                        if dist < SAFE_DISTANCE and yDist < Y_LEVEL_TOLERANCE then
+                            stillSafe = false
+                            break
+                        end
+                    end
+                    if stillSafe then needNewSpot = false end
+                end
+                
+                if needNewSpot then
+                    activeSafeSpot = getSafestCollectedPosition(rootPart.Position.Y)
+                    if activeSafeSpot then
+                        rootPart.CFrame = CFrame.new(activeSafeSpot + Vector3.new(0, 3, 0))
+                    end
+                else
+                    local jitter = Vector3.new(math.random(-10, 10)/10, 0, math.random(-10, 10)/10)
+                    rootPart.CFrame = CFrame.new(activeSafeSpot + Vector3.new(0, 3, 0) + jitter)
+                end
+                
+                task.wait(0.5)
+            end
+        end
+
+        if isCollecting then
+            statusLabel.Text = "Status: Done!"
+            isCollecting = false
+            toggleAutoBtn.Text = "Auto: Off"
+        else
+            statusLabel.Text = "Status: Stopped"
+        end
+        
+        local finalRoot = getRoot()
+        if finalRoot and originalPosition then
+            finalRoot.CFrame = originalPosition
+        end
+        
+        task.wait(2)
+        if not isCollecting then
+            statusLabel.Text = "Status: Offline"
+            statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+        end
+    end)
+end
+
+local function stopCollection()
+    isCollecting = false
+    toggleAutoBtn.Text = "Auto: Off"
+    statusLabel.Text = "Status: Stopping..."
+    statusLabel.TextColor3 = Color3.fromRGB(255, 165, 0)
+    
+    local root = getRoot()
+    if root and originalPosition then
+        root.CFrame = originalPosition
+    end
+end
+
+local function manualTpToRing()
+    local ring = getRingPiece()
+    local root = getRoot()
+    if ring and root then
+        statusLabel.Text = "Status: TP to Ring..."
+        statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+        root.CFrame = ring.CFrame
+        task.wait(1.5)
+        if not isCollecting then statusLabel.Text = "Status: Offline" statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0) end
+    else
+        statusLabel.Text = "Status: Ring Not Found!"
+        statusLabel.TextColor3 = Color3.fromRGB(255, 165, 0)
+        task.wait(1.5)
+        if not isCollecting then statusLabel.Text = "Status: Offline" statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0) end
+    end
+end
+
+local function manualTpToExit()
+    local portal = getExitPortal()
+    local root = getRoot()
+    if portal and root then
+        statusLabel.Text = "Status: TP to Exit..."
+        statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+        root.CFrame = portal.CFrame
+        task.wait(1.5)
+        if not isCollecting then statusLabel.Text = "Status: Offline" statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0) end
+    else
+        statusLabel.Text = "Status: Exit Not Found!"
+        statusLabel.TextColor3 = Color3.fromRGB(255, 165, 0)
+        task.wait(1.5)
+        if not isCollecting then statusLabel.Text = "Status: Offline" statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0) end
+    end
+end
+
+-------------------------------------------------------------------------
+-- BUTTON CONNECTIONS
+-------------------------------------------------------------------------
+
+toggleAutoBtn.MouseButton1Click:Connect(function()
+    if isCollecting then stopCollection() else startCollection() end
+end)
+
+toggleEspBtn.MouseButton1Click:Connect(function()
+    if espEnabled then deactivateESP() else activateESP() end
+end)
+
+ringBtn.MouseButton1Click:Connect(function()
+    manualTpToRing()
+end)
+
+exitBtn.MouseButton1Click:Connect(function()
+    manualTpToExit()
+end)
+
+destroyBtn.MouseButton1Click:Connect(function()
+    isCollecting = false 
+    espEnabled = false
+    screenGui:Destroy()
+end)
