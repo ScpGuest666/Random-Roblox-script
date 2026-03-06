@@ -31,27 +31,37 @@ toggleButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
 toggleButton.Size = UDim2.new(0, 80, 0, 30)
 toggleButton.Position = UDim2.new(0, 10, 0, 20)
 toggleButton.Text = "START"
-toggleButton.TextColor3 = Color3.fromRGB(0, 255, 0) -- Green for Start
+toggleButton.TextColor3 = Color3.fromRGB(0, 255, 0)
 toggleButton.TextScaled = true
 
--- Create Fast Button (Teleport)
+-- Create Fast TP Button (Toggle)
 local fastButton = Instance.new("TextButton")
 fastButton.Parent = frame
 fastButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
 fastButton.Size = UDim2.new(0, 80, 0, 30)
 fastButton.Position = UDim2.new(0, 110, 0, 20)
-fastButton.Text = "FAST TP"
-fastButton.TextColor3 = Color3.fromRGB(0, 255, 255) -- Cyan
+fastButton.Text = "FAST TP: OFF"
+fastButton.TextColor3 = Color3.fromRGB(0, 255, 255)
 fastButton.TextScaled = true
+
+-- Create Anti-Lag Button (Toggle)
+local antiLagButton = Instance.new("TextButton")
+antiLagButton.Parent = frame
+antiLagButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+antiLagButton.Size = UDim2.new(0, 80, 0, 30)
+antiLagButton.Position = UDim2.new(0, 10, 0, 60)
+antiLagButton.Text = "ANTI-LAG: OFF"
+antiLagButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+antiLagButton.TextScaled = true
 
 -- Create Destroy Button
 local destroyButton = Instance.new("TextButton")
 destroyButton.Parent = frame
 destroyButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-destroyButton.Size = UDim2.new(0, 160, 0, 30)
-destroyButton.Position = UDim2.new(0, 20, 0, 60)
+destroyButton.Size = UDim2.new(0, 80, 0, 30)
+destroyButton.Position = UDim2.new(0, 110, 0, 60)
 destroyButton.Text = "Destroy UI"
-destroyButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+destroyButton.TextColor3 = Color3.fromRGB(255, 100, 100)
 destroyButton.TextScaled = true
 
 -- Create Status Indicator
@@ -69,13 +79,16 @@ statusLabel.TextScaled = true
 -------------------------------------------------------------------------------
 
 local isScanning = false
+local isFastTPing = false
+local isAntiLagOn = false 
 local cachedParts = {}      
 local neighborMap = {}      
 local numberTiles = {}      
 local knownMines = {}       
 local knownSafe = {}
-local currentBestGuess = nil -- Stores the current yellow block
+local currentBestGuess = nil 
 local connections = {}
+local pendingReset = false 
 
 -------------------------------------------------------------------------------
 -- HELPER FUNCTIONS
@@ -86,22 +99,20 @@ local function isColorMatch(c1, r, g, b)
 end
 
 local function isExcluded(part)
-	-- Exclude Yellow (Flagged/Selected blocks)
 	return isColorMatch(part.Color, 1.000, 1.000, 0.490)
 end
 
 local function isUnrevealed(part)
 	if part.Name ~= "Part" or isExcluded(part) then return false end
 	
-	-- Green Board Colors
 	local green1 = isColorMatch(part.Color, 0.459, 0.804, 0.392)
 	local green2 = isColorMatch(part.Color, 0.404, 0.706, 0.345)
-	
-	-- Red Board Colors
 	local red1 = isColorMatch(part.Color, 0.804, 0.392, 0.392) 
 	local red2 = isColorMatch(part.Color, 0.706, 0.345, 0.345) 
+	local blue1 = isColorMatch(part.Color, 0.392, 0.741, 0.804)
+	local blue2 = isColorMatch(part.Color, 0.345, 0.651, 0.706)
 	
-	return green1 or green2 or red1 or red2
+	return green1 or green2 or red1 or red2 or blue1 or blue2
 end
 
 local function getNumber(part)
@@ -115,11 +126,16 @@ local function getNumber(part)
 	return nil
 end
 
--- Visuals
+local function clearVisuals(part)
+	if not part then return end
+	if part:FindFirstChild("Mine_Highlight") then part.Mine_Highlight:Destroy() end
+	if part:FindFirstChild("Safe_Highlight") then part.Safe_Highlight:Destroy() end
+	if part:FindFirstChild("Guess_Highlight") then part.Guess_Highlight:Destroy() end
+end
+
 local function createHighlight(part, color, name)
 	if part:FindFirstChild(name) then return end
 	
-	-- Remove conflicting highlights
 	if name == "Guess_Highlight" then
 		if part:FindFirstChild("Safe_Highlight") or part:FindFirstChild("Mine_Highlight") then return end
 	elseif name == "Safe_Highlight" or name == "Mine_Highlight" then
@@ -136,18 +152,12 @@ local function createHighlight(part, color, name)
 	h.Parent = part
 end
 
-local function clearVisuals(part)
-	if part:FindFirstChild("Mine_Highlight") then part.Mine_Highlight:Destroy() end
-	if part:FindFirstChild("Safe_Highlight") then part.Safe_Highlight:Destroy() end
-	if part:FindFirstChild("Guess_Highlight") then part.Guess_Highlight:Destroy() end
-end
-
 -------------------------------------------------------------------------------
--- NEIGHBOR CACHING
+-- DYNAMIC NEIGHBOR CACHING & RESET
 -------------------------------------------------------------------------------
 
-local function cacheNeighbors(centerPart)
-	if neighborMap[centerPart] then return end
+local function cacheNeighbors(centerPart, forceRefresh)
+	if not forceRefresh and neighborMap[centerPart] then return end
 	
 	local neighbors = {}
 	local boxSize = centerPart.Size * 2.5 
@@ -166,17 +176,38 @@ local function cacheNeighbors(centerPart)
 	neighborMap[centerPart] = neighbors
 end
 
+local function requestReset()
+	if pendingReset then return end
+	pendingReset = true
+	
+	task.delay(0.2, function()
+		pendingReset = false -- CRITICAL FIX: Always unpause, even if script was turned off
+		if not isScanning then return end
+		
+		for p, _ in pairs(knownSafe) do clearVisuals(p) end
+		for p, _ in pairs(knownMines) do clearVisuals(p) end
+		if currentBestGuess then clearVisuals(currentBestGuess) end
+		
+		knownSafe = {}
+		knownMines = {}
+		currentBestGuess = nil
+	end)
+end
+
 -------------------------------------------------------------------------------
 -- SOLVER LOGIC
 -------------------------------------------------------------------------------
 
 local function solveBoard()
-	local activeNumbers = {} 
-	local probabilityMap = {} -- [Part] = Highest Probability (0 to 1)
+	if pendingReset then return end 
 	
-	-- PASS 1: Basic Logic & Probability Data Collection
+	local activeNumbers = {} 
+	local probabilityMap = {} 
+	
+	-- PASS 1: Basic Logic
 	for centerPart, targetNum in pairs(numberTiles) do
-		if not centerPart.Parent then 
+		-- CRITICAL FIX: Check if part is actually in the workspace, not just if it has a parent
+		if not centerPart:IsDescendantOf(workspace) then 
 			numberTiles[centerPart] = nil
 			continue 
 		end
@@ -197,7 +228,6 @@ local function solveBoard()
 		
 		local remainingMines = targetNum - mineCount
 		
-		-- Deterministic Solving (100% Safe or Mine)
 		if remainingMines == #unrevealed and #unrevealed > 0 then
 			for _, p in ipairs(unrevealed) do 
 				if not knownMines[p] then 
@@ -215,13 +245,9 @@ local function solveBoard()
 				end 
 			end
 		else
-			-- Probability Calculation for Guessing
-			-- If we have 2 mines left in 4 blocks, prob is 0.5 (50%)
 			if #unrevealed > 0 then
 				local prob = remainingMines / #unrevealed
 				for _, p in ipairs(unrevealed) do
-					-- We store the HIGHEST probability found for this block.
-					-- If a block touches a 50% chance and a 20% chance, we treat it as 50% dangerous.
 					if not probabilityMap[p] or prob > probabilityMap[p] then
 						probabilityMap[p] = prob
 					end
@@ -238,7 +264,7 @@ local function solveBoard()
 		end
 	end
 	
-	-- PASS 2: Advanced Set Difference (Logic)
+	-- PASS 2: Advanced Set Difference
 	for i = 1, #activeNumbers do
 		for j = 1, #activeNumbers do
 			if i == j then continue end
@@ -288,14 +314,12 @@ local function solveBoard()
 		end
 	end
 
-	-- PASS 3: The "Best Guess" Logic (Yellow Highlight)
-	-- Only run if we have no safe blocks to click
+	-- PASS 3: Best Guess (Yellow)
 	local hasSafeMoves = false
 	for _, _ in pairs(knownSafe) do hasSafeMoves = true; break end
 	
-	-- Clear old guess if it's no longer valid or we have safe moves
-	if currentBestGuess and (not currentBestGuess.Parent or knownSafe[currentBestGuess] or knownMines[currentBestGuess] or hasSafeMoves) then
-		if currentBestGuess.Parent and currentBestGuess:FindFirstChild("Guess_Highlight") then
+	if currentBestGuess and (not currentBestGuess:IsDescendantOf(workspace) or knownSafe[currentBestGuess] or knownMines[currentBestGuess] or hasSafeMoves) then
+		if currentBestGuess:IsDescendantOf(workspace) and currentBestGuess:FindFirstChild("Guess_Highlight") then
 			currentBestGuess.Guess_Highlight:Destroy()
 		end
 		currentBestGuess = nil
@@ -303,11 +327,9 @@ local function solveBoard()
 
 	if not hasSafeMoves then
 		local bestPart = nil
-		local lowestProb = 1.1 -- Start higher than 100%
+		local lowestProb = 1.1 
 		
 		for part, prob in pairs(probabilityMap) do
-			-- We want the LOWEST probability (Safest block)
-			-- Ignore blocks we already know are mines
 			if not knownMines[part] and not knownSafe[part] then
 				if prob < lowestProb then
 					lowestProb = prob
@@ -317,29 +339,46 @@ local function solveBoard()
 		end
 		
 		if bestPart and bestPart ~= currentBestGuess then
-			-- Remove highlight from old guess
-			if currentBestGuess and currentBestGuess.Parent and currentBestGuess:FindFirstChild("Guess_Highlight") then
+			if currentBestGuess and currentBestGuess:IsDescendantOf(workspace) and currentBestGuess:FindFirstChild("Guess_Highlight") then
 				currentBestGuess.Guess_Highlight:Destroy()
 			end
-			
 			currentBestGuess = bestPart
-			createHighlight(bestPart, Color3.fromRGB(255, 255, 0), "Guess_Highlight") -- Yellow
+			createHighlight(bestPart, Color3.fromRGB(255, 255, 0), "Guess_Highlight") 
 		end
 	end
 end
 
 -------------------------------------------------------------------------------
--- MAIN LOOP
+-- MAIN LOOP (With Anti-Lag Optimization)
 -------------------------------------------------------------------------------
 
 local function startSolverLoop()
 	task.spawn(function()
 		while isScanning do
 			local validParts = {}
+			
+			local charPos = nil
+			if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+				charPos = player.Character.HumanoidRootPart.Position
+			end
+			
 			for _, part in ipairs(cachedParts) do
-				if part.Parent then
+				-- CRITICAL FIX: Check if part is actually in the workspace
+				if part:IsDescendantOf(workspace) then
 					table.insert(validParts, part)
-					if not neighborMap[part] then cacheNeighbors(part) end
+					
+					if isAntiLagOn and charPos then
+						local dist = (part.Position - charPos).Magnitude
+						if dist > 60 then
+							clearVisuals(part)
+							numberTiles[part] = nil
+							knownSafe[part] = nil
+							knownMines[part] = nil
+							continue 
+						end
+					end
+					
+					if not neighborMap[part] then cacheNeighbors(part, false) end
 					
 					if isExcluded(part) then
 						if numberTiles[part] or knownSafe[part] or knownMines[part] then
@@ -357,6 +396,7 @@ local function startSolverLoop()
 						end
 					end
 				else
+					-- Part was destroyed/removed from workspace
 					neighborMap[part] = nil
 					numberTiles[part] = nil
 					knownMines[part] = nil
@@ -375,7 +415,13 @@ local function onDescendantAdded(descendant)
 	if isScanning and descendant:IsA("BasePart") and descendant.Name == "Part" then
 		table.insert(cachedParts, descendant)
 		task.delay(0.1, function() 
-			if descendant.Parent then cacheNeighbors(descendant) end 
+			if descendant:IsDescendantOf(workspace) then 
+				cacheNeighbors(descendant, true) 
+				for _, neighbor in ipairs(neighborMap[descendant] or {}) do
+					cacheNeighbors(neighbor, true)
+				end
+				requestReset()
+			end 
 		end)
 	end
 end
@@ -384,90 +430,114 @@ end
 -- UI CONNECTIONS
 -------------------------------------------------------------------------------
 
--- TOGGLE BUTTON LOGIC
 toggleButton.MouseButton1Click:Connect(function()
 	if isScanning then
-		-- Turn OFF
 		isScanning = false
+		isFastTPing = false
+		pendingReset = false -- Ensure it doesn't get stuck
+		
 		toggleButton.Text = "START"
 		toggleButton.TextColor3 = Color3.fromRGB(0, 255, 0)
+		fastButton.Text = "FAST TP: OFF"
+		fastButton.TextColor3 = Color3.fromRGB(0, 255, 255)
 		statusLabel.Text = "Status: Offline"
 		statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
 		
 		for _, conn in pairs(connections) do conn:Disconnect() end
 		connections = {}
-		
-		for _, p in pairs(cachedParts) do if p.Parent then clearVisuals(p) end end
-		
-		cachedParts = {}
-		neighborMap = {}
-		numberTiles = {}
-		knownMines = {}
-		knownSafe = {}
-		currentBestGuess = nil
+		for _, p in pairs(cachedParts) do if p:IsDescendantOf(workspace) then clearVisuals(p) end end
+		cachedParts = {}; neighborMap = {}; numberTiles = {}; knownMines = {}; knownSafe = {}; currentBestGuess = nil
 	else
-		-- Turn ON
 		isScanning = true
 		toggleButton.Text = "STOP"
 		toggleButton.TextColor3 = Color3.fromRGB(255, 0, 0)
 		statusLabel.Text = "Status: Scanning..."
 		statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
 		
-		cachedParts = {}
-		neighborMap = {}
+		cachedParts = {}; neighborMap = {}
 		for _, obj in ipairs(workspace:GetDescendants()) do
 			if obj:IsA("BasePart") and obj.Name == "Part" then 
 				table.insert(cachedParts, obj)
-				cacheNeighbors(obj)
+				cacheNeighbors(obj, false)
 			end
 		end
-		
 		table.insert(connections, workspace.DescendantAdded:Connect(onDescendantAdded))
 		startSolverLoop()
 	end
 end)
 
--- FAST BUTTON LOGIC (Teleport to Safe Blocks)
 fastButton.MouseButton1Click:Connect(function()
 	if not isScanning then return end
 	
-	local char = player.Character
-	if not char or not char:FindFirstChild("HumanoidRootPart") then return end
-	local root = char.HumanoidRootPart
+	isFastTPing = not isFastTPing 
 	
-	-- Collect safe parts
-	local safeParts = {}
-	for part, _ in pairs(knownSafe) do
-		if part and part.Parent and isUnrevealed(part) then
-			table.insert(safeParts, part)
-		end
-	end
-	
-	if #safeParts == 0 then return end
-	
-	statusLabel.Text = "Status: Teleporting..."
-	
-	-- Teleport loop with EMERGENCY BREAK
-	for _, part in ipairs(safeParts) do
-		-- CRITICAL FIX: Stop teleporting if user turned off the script
-		if not isScanning then break end 
+	if isFastTPing then
+		fastButton.Text = "FAST TP: ON"
+		fastButton.TextColor3 = Color3.fromRGB(0, 255, 0)
+		statusLabel.Text = "Status: Fast TP Active"
 		
-		if part.Parent then
-			-- Calculate Top Surface: Center + (Half Height) + Buffer (3 studs)
-			local topOffset = (part.Size.Y / 2) + 3
-			root.CFrame = part.CFrame + Vector3.new(0, topOffset, 0)
+		task.spawn(function()
+			while isFastTPing and isScanning do
+				if not pendingReset then
+					local char = player.Character
+					local root = char and char:FindFirstChild("HumanoidRootPart")
+					
+					if root then
+						local safeParts = {}
+						for part, _ in pairs(knownSafe) do
+							if part and part:IsDescendantOf(workspace) and isUnrevealed(part) then
+								table.insert(safeParts, part)
+							end
+						end
+						
+						if #safeParts > 0 then
+							for _, part in ipairs(safeParts) do
+								if not isFastTPing or not isScanning or pendingReset then break end 
+								
+								if part:IsDescendantOf(workspace) and isUnrevealed(part) then
+									local topOffset = (part.Size.Y / 2) + 3
+									root.CFrame = part.CFrame + Vector3.new(0, topOffset, 0)
+									task.wait(0.05) 
+								end
+							end
+						else
+							task.wait(0.1) 
+						end
+					else
+						task.wait(0.1)
+					end
+				else
+					task.wait(0.1) 
+				end
+			end
 			
-			task.wait(0.05) -- Speed
-		end
-	end
-	
-	if isScanning then
+			isFastTPing = false
+			fastButton.Text = "FAST TP: OFF"
+			fastButton.TextColor3 = Color3.fromRGB(0, 255, 255)
+			if isScanning then statusLabel.Text = "Status: Scanning..." end
+		end)
+	else
+		isFastTPing = false
+		fastButton.Text = "FAST TP: OFF"
+		fastButton.TextColor3 = Color3.fromRGB(0, 255, 255)
 		statusLabel.Text = "Status: Scanning..."
+	end
+end)
+
+antiLagButton.MouseButton1Click:Connect(function()
+	isAntiLagOn = not isAntiLagOn
+	if isAntiLagOn then
+		antiLagButton.Text = "ANTI-LAG: ON"
+		antiLagButton.TextColor3 = Color3.fromRGB(0, 255, 0)
+	else
+		antiLagButton.Text = "ANTI-LAG: OFF"
+		antiLagButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 	end
 end)
 
 destroyButton.MouseButton1Click:Connect(function()
 	isScanning = false
+	isFastTPing = false
 	for _, conn in pairs(connections) do conn:Disconnect() end
 	screenGui:Destroy()
 end)
