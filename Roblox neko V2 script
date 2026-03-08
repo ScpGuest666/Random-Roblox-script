@@ -13,7 +13,7 @@ player:WaitForChild("PlayerGui")
 local screenGui = Instance.new("ScreenGui")
 screenGui.Parent = player.PlayerGui
 screenGui.ResetOnSpawn = false
-screenGui.Name = "GuiVersion19"
+screenGui.Name = "GuiVersion21"
 
 -- Create Main Frame
 local frame = Instance.new("Frame")
@@ -33,7 +33,7 @@ emoteFrame.Position = UDim2.new(0, -155, 0, -30)
 emoteFrame.Visible = false
 emoteFrame.BorderSizePixel = 2
 
--- Emote List (24 Emotes)
+-- Emote List (25 Emotes)
 local emoteData = {
     {Name = "Scratching", ID = "93910188107955"},
     {Name = "Sit", ID = "110757655806288"},
@@ -58,7 +58,8 @@ local emoteData = {
     {Name = "Contemplate", ID = "129641195700400"},
     {Name = "Grooming", ID = "117809429848082"},
     {Name = "Kicking Feet", ID = "103155280474275"},
-    {Name = "Cat Pose", ID = "79458008243992"}
+    {Name = "Cat Pose", ID = "79458008243992"},
+    {Name = "Feign Hurt", ID = "103426546772784"} -- New Emote Added
 }
 
 -- Create Scrolling List for Emotes
@@ -181,7 +182,8 @@ local function startIdleSequence()
     local char = player.Character
     if char and char:FindFirstChild("Humanoid") then
         local state = char.Humanoid:GetState()
-        if state == Enum.HumanoidStateType.Freefall or state == Enum.HumanoidStateType.Jumping then return end
+        -- Prevent idle sequence if jumping, falling, or climbing
+        if state == Enum.HumanoidStateType.Freefall or state == Enum.HumanoidStateType.Jumping or state == Enum.HumanoidStateType.Climbing then return end
     end
 
     isIdle = true
@@ -250,15 +252,16 @@ local function applyCustomAnimation(character)
         if not isCustomAnimActive then return end
         
         local state = humanoid:GetState()
-        local inAir = (state == Enum.HumanoidStateType.Jumping or state == Enum.HumanoidStateType.Freefall)
+        -- Added Climbing to the special states that bypass custom animations
+        local isSpecialState = (state == Enum.HumanoidStateType.Jumping or state == Enum.HumanoidStateType.Freefall or state == Enum.HumanoidStateType.Climbing)
         
         -- 1. Manage Default Tracks (Make them invisible instead of stopping them)
         for _, track in pairs(animator:GetPlayingAnimationTracks()) do
             if not isOurTrack(track) then
                 local p = track.Priority
                 if p == Enum.AnimationPriority.Idle or p == Enum.AnimationPriority.Movement then
-                    if inAir then
-                        -- Restore weight so default Jump/Fall animations play normally
+                    if isSpecialState then
+                        -- Restore weight so default Jump/Fall/Climb animations play normally
                         if track.Weight < 0.5 then
                             track:AdjustWeight(1, 0.1)
                         end
@@ -271,9 +274,9 @@ local function applyCustomAnimation(character)
         end
 
         -- 2. Manage Custom Tracks
-        if inAir then
-            if currentMovementState ~= "Air" then
-                currentMovementState = "Air"
+        if isSpecialState then
+            if currentMovementState ~= "Special" then
+                currentMovementState = "Special"
                 if customWalkTrack then customWalkTrack:Stop(0.2) end
                 if customRunTrack then customRunTrack:Stop(0.2) end
                 stopAllManualTracks()
@@ -334,7 +337,6 @@ local function restoreOriginalAnimation(character)
     stopAllManualTracks()
 
     -- Restore the weight of the game's default tracks
-    -- Because we never stopped them, they are already perfectly in stride!
     local humanoid = character:FindFirstChild("Humanoid")
     if humanoid then
         local animator = humanoid:FindFirstChild("Animator")
@@ -367,17 +369,21 @@ for _, data in ipairs(emoteData) do
         if not char or not isCustomAnimActive then return end
         local hum = char:FindFirstChild("Humanoid")
         
-        if hum and hum.MoveDirection.Magnitude < 0.1 and hum:GetState() ~= Enum.HumanoidStateType.Freefall then
-            stopAllManualTracks()
-            isManualEmotePlaying = true
-            local track = loadedManualEmotes[data.Name]
-            if track then 
-                track:Play(0.3) 
-                local conn; conn = track.Stopped:Connect(function()
-                    isManualEmotePlaying = false
-                    if hum.MoveDirection.Magnitude < 0.1 then startIdleSequence() end
-                    conn:Disconnect()
-                end)
+        if hum then
+            local state = hum:GetState()
+            -- Prevent emoting if moving, jumping, falling, or climbing
+            if hum.MoveDirection.Magnitude < 0.1 and state ~= Enum.HumanoidStateType.Freefall and state ~= Enum.HumanoidStateType.Jumping and state ~= Enum.HumanoidStateType.Climbing then
+                stopAllManualTracks()
+                isManualEmotePlaying = true
+                local track = loadedManualEmotes[data.Name]
+                if track then 
+                    track:Play(0.3) 
+                    local conn; conn = track.Stopped:Connect(function()
+                        isManualEmotePlaying = false
+                        if hum.MoveDirection.Magnitude < 0.1 then startIdleSequence() end
+                        conn:Disconnect()
+                    end)
+                end
             end
         end
     end)
