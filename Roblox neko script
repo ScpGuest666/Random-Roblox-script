@@ -46,7 +46,7 @@ local emoteData = {
     {Name = "Lay", ID = "119370572836578"},
     {Name = "Lay Legs Up", ID = "91142240425542"},
     {Name = "Lay Legs Up 2", ID = "123786470044230"},
-    {Name = "Back Up", ID = "97861993155293"},
+    {Name = "Back Up", ID = "108150470459728"},
     {Name = "Pic Pose", ID = "72185261708093"},
     {Name = "V-Sit", ID = "81180825463784"},
     {Name = "Curious Sat Pose", ID = "76261461321661"},
