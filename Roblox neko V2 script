@@ -13,7 +13,7 @@ player:WaitForChild("PlayerGui")
 local screenGui = Instance.new("ScreenGui")
 screenGui.Parent = player.PlayerGui
 screenGui.ResetOnSpawn = false
-screenGui.Name = "GuiVersion21"
+screenGui.Name = "GuiVersion22"
 
 -- Create Main Frame
 local frame = Instance.new("Frame")
@@ -59,7 +59,7 @@ local emoteData = {
     {Name = "Grooming", ID = "117809429848082"},
     {Name = "Kicking Feet", ID = "103155280474275"},
     {Name = "Cat Pose", ID = "79458008243992"},
-    {Name = "Feign Hurt", ID = "103426546772784"} -- New Emote Added
+    {Name = "Feign Hurt", ID = "103426546772784"}
 }
 
 -- Create Scrolling List for Emotes
@@ -252,7 +252,6 @@ local function applyCustomAnimation(character)
         if not isCustomAnimActive then return end
         
         local state = humanoid:GetState()
-        -- Added Climbing to the special states that bypass custom animations
         local isSpecialState = (state == Enum.HumanoidStateType.Jumping or state == Enum.HumanoidStateType.Freefall or state == Enum.HumanoidStateType.Climbing)
         
         -- 1. Manage Default Tracks (Make them invisible instead of stopping them)
@@ -261,12 +260,10 @@ local function applyCustomAnimation(character)
                 local p = track.Priority
                 if p == Enum.AnimationPriority.Idle or p == Enum.AnimationPriority.Movement then
                     if isSpecialState then
-                        -- Restore weight so default Jump/Fall/Climb animations play normally
                         if track.Weight < 0.5 then
                             track:AdjustWeight(1, 0.1)
                         end
                     else
-                        -- Suppress default Walk/Run/Idle so our custom ones take over
                         track:AdjustWeight(0.0001, 0)
                     end
                 end
@@ -284,13 +281,24 @@ local function applyCustomAnimation(character)
             return
         end
 
-        -- Check if player is ACTUALLY trying to move (ignores emote root motion)
+        -- Check if player is ACTUALLY trying to move
         local isMoving = humanoid.MoveDirection.Magnitude > 0.05
         
         if isMoving then
             local velocity = humanoid.RootPart and humanoid.RootPart.Velocity or Vector3.new(0,0,0)
             local flatSpeed = Vector3.new(velocity.X, 0, velocity.Z).Magnitude
             local animSpeed = math.max(flatSpeed, 2)
+            
+            -- Determine if moving backwards using Dot Product
+            local directionMultiplier = 1
+            if humanoid.RootPart then
+                local moveDir = humanoid.MoveDirection
+                local lookDir = humanoid.RootPart.CFrame.LookVector
+                -- If the dot product is negative, the player is moving opposite to where they are facing
+                if moveDir:Dot(lookDir) < -0.1 then
+                    directionMultiplier = -1
+                end
+            end
             
             if flatSpeed <= 10 then
                 -- Walking
@@ -300,7 +308,8 @@ local function applyCustomAnimation(character)
                     if customRunTrack then customRunTrack:Stop(0.2) end
                     if customWalkTrack then customWalkTrack:Play(0.2) end
                 end
-                if customWalkTrack then customWalkTrack:AdjustSpeed(animSpeed / 10) end
+                -- Apply speed and direction multiplier
+                if customWalkTrack then customWalkTrack:AdjustSpeed((animSpeed / 10) * directionMultiplier) end
             else
                 -- Running
                 if currentMovementState ~= "Running" then
@@ -309,7 +318,8 @@ local function applyCustomAnimation(character)
                     if customWalkTrack then customWalkTrack:Stop(0.2) end
                     if customRunTrack then customRunTrack:Play(0.2) end
                 end
-                if customRunTrack then customRunTrack:AdjustSpeed(animSpeed / 16) end
+                -- Apply speed and direction multiplier
+                if customRunTrack then customRunTrack:AdjustSpeed((animSpeed / 16) * directionMultiplier) end
             end
         else
             -- Stopped
