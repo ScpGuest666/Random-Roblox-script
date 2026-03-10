@@ -35,20 +35,22 @@ emoteFrame.BorderSizePixel = 2
 
 -- Emote List (25 Emotes)
 local emoteData = {
-    {Name = "Push Up", ID = "108890286629805"},
-    {Name = "1arm pushups", ID = "110904780556875"},
-    {Name = "Salute", ID = "104670223060882"},
-    {Name = "Kneel down", ID = "111189505793517"},
-    {Name = "Rat Dance", ID = "94083401455021"},
-    {Name = "Sit", ID = "101935805910670"},
-    {Name = "Relax Sit", ID = "84979703556782"},
-    {Name = "Honor Kneel", ID = "103663987050338"},
-    {Name = "Countly Bow", ID = "72613272882226"},
-    {Name = "Lay", ID = "134624712364333"},
-    {Name = "Lay Left Side", ID = "91064891341996"},
-    {Name = "Lay Right Side", ID = "132546814741927"},
-    {Name = "California Dance", ID = "95528267749447"},
-    {Name = "It goes hard", ID = "109910154206713"}
+    {Name = "P: Push Up", ID = "108890286629805"},
+    {Name = "P: 1arm pushups", ID = "110904780556875"},
+    {Name = "P: Salute", ID = "104670223060882"},
+    {Name = "P: Kneel down", ID = "111189505793517"},
+    {Name = "D: Rat Dance", ID = "94083401455021"},
+    {Name = "P: Sit", ID = "101935805910670"},
+    {Name = "P: Relax Sit", ID = "84979703556782"},
+    {Name = "P: Honor Kneel", ID = "103663987050338"},
+    {Name = "P: Countly Bow", ID = "72613272882226"},
+    {Name = "P: Lay", ID = "134624712364333"},
+    {Name = "P: Lay Left Side", ID = "91064891341996"},
+    {Name = "P: Lay Right Side", ID = "132546814741927"},
+    {Name = "D: California Dance", ID = "95528267749447"},
+    {Name = "D: It goes hard", ID = "109910154206713"},
+    {Name = "D: Bhangra Dance", ID = "93968837624319"},
+    {Name = "D: Low Cortisol", ID = "127791529447152"}
 }
 
 -- Create Scrolling List for Emotes
