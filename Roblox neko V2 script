@@ -128,6 +128,7 @@ local idleSequenceTask = nil
 local isIdle = false
 local isManualEmotePlaying = false
 local currentMovementState = "Stopped"
+local originalC0s = {}
 
 -- Tracks
 local customRunTrack, customWalkTrack
@@ -154,13 +155,19 @@ local function getTrueAnimationId(id)
     return "rbxassetid://" .. strId
 end
 
--- Helper: Check if a track belongs to our custom system
-local function isOurTrack(track)
-    if track == customRunTrack or track == customWalkTrack or track == idleTrack1 or track == idleTrack2 then return true end
-    for _, t in pairs(loadedManualEmotes) do
-        if track == t then return true end
-    end
-    return false
+-- Helper: Check Special States (Jump, Fall, Climb, Swim, Sit, etc.)
+local function isSpecialMovementState(state)
+    return state == Enum.HumanoidStateType.Jumping 
+        or state == Enum.HumanoidStateType.Freefall 
+        or state == Enum.HumanoidStateType.Climbing 
+        or state == Enum.HumanoidStateType.Swimming 
+        or state == Enum.HumanoidStateType.Seated
+        or state == Enum.HumanoidStateType.GettingUp
+        or state == Enum.HumanoidStateType.FallingDown
+        or state == Enum.HumanoidStateType.Ragdoll
+        or state == Enum.HumanoidStateType.Flying
+        or state == Enum.HumanoidStateType.Physics
+        or state == Enum.HumanoidStateType.Dead
 end
 
 -- Stop everything
@@ -182,8 +189,7 @@ local function startIdleSequence()
     local char = player.Character
     if char and char:FindFirstChild("Humanoid") then
         local state = char.Humanoid:GetState()
-        -- Prevent idle sequence if jumping, falling, or climbing
-        if state == Enum.HumanoidStateType.Freefall or state == Enum.HumanoidStateType.Jumping or state == Enum.HumanoidStateType.Climbing then return end
+        if isSpecialMovementState(state) then return end
     end
 
     isIdle = true
@@ -203,7 +209,7 @@ local function startIdleSequence()
                 if idleTrack1 then idleTrack1:Stop(0.3) end
                 if idleTrack2 then
                     idleTrack2:Play(0.3)
-                    task.wait(3)
+                    task.wait(99999999999999999)
                     if not isIdle or isManualEmotePlaying then break end
                     idleTrack2:Stop(0.3)
                 end
@@ -212,7 +218,7 @@ local function startIdleSequence()
     end)
 end
 
--- Apply Animations (Non-Destructive Override Method)
+-- Apply Animations
 local function applyCustomAnimation(character)
     local humanoid = character:WaitForChild("Humanoid", 5)
     local animator = humanoid:WaitForChild("Animator", 5)
@@ -222,50 +228,52 @@ local function applyCustomAnimation(character)
     for _, conn in pairs(charConnections) do conn:Disconnect() end
     charConnections = {}
     currentMovementState = "Stopped"
+    
+    -- Save original Motor6D C0s to prevent it from forcing the arm to point
+    originalC0s = {}
+    for _, desc in ipairs(character:GetDescendants()) do
+        if desc:IsA("Motor6D") then
+            originalC0s[desc] = desc.C0
+        end
+    end
 
-    -- Load Movement Tracks
+    -- Load Movement Tracks (Action3 to overpower tools/default movement)
     local rAnim = Instance.new("Animation"); rAnim.AnimationId = getTrueAnimationId(customRunId)
-    customRunTrack = animator:LoadAnimation(rAnim); customRunTrack.Priority = Enum.AnimationPriority.Movement
+    customRunTrack = animator:LoadAnimation(rAnim); customRunTrack.Priority = Enum.AnimationPriority.Action3
     
     local wAnim = Instance.new("Animation"); wAnim.AnimationId = getTrueAnimationId(customWalkId)
-    customWalkTrack = animator:LoadAnimation(wAnim); customWalkTrack.Priority = Enum.AnimationPriority.Movement
+    customWalkTrack = animator:LoadAnimation(wAnim); customWalkTrack.Priority = Enum.AnimationPriority.Action3
 
-    -- Load Idles
+    -- Load Idles (Action2 to overpower tools/default idle)
     local a1 = Instance.new("Animation"); a1.AnimationId = getTrueAnimationId(customIdle1Id)
-    idleTrack1 = animator:LoadAnimation(a1); idleTrack1.Priority = Enum.AnimationPriority.Idle
+    idleTrack1 = animator:LoadAnimation(a1); idleTrack1.Priority = Enum.AnimationPriority.Action2
     
     local a2 = Instance.new("Animation"); a2.AnimationId = getTrueAnimationId(customIdle2Id)
-    idleTrack2 = animator:LoadAnimation(a2); idleTrack2.Priority = Enum.AnimationPriority.Idle
+    idleTrack2 = animator:LoadAnimation(a2); idleTrack2.Priority = Enum.AnimationPriority.Action2
 
-    -- Load Manual Emotes
+    -- Load Manual Emotes (Action4 to overpower EVERYTHING)
     loadedManualEmotes = {}
     for _, data in ipairs(emoteData) do
         local anim = Instance.new("Animation")
         anim.AnimationId = getTrueAnimationId(data.ID)
         local track = animator:LoadAnimation(anim)
-        track.Priority = Enum.AnimationPriority.Action
+        track.Priority = Enum.AnimationPriority.Action4
         loadedManualEmotes[data.Name] = track
     end
 
-    -- Heartbeat Loop for Flawless Movement & Non-Destructive Override
+    -- Heartbeat Loop
     table.insert(charConnections, RunService.Heartbeat:Connect(function()
         if not isCustomAnimActive then return end
         
         local state = humanoid:GetState()
-        local isSpecialState = (state == Enum.HumanoidStateType.Jumping or state == Enum.HumanoidStateType.Freefall or state == Enum.HumanoidStateType.Climbing)
+        local isSpecialState = isSpecialMovementState(state)
         
-        -- 1. Manage Default Tracks (Make them invisible instead of stopping them)
-        for _, track in pairs(animator:GetPlayingAnimationTracks()) do
-            if not isOurTrack(track) then
-                local p = track.Priority
-                if p == Enum.AnimationPriority.Idle or p == Enum.AnimationPriority.Movement then
-                    if isSpecialState then
-                        if track.Weight < 0.5 then
-                            track:AdjustWeight(1, 0.1)
-                        end
-                    else
-                        track:AdjustWeight(0.0001, 0)
-                    end
+        -- 1. Lock Motor6Ds to prevent its procedural arm pointing script from snapping the arm
+        -- We only lock them when NOT in a special state, so swimming/jumping looks natural
+        if not isSpecialState then
+            for motor, c0 in pairs(originalC0s) do
+                if motor.Parent and (motor.Name:match("Shoulder") or motor.Name == "Waist" or motor.Name == "Neck") then
+                    motor.C0 = c0
                 end
             end
         end
@@ -278,7 +286,7 @@ local function applyCustomAnimation(character)
                 if customRunTrack then customRunTrack:Stop(0.2) end
                 stopAllManualTracks()
             end
-            return
+            return -- Exit early so default jump/swim/climb animations can play naturally
         end
 
         -- Check if player is ACTUALLY trying to move
@@ -294,7 +302,6 @@ local function applyCustomAnimation(character)
             if humanoid.RootPart then
                 local moveDir = humanoid.MoveDirection
                 local lookDir = humanoid.RootPart.CFrame.LookVector
-                -- If the dot product is negative, the player is moving opposite to where they are facing
                 if moveDir:Dot(lookDir) < -0.1 then
                     directionMultiplier = -1
                 end
@@ -308,7 +315,6 @@ local function applyCustomAnimation(character)
                     if customRunTrack then customRunTrack:Stop(0.2) end
                     if customWalkTrack then customWalkTrack:Play(0.2) end
                 end
-                -- Apply speed and direction multiplier
                 if customWalkTrack then customWalkTrack:AdjustSpeed((animSpeed / 10) * directionMultiplier) end
             else
                 -- Running
@@ -318,7 +324,6 @@ local function applyCustomAnimation(character)
                     if customWalkTrack then customWalkTrack:Stop(0.2) end
                     if customRunTrack then customRunTrack:Play(0.2) end
                 end
-                -- Apply speed and direction multiplier
                 if customRunTrack then customRunTrack:AdjustSpeed((animSpeed / 16) * directionMultiplier) end
             end
         else
@@ -333,34 +338,19 @@ local function applyCustomAnimation(character)
     end))
 end
 
--- Restore Original Animations (Flawless Transition)
+-- Restore Original Animations
 local function restoreOriginalAnimation(character)
     isCustomAnimActive = false
     
     -- Disconnect our overrides
     for _, conn in pairs(charConnections) do conn:Disconnect() end
     charConnections = {}
+    originalC0s = {}
 
     -- Stop all our custom tracks
     if customWalkTrack then customWalkTrack:Stop(0.2) end
     if customRunTrack then customRunTrack:Stop(0.2) end
     stopAllManualTracks()
-
-    -- Restore the weight of the game's default tracks
-    local humanoid = character:FindFirstChild("Humanoid")
-    if humanoid then
-        local animator = humanoid:FindFirstChild("Animator")
-        if animator then
-            for _, track in pairs(animator:GetPlayingAnimationTracks()) do
-                if not isOurTrack(track) then
-                    local p = track.Priority
-                    if p == Enum.AnimationPriority.Idle or p == Enum.AnimationPriority.Movement then
-                        track:AdjustWeight(1, 0.2)
-                    end
-                end
-            end
-        end
-    end
 end
 
 -- Create Emote Buttons in Scroll
@@ -381,8 +371,7 @@ for _, data in ipairs(emoteData) do
         
         if hum then
             local state = hum:GetState()
-            -- Prevent emoting if moving, jumping, falling, or climbing
-            if hum.MoveDirection.Magnitude < 0.1 and state ~= Enum.HumanoidStateType.Freefall and state ~= Enum.HumanoidStateType.Jumping and state ~= Enum.HumanoidStateType.Climbing then
+            if hum.MoveDirection.Magnitude < 0.1 and not isSpecialMovementState(state) then
                 stopAllManualTracks()
                 isManualEmotePlaying = true
                 local track = loadedManualEmotes[data.Name]
