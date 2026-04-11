@@ -96,7 +96,7 @@ end
 -------------------------------------------------------------------------
 
 local function getRingPiece()
-    if currentMapMode == "Chapter 2" or currentMapMode == "Chapter 4" then
+    if currentMapMode == "Chapter 2" or currentMapMode == "Chapter 4" or currentMapMode == "Chapter 5" then
         local potentialOrbs = {}
         local potentialStatues = {}
 
@@ -127,7 +127,7 @@ local function getRingPiece()
             end
         end
         
-        if currentMapMode == "Chapter 4" and #potentialOrbs > 0 then
+        if (currentMapMode == "Chapter 4" or currentMapMode == "Chapter 5") and #potentialOrbs > 0 then
              local orb = potentialOrbs[1]
              return orb:IsA("Model") and (orb.PrimaryPart or orb:FindFirstChildWhichIsA("BasePart")) or orb
         end
@@ -168,6 +168,8 @@ end
 local function detectGameMode()
     if game.PlaceId == 95211388186571 then
         return "Chapter 3"
+    elseif game.PlaceId == 129556108844772 then
+        return "Chapter 5"
     end
 
     local success, info = pcall(function()
@@ -188,6 +190,8 @@ local function detectGameMode()
             return "Chapter 3"
         elseif string.find(name, "chapter 4") or string.find(name, "mascot") or string.find(name, "joy") then
             return "Chapter 4"
+        elseif string.find(name, "chapter 5") then
+            return "Chapter 5"
         end
     end
     
