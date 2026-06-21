@@ -1,0 +1,232 @@
+-- Wait for player
+local Players = game:GetService("Players")
+local vim = game:GetService("VirtualInputManager")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer or Players.PlayerAdded:Wait()
+
+-- Determine the best parent for the GUI
+local guiParent
+if type(gethui) == "function" then
+    guiParent = gethui()
+else
+    local success = pcall(function()
+        return game:GetService("CoreGui").Name
+    end)
+    if success then
+        guiParent = game:GetService("CoreGui")
+    else
+        guiParent = player:WaitForChild("PlayerGui")
+    end
+end
+
+-- Create ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "Gui_" .. math.random(10000, 99999)
+screenGui.ResetOnSpawn = false
+screenGui.DisplayOrder = 2147483647
+screenGui.IgnoreGuiInset = true
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+screenGui.Parent = guiParent
+
+-- Main draggable frame
+local mainFrame = Instance.new("Frame")
+mainFrame.Parent = screenGui
+mainFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+mainFrame.Size = UDim2.new(0, 200, 0, 100)
+mainFrame.Position = UDim2.new(0.3, 0, 0.5, -50)
+mainFrame.Draggable = true
+mainFrame.Active = true
+
+-- Status label
+local status = Instance.new("TextLabel")
+status.Parent = mainFrame
+status.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+status.Size = UDim2.new(0, 200, 0, 30)
+status.Position = UDim2.new(0, 0, 0, -30)
+status.Text = "Status: Offline"
+status.TextColor3 = Color3.fromRGB(255, 0, 0)
+status.TextScaled = true
+
+-- Helper to create a proper TextButton
+local function createButton(name, text, x, y, width, height)
+    local btn = Instance.new("TextButton")
+    btn.Name = name
+    btn.Parent = mainFrame
+    btn.Text = text
+    btn.Size = UDim2.new(0, width, 0, height)
+    btn.Position = UDim2.new(0, x, 0, y)
+    btn.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.TextScaled = true
+    btn.AutoButtonColor = true
+    btn.BorderSizePixel = 0
+    return btn
+end
+
+-- Create buttons
+local onBtn = createButton("OnBtn", "On", 10, 20, 80, 30)
+local offBtn = createButton("OffBtn", "Off", 110, 20, 80, 30)
+local destroyBtn = createButton("DestroyBtn", "Destroy", 20, 60, 160, 30)
+
+-- Visual Pointer (Red Dot) to show exactly where the script is clicking
+local pointer = Instance.new("Frame")
+pointer.Name = "ClickPointer"
+pointer.Size = UDim2.new(0, 12, 0, 12)
+pointer.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+pointer.AnchorPoint = Vector2.new(0.5, 0.5)
+pointer.ZIndex = 2147483647
+pointer.Visible = false
+pointer.Parent = screenGui
+
+local uiCorner = Instance.new("UICorner")
+uiCorner.CornerRadius = UDim.new(1, 0)
+uiCorner.Parent = pointer
+
+-------------------------------------------------------------------------------
+-- HOLD BUTTON TRACKING LOGIC
+-------------------------------------------------------------------------------
+
+-- [[ ADJUST MOUSE POSITION HERE ]] --
+local offsetX = 290 
+local offsetY = 0  
+--------------------------------------
+
+local isRunning = false
+local holdCoroutine = nil
+local isHolding = false
+local lastX, lastY = 0, 0
+local TOUCH_ID = 1 -- A unique ID for our virtual finger
+
+-- Function to check if a GUI element is truly visible
+local function isTrulyVisible(guiObject)
+    local current = guiObject
+    while current and current:IsA("GuiObject") do
+        if not current.Visible then
+            return false
+        end
+        if current:IsA("TextLabel") or current:IsA("TextButton") then
+            if current.TextTransparency >= 1 then
+                return false
+            end
+        end
+        current = current.Parent
+    end
+    return true
+end
+
+-- Scans PlayerGui for the "HOLD" button
+local function findHoldButton()
+    local playerGui = player:FindFirstChild("PlayerGui")
+    if not playerGui then return nil end
+
+    for _, desc in ipairs(playerGui:GetDescendants()) do
+        if desc:IsA("TextLabel") or desc:IsA("TextButton") then
+            if desc.Text then
+                local text = string.upper(desc.Text)
+                if string.find(text, "HOLD") and isTrulyVisible(desc) then
+                    return desc
+                end
+            end
+        end
+    end
+    return nil
+end
+
+-- Main loop for tracking and holding the button
+local function startHolding()
+    while isRunning do
+        local button = findHoldButton()
+
+        if button then
+            local absPos = button.AbsolutePosition
+            local absSize = button.AbsoluteSize
+
+            -- Calculate the exact center of the UI element, applying your custom offsets
+            -- We use math.round because TouchEvents prefer whole numbers
+            local x = math.round(absPos.X + (absSize.X / 2) + offsetX)
+            local y = math.round(absPos.Y + (absSize.Y / 2) + offsetY)
+
+            -- Update visual pointer so you can see where it's aiming
+            pointer.Position = UDim2.new(0, x, 0, y)
+            pointer.Visible = true
+
+            if not isHolding then
+                -- Start holding: Send TouchBegan (State 0)
+                vim:SendTouchEvent(TOUCH_ID, 0, x, y)
+                isHolding = true
+                lastX = x
+                lastY = y
+            else
+                -- Already holding: Check if the button teleported (moved more than 5 pixels)
+                if math.abs(lastX - x) > 5 or math.abs(lastY - y) > 5 then
+                    -- 1. Release the touch at the old location: Send TouchEnded (State 2)
+                    vim:SendTouchEvent(TOUCH_ID, 2, lastX, lastY)
+                    
+                    task.wait(0.01) 
+                    
+                    -- 2. Press down again at the new location: Send TouchBegan (State 0)
+                    vim:SendTouchEvent(TOUCH_ID, 0, x, y)
+                    
+                    -- Update last known coordinates
+                    lastX = x
+                    lastY = y
+                end
+            end
+        else
+            -- No button found, release touch if we were holding it
+            pointer.Visible = false
+            if isHolding then
+                vim:SendTouchEvent(TOUCH_ID, 2, lastX, lastY) -- State 2 = Ended
+                isHolding = false
+            end
+        end
+
+        -- Wait for the next frame
+        RunService.RenderStepped:Wait()
+    end
+    
+    -- Ensure touch is released when turned off
+    pointer.Visible = false
+    if isHolding then
+        vim:SendTouchEvent(TOUCH_ID, 2, lastX, lastY)
+        isHolding = false
+    end
+end
+
+-------------------------------------------------------------------------------
+-- BUTTON CONNECTIONS
+-------------------------------------------------------------------------------
+local function setOnline()
+    if isRunning then return end
+    isRunning = true
+    status.Text = "Status: Online"
+    status.TextColor3 = Color3.fromRGB(0, 255, 0)
+    
+    holdCoroutine = task.spawn(startHolding)
+end
+
+local function setOffline()
+    isRunning = false
+    status.Text = "Status: Offline"
+    status.TextColor3 = Color3.fromRGB(255, 0, 0)
+    
+    if holdCoroutine then
+        task.cancel(holdCoroutine)
+        holdCoroutine = nil
+    end
+    
+    -- Cleanup
+    pointer.Visible = false
+    if isHolding then
+        vim:SendTouchEvent(TOUCH_ID, 2, lastX, lastY)
+        isHolding = false
+    end
+end
+
+onBtn.MouseButton1Click:Connect(setOnline)
+offBtn.MouseButton1Click:Connect(setOffline)
+destroyBtn.MouseButton1Click:Connect(function()
+    setOffline()
+    screenGui:Destroy()
+end)
