@@ -84,19 +84,23 @@ uiCorner.CornerRadius = UDim.new(1, 0)
 uiCorner.Parent = pointer
 
 -------------------------------------------------------------------------------
--- HOLD BUTTON TRACKING LOGIC
+-- BUTTON TRACKING LOGIC
 -------------------------------------------------------------------------------
 
 -- [[ ADJUST MOUSE POSITION HERE ]] --
 local offsetX = 290 
 local offsetY = 0  
+
+-- [[ ADJUST POINTER (RED DOT) POSITION RELATIVE TO MOUSE HERE ]] --
+local pointerOffsetX = -38 
+local pointerOffsetY = 0   
 --------------------------------------
 
 local isRunning = false
 local holdCoroutine = nil
 local isHolding = false
 local lastX, lastY = 0, 0
-local TOUCH_ID = 1 -- A unique ID for our virtual finger
+local TOUCH_ID = 8823 -- Unique ID to simulate a specific finger touch
 
 -- Function to check if a GUI element is truly visible
 local function isTrulyVisible(guiObject)
@@ -115,8 +119,8 @@ local function isTrulyVisible(guiObject)
     return true
 end
 
--- Scans PlayerGui for the "HOLD" button
-local function findHoldButton()
+-- Scans PlayerGui for the "HOLD", "WASD", or individual "W", "A", "S", "D" buttons
+local function findTargetButton()
     local playerGui = player:FindFirstChild("PlayerGui")
     if not playerGui then return nil end
 
@@ -124,7 +128,17 @@ local function findHoldButton()
         if desc:IsA("TextLabel") or desc:IsA("TextButton") then
             if desc.Text then
                 local text = string.upper(desc.Text)
-                if string.find(text, "HOLD") and isTrulyVisible(desc) then
+                local trimmedText = string.gsub(text, "%s+", "") -- Remove spaces for exact matching
+                
+                -- Check if the text matches any of our target buttons
+                local isMatch = string.find(text, "HOLD") 
+                    or string.find(text, "WASD") 
+                    or trimmedText == "W" 
+                    or trimmedText == "A" 
+                    or trimmedText == "S" 
+                    or trimmedText == "D"
+
+                if isMatch and isTrulyVisible(desc) then
                     return desc
                 end
             end
@@ -136,37 +150,54 @@ end
 -- Main loop for tracking and holding the button
 local function startHolding()
     while isRunning do
-        local button = findHoldButton()
+        local button = findTargetButton()
 
         if button then
             local absPos = button.AbsolutePosition
             local absSize = button.AbsoluteSize
 
             -- Calculate the exact center of the UI element, applying your custom offsets
-            -- We use math.round because TouchEvents prefer whole numbers
-            local x = math.round(absPos.X + (absSize.X / 2) + offsetX)
-            local y = math.round(absPos.Y + (absSize.Y / 2) + offsetY)
+            local x = absPos.X + (absSize.X / 2) + offsetX
+            local y = absPos.Y + (absSize.Y / 2) + offsetY
 
-            -- Update visual pointer so you can see where it's aiming
-            pointer.Position = UDim2.new(0, x, 0, y)
+            -- Update visual pointer relative to the actual touch position
+            pointer.Position = UDim2.new(0, x + pointerOffsetX, 0, y + pointerOffsetY)
             pointer.Visible = true
 
             if not isHolding then
-                -- Start holding: Send TouchBegan (State 0)
+                -- Wait a tiny fraction of a second to ensure the game has fully initialized the button's click detectors
+                task.wait(0.05)
+                
+                -- Re-calculate in case the button moved during the wait
+                absPos = button.AbsolutePosition
+                absSize = button.AbsoluteSize
+                x = absPos.X + (absSize.X / 2) + offsetX
+                y = absPos.Y + (absSize.Y / 2) + offsetY
+                pointer.Position = UDim2.new(0, x + pointerOffsetX, 0, y + pointerOffsetY)
+
+                -- Start holding: Send Touch Began event (0 = Began)
                 vim:SendTouchEvent(TOUCH_ID, 0, x, y)
+                task.wait(0.02)
+                -- Send Touch Moved event (1 = Moved) to force Roblox to register the touch
+                vim:SendTouchEvent(TOUCH_ID, 1, x, y)
+                
                 isHolding = true
                 lastX = x
                 lastY = y
             else
                 -- Already holding: Check if the button teleported (moved more than 5 pixels)
                 if math.abs(lastX - x) > 5 or math.abs(lastY - y) > 5 then
-                    -- 1. Release the touch at the old location: Send TouchEnded (State 2)
+                    -- 1. Release the touch at the old location (2 = Ended)
                     vim:SendTouchEvent(TOUCH_ID, 2, lastX, lastY)
                     
-                    task.wait(0.01) 
+                    -- 2. Wait a tiny bit
+                    task.wait(0.02) 
                     
-                    -- 2. Press down again at the new location: Send TouchBegan (State 0)
+                    -- 3. Press down again at the new location (0 = Began)
                     vim:SendTouchEvent(TOUCH_ID, 0, x, y)
+                    task.wait(0.02)
+                    -- 4. Send Touch Moved event (1 = Moved) to force registration
+                    vim:SendTouchEvent(TOUCH_ID, 1, x, y)
                     
                     -- Update last known coordinates
                     lastX = x
@@ -177,7 +208,7 @@ local function startHolding()
             -- No button found, release touch if we were holding it
             pointer.Visible = false
             if isHolding then
-                vim:SendTouchEvent(TOUCH_ID, 2, lastX, lastY) -- State 2 = Ended
+                vim:SendTouchEvent(TOUCH_ID, 2, lastX, lastY)
                 isHolding = false
             end
         end
