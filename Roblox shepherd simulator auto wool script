@@ -1,0 +1,219 @@
+-- Wait for player
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer or Players.PlayerAdded:Wait()
+
+-- Determine the best parent for the GUI
+local guiParent
+if type(gethui) == "function" then
+    guiParent = gethui()
+else
+    local success = pcall(function()
+        return game:GetService("CoreGui").Name
+    end)
+    if success then
+        guiParent = game:GetService("CoreGui")
+    else
+        guiParent = player:WaitForChild("PlayerGui")
+    end
+end
+
+-- Create ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "Gui_" .. math.random(10000, 99999)
+screenGui.ResetOnSpawn = false
+screenGui.DisplayOrder = 2147483647
+screenGui.IgnoreGuiInset = true
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+screenGui.Parent = guiParent
+
+-- Main draggable frame
+local mainFrame = Instance.new("Frame")
+mainFrame.Parent = screenGui
+mainFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+mainFrame.Size = UDim2.new(0, 200, 0, 100)
+mainFrame.Position = UDim2.new(0.3, 0, 0.5, -50)
+mainFrame.Draggable = true
+mainFrame.Active = true
+
+-- Status label
+local status = Instance.new("TextLabel")
+status.Parent = mainFrame
+status.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+status.Size = UDim2.new(0, 200, 0, 30)
+status.Position = UDim2.new(0, 0, 0, -30)
+status.Text = "Status: Offline"
+status.TextColor3 = Color3.fromRGB(255, 0, 0)
+status.TextScaled = true
+status.Font = Enum.Font.SourceSansBold
+
+-- Helper to create a proper TextButton
+local function createButton(name, text, x, y, width, height)
+    local btn = Instance.new("TextButton")
+    btn.Name = name
+    btn.Parent = mainFrame
+    btn.Text = text
+    btn.Size = UDim2.new(0, width, 0, height)
+    btn.Position = UDim2.new(0, x, 0, y)
+    btn.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.TextScaled = true
+    btn.AutoButtonColor = true
+    btn.BorderSizePixel = 0
+    return btn
+end
+
+-- Create buttons
+local onBtn = createButton("OnBtn", "On", 10, 20, 80, 30)
+local offBtn = createButton("OffBtn", "Off", 110, 20, 80, 30)
+local destroyBtn = createButton("DestroyBtn", "Destroy", 20, 60, 160, 30)
+
+-------------------------------------------------------------------------------
+-- CONFIGURATION & VARIABLES
+-------------------------------------------------------------------------------
+local isFarming = false
+local originalCFrame = nil
+local maxDistance = 40
+local mySheep = {}
+local singleFakeLimb = nil
+local farmCoroutine = nil
+
+-------------------------------------------------------------------------------
+-- MAIN FARMING CYCLE (SINGLE FAST LIMB)
+-------------------------------------------------------------------------------
+local function startFarmingCycle()
+    local toggleWiggle = false
+
+    while isFarming do
+        local char = player.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+
+        if char and hrp then
+            -- 1. Create the single fake limb if it doesn't exist (or if player died)
+            if not singleFakeLimb or not singleFakeLimb.Parent then
+                singleFakeLimb = Instance.new("Part")
+                singleFakeLimb.Name = "Right Arm"
+                singleFakeLimb.CanCollide = false
+                singleFakeLimb.Transparency = 1
+                singleFakeLimb.Massless = true
+                singleFakeLimb.Parent = char
+            end
+
+            -- Wiggle offset forces the physics engine to register continuous touches if there's only 1 sheep
+            toggleWiggle = not toggleWiggle
+            local wiggleOffset = toggleWiggle and Vector3.new(0, 0.1, 0) or Vector3.new(0, -0.1, 0)
+
+            -- 2. Rapidly move the single limb to every sheep
+            for sheepModel, _ in pairs(mySheep) do
+                if not isFarming then break end
+                
+                if sheepModel and sheepModel.Parent then
+                    local sheepCFrame, sheepSize = sheepModel:GetBoundingBox()
+                    
+                    -- Move the single fake limb to this specific sheep
+                    if singleFakeLimb and singleFakeLimb.Parent then
+                        singleFakeLimb.Size = sheepSize + Vector3.new(2, 2, 2)
+                        singleFakeLimb.CFrame = sheepCFrame + wiggleOffset
+                    end
+
+                    -- Fire Proximity Prompts (if the game uses them)
+                    for _, desc in ipairs(sheepModel:GetDescendants()) do
+                        if desc:IsA("ProximityPrompt") then
+                            if fireproximityprompt then
+                                fireproximityprompt(desc)
+                            else
+                                desc:InputHoldBegin()
+                                task.wait(desc.HoldDuration + 0.05)
+                                desc:InputHoldEnd()
+                            end
+                        end
+                    end
+
+                    -- Fire Touch Interests (if the game uses standard touches)
+                    for _, desc in ipairs(sheepModel:GetDescendants()) do
+                        if desc:IsA("BasePart") then
+                            if firetouchinterest then
+                                firetouchinterest(hrp, desc, 0)
+                                firetouchinterest(hrp, desc, 1)
+                            end
+                        end
+                    end
+
+                    -- Yield for exactly one frame so the physics engine registers the limb's new position
+                    RunService.Heartbeat:Wait()
+                else
+                    -- Remove sheep from list if it despawned/was deleted
+                    mySheep[sheepModel] = nil 
+                end
+            end
+        else
+            task.wait(1) -- Wait for character to respawn
+        end
+        
+        -- Tiny delay before restarting the loop to prevent crashing
+        task.wait(0.05)
+    end
+end
+
+-------------------------------------------------------------------------------
+-- BUTTON CONNECTIONS
+-------------------------------------------------------------------------------
+local function setOnline()
+    if isFarming then return end
+    
+    local character = player.Character
+    local hrp = character and character:FindFirstChild("HumanoidRootPart")
+    if hrp then
+        originalCFrame = hrp.CFrame
+    else
+        return -- Cannot start without a character
+    end
+    
+    -- Whitelist Sheep within the sheepfold (maxDistance)
+    mySheep = {}
+    for _, desc in pairs(workspace:GetDescendants()) do
+        if desc:IsA("BillboardGui") then
+            local sheepModel = desc:FindFirstAncestorOfClass("Model")
+            if sheepModel and not mySheep[sheepModel] then
+                local part = sheepModel.PrimaryPart or sheepModel:FindFirstChildWhichIsA("BasePart")
+                if part and part.Parent then
+                    local dist = (part.Position - originalCFrame.Position).Magnitude
+                    if dist <= maxDistance then
+                        mySheep[sheepModel] = part
+                    end
+                end
+            end
+        end
+    end
+    
+    isFarming = true
+    status.Text = "Status: Farming"
+    status.TextColor3 = Color3.fromRGB(0, 255, 0)
+    
+    farmCoroutine = task.spawn(startFarmingCycle)
+end
+
+local function setOffline()
+    isFarming = false
+    status.Text = "Status: Offline"
+    status.TextColor3 = Color3.fromRGB(255, 0, 0)
+    
+    if farmCoroutine then
+        task.cancel(farmCoroutine)
+        farmCoroutine = nil
+    end
+    
+    -- Cleanup the single fake limb
+    if singleFakeLimb then
+        singleFakeLimb:Destroy()
+        singleFakeLimb = nil
+    end
+end
+
+onBtn.MouseButton1Click:Connect(setOnline)
+offBtn.MouseButton1Click:Connect(setOffline)
+destroyBtn.MouseButton1Click:Connect(function()
+    setOffline()
+    screenGui:Destroy()
+end)
