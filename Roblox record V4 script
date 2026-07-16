@@ -5,151 +5,186 @@ local PathfindingService = game:GetService("PathfindingService")
 local HttpService = game:GetService("HttpService")
 
 -- Wait for player to load
-local player = PlayerService.LocalPlayer
-if not player then
-    player = PlayerService.PlayerAdded:Wait()
-end
+local player = PlayerService.LocalPlayer or PlayerService.PlayerAdded:Wait()
 
--- Wait for player GUI to be ready
-player:WaitForChild("PlayerGui")
+-- Determine the best parent for the GUI
+local guiParent
+if type(gethui) == "function" then
+    guiParent = gethui()
+else
+    local success = pcall(function()
+        return game:GetService("CoreGui").Name
+    end)
+    if success then
+        guiParent = game:GetService("CoreGui")
+    else
+        guiParent = player:WaitForChild("PlayerGui")
+    end
+end
 
 -- Create ScreenGui
 local screenGui = Instance.new("ScreenGui")
-screenGui.Parent = player.PlayerGui
+screenGui.Name = "MovementRecorderGui_" .. math.random(10000, 99999)
 screenGui.ResetOnSpawn = false
-screenGui.Name = "MovementRecorderGui"
+screenGui.DisplayOrder = 2147483647 -- Maximum value to ensure it renders on top
+screenGui.IgnoreGuiInset = true
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+screenGui.Parent = guiParent
 
--- Create Frame
+-- Main draggable frame
 local frame = Instance.new("Frame")
+frame.Name = "MainFrame"
 frame.Parent = screenGui
-frame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-frame.Size = UDim2.new(0, 220, 0, 200)
-frame.Position = UDim2.new(0.5, -110, 0.5, -100)
+frame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+frame.Size = UDim2.new(0, 240, 0, 250)
+frame.Position = UDim2.new(0.5, -120, 0.5, -125)
 frame.Active = true
 frame.Draggable = true
-
--- Create Buttons
-local recordButton = Instance.new("TextButton")
-recordButton.Parent = frame
-recordButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-recordButton.Size = UDim2.new(0, 60, 0, 30)
-recordButton.Position = UDim2.new(0, 10, 0, 20)
-recordButton.Text = "Record"
-recordButton.TextScaled = true
-
-local stopRecordButton = Instance.new("TextButton")
-stopRecordButton.Parent = frame
-stopRecordButton.BackgroundColor3 = Color3.fromRGB(255, 165, 0)
-stopRecordButton.Size = UDim2.new(0, 60, 0, 30)
-stopRecordButton.Position = UDim2.new(0, 80, 0, 20)
-stopRecordButton.Text = "Stop Record"
-stopRecordButton.TextScaled = true
-
-local stopReplayButton = Instance.new("TextButton")
-stopReplayButton.Parent = frame
-stopReplayButton.BackgroundColor3 = Color3.fromRGB(255, 100, 100)
-stopReplayButton.Size = UDim2.new(0, 60, 0, 30)
-stopReplayButton.Position = UDim2.new(0, 150, 0, 20)
-stopReplayButton.Text = "Stop Replay"
-stopReplayButton.TextScaled = true
-
-local destroyButton = Instance.new("TextButton")
-destroyButton.Parent = frame
-destroyButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-destroyButton.Size = UDim2.new(0, 90, 0, 30)
-destroyButton.Position = UDim2.new(0, 10, 0, 60)
-destroyButton.Text = "Destroy"
-destroyButton.TextScaled = true
-
-local deleteButton = Instance.new("TextButton")
-deleteButton.Parent = frame
-deleteButton.BackgroundColor3 = Color3.fromRGB(200, 100, 100)
-deleteButton.Size = UDim2.new(0, 90, 0, 30)
-deleteButton.Position = UDim2.new(0, 120, 0, 60)
-deleteButton.Text = "Delete"
-deleteButton.TextScaled = true
+frame.BorderSizePixel = 0
 
 -- Status Indicator
 local statusLabel = Instance.new("TextLabel")
+statusLabel.Name = "StatusLabel"
 statusLabel.Parent = frame
-statusLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-statusLabel.Size = UDim2.new(0, 220, 0, 30)
+statusLabel.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+statusLabel.Size = UDim2.new(1, 0, 0, 30)
 statusLabel.Position = UDim2.new(0, 0, 0, -30)
 statusLabel.Text = "Status: Idle"
-statusLabel.TextColor3 = Color3.fromRGB(0, 0, 0)
+statusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
 statusLabel.TextScaled = true
+statusLabel.BorderSizePixel = 0
+
+-- Helper to create a proper TextButton
+local function createButton(name, text, x, y, width, height, bgColor)
+    local btn = Instance.new("TextButton")
+    btn.Name = name
+    btn.Parent = frame
+    btn.Text = text
+    btn.Size = UDim2.new(0, width, 0, height)
+    btn.Position = UDim2.new(0, x, 0, y)
+    btn.BackgroundColor3 = bgColor or Color3.fromRGB(80, 80, 80)
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.TextScaled = true
+    btn.AutoButtonColor = true
+    btn.BorderSizePixel = 0
+    return btn
+end
+
+-- Create Buttons (Organized Layout)
+-- Row 1
+local recordButton = createButton("RecordBtn", "Record", 10, 10, 70, 25, Color3.fromRGB(120, 40, 40))
+local stopRecordButton = createButton("StopRecBtn", "Stop Rec", 85, 10, 70, 25, Color3.fromRGB(120, 80, 20))
+local stopReplayButton = createButton("StopRepBtn", "Stop Rep", 160, 10, 70, 25, Color3.fromRGB(120, 60, 60))
+
+-- Row 2
+local destroyButton = createButton("DestroyBtn", "Destroy", 10, 40, 70, 25)
+local deleteButton = createButton("DeleteBtn", "Delete", 85, 40, 70, 25, Color3.fromRGB(100, 50, 50))
+local loopButton = createButton("LoopBtn", "Loop: Off", 160, 40, 70, 25, Color3.fromRGB(80, 80, 80))
+
+-- Row 3
+local saveButton = createButton("SaveBtn", "Save", 10, 70, 105, 25, Color3.fromRGB(50, 100, 50))
+local nextChunkButton = createButton("NextChunkBtn", "Next Chunk", 125, 70, 105, 25, Color3.fromRGB(50, 80, 120))
 
 -- Create Scrollable List
 local scrollFrame = Instance.new("ScrollingFrame")
+scrollFrame.Name = "PlatformList"
 scrollFrame.Parent = frame
-scrollFrame.Size = UDim2.new(0, 200, 0, 70)
-scrollFrame.Position = UDim2.new(0, 10, 0, 100)
-scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0) -- Dynamically adjusted
-scrollFrame.ScrollBarThickness = 8
+scrollFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+scrollFrame.Size = UDim2.new(0, 220, 0, 95)
+scrollFrame.Position = UDim2.new(0, 10, 0, 105)
+scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+scrollFrame.ScrollBarThickness = 6
+scrollFrame.BorderSizePixel = 0
+scrollFrame.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 100)
 
 local uiListLayout = Instance.new("UIListLayout")
 uiListLayout.Parent = scrollFrame
 uiListLayout.Padding = UDim.new(0, 5)
+uiListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+
+-- Row 4 (Toggle Paste UI)
+local toggleButton = createButton("ToggleBtn", "+", 10, 210, 30, 25)
+
+local pasteLabel = Instance.new("TextLabel")
+pasteLabel.Name = "PasteLabel"
+pasteLabel.Parent = frame
+pasteLabel.BackgroundTransparency = 1
+pasteLabel.Size = UDim2.new(0, 180, 0, 25)
+pasteLabel.Position = UDim2.new(0, 50, 0, 210)
+pasteLabel.Text = "Paste Platform Data Here"
+pasteLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+pasteLabel.TextScaled = true
+pasteLabel.Visible = false
+
+local pasteTextBox = Instance.new("TextBox")
+pasteTextBox.Name = "PasteTextBox"
+pasteTextBox.Parent = frame
+pasteTextBox.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+pasteTextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+pasteTextBox.Size = UDim2.new(0, 220, 0, 50)
+pasteTextBox.Position = UDim2.new(0, 10, 0, 245)
+pasteTextBox.Text = ""
+pasteTextBox.PlaceholderText = "Paste JSON data here"
+pasteTextBox.ClearTextOnFocus = true 
+pasteTextBox.MultiLine = true
+pasteTextBox.TextScaled = true
+pasteTextBox.Visible = false 
+pasteTextBox.BorderSizePixel = 0
+
+local loadButton = createButton("LoadBtn", "Load", 10, 305, 220, 25, Color3.fromRGB(100, 100, 40))
+loadButton.Visible = false 
 
 -- Variables for recording and platforms
 local recording = false
 local replaying = false
+local isLooping = false
 local character = player.Character or player.CharacterAdded:Wait()
-local humanoid = character:WaitForChild("Humanoid") -- Get the Humanoid
+local humanoid = character:WaitForChild("Humanoid")
 local platforms = {}
 local yellowPlatforms = {}
 local platformData = {}
 local platformCounter = 0
 local lastPosition = nil
-local replayThread
-local yellowToRedMapping = {} -- Mapping of yellow platforms to red platforms
+local yellowToRedMapping = {}
 
--- Add these variables at the top with other declarations
 local currentReplayThread = nil
 local shouldStopReplay = false
 local currentPlatformIndex = 0
 local totalPlatformsToPlay = 0
-local currentRecordingPlatform = nil -- Track the platform currently being recorded
+local currentRecordingPlatform = nil
 
--- Global Variables for Force Movement (from provided script)
+-- Global Variables for Force Movement
 local forceActiveConnection = nil
-local forceSpeedMultiplier = 1.0 -- 1.0 = same as walk speed, 2.0 = double walk speed, etc.
+local forceSpeedMultiplier = 1.0
 local isClimbing = false
-local allConnections = {} -- Table to hold all connections for easy cleanup from the force script
+local allConnections = {}
 
--- This function sets up the state-change listener for a character's humanoid
+-- Setup character force
 local function setupCharacterForce(characterToSetup)
     local humanoidToSetup = characterToSetup:WaitForChild("Humanoid")
-    
-    -- Function to update the isClimbing status
     local function onStateChanged(oldState, newState)
         isClimbing = (newState == Enum.HumanoidStateType.Climbing)
     end
-    
-    -- Connect to the StateChanged event and store the connection for later cleanup
     local stateConnection = humanoidToSetup.StateChanged:Connect(onStateChanged)
     table.insert(allConnections, stateConnection)
 end
 
--- Function to stop the force movement
+-- Stop force movement
 local function stopForceMovement()
     if forceActiveConnection then
         forceActiveConnection:Disconnect()
         forceActiveConnection = nil
     end
-    
     local char = player.Character
     if char and char.PrimaryPart then
         local rootPart = char.PrimaryPart
-        -- Crucially, reset velocity to avoid residual movement
         rootPart.AssemblyLinearVelocity = Vector3.new(0, rootPart.AssemblyLinearVelocity.Y, 0)
     end
 end
 
--- Function to start the force movement
+-- Start force movement
 local function startForceMovement()
     if forceActiveConnection then return end
-    
     forceActiveConnection = RunService.Heartbeat:Connect(function()
         local char = player.Character
         local rootPart = char and char.PrimaryPart
@@ -160,10 +195,7 @@ local function startForceMovement()
             return
         end
         
-        -- If the character is climbing, do nothing.
-        if isClimbing then
-            return
-        end
+        if isClimbing then return end
         
         local verticalVelocity = rootPart.AssemblyLinearVelocity.Y
         local moveSpeed = hum.WalkSpeed * forceSpeedMultiplier
@@ -205,63 +237,62 @@ local function cleanupPlatform(platform)
     end
 end
 
+-- Loop Button Logic
+loopButton.MouseButton1Click:Connect(function()
+    isLooping = not isLooping
+    if isLooping then
+        loopButton.Text = "Loop: On"
+        loopButton.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
+    else
+        loopButton.Text = "Loop: Off"
+        loopButton.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+    end
+end)
+
 local function addPlatformToScrollFrame(platformName)
     local button = Instance.new("TextButton")
     button.Parent = scrollFrame
     button.Size = UDim2.new(1, -10, 0, 25)
     button.Text = platformName
+    button.TextColor3 = Color3.fromRGB(255, 255, 255)
     button.TextScaled = true
-    button.BackgroundColor3 = Color3.fromRGB(150, 150, 255)
+    button.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
+    button.BorderSizePixel = 0
 
     local playButton = Instance.new("TextButton")
     playButton.Parent = button
     playButton.Size = UDim2.new(0, 50, 1, 0)
-    playButton.Position = UDim2.new(1, -40, 0, 0)
+    playButton.Position = UDim2.new(1, -50, 0, 0)
     playButton.Text = "Play"
+    playButton.TextColor3 = Color3.fromRGB(255, 255, 255)
     playButton.TextScaled = true
-    playButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+    playButton.BackgroundColor3 = Color3.fromRGB(40, 100, 40)
+    playButton.BorderSizePixel = 0
 
     playButton.MouseButton1Click:Connect(function()
         if replaying then return end
 
-        -- Stop any existing replay first
         if currentReplayThread then
             shouldStopReplay = true
-            task.wait() -- Allow cancellation to propagate
+            task.wait()
         end
 
-        -- Reset control flags
         replaying = true
         shouldStopReplay = false
 
-        -- Extract platform number safely
         local platformNumber = tonumber(button.Text:match("%d+"))
         if not platformNumber or platformNumber < 1 or platformNumber > #platforms then
             statusLabel.Text = "Status: Invalid platform index"
-            statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+            statusLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
             return
         end
 
-        local platform = platforms[platformNumber]
-
-        -- Update initial status
-        statusLabel.Text = string.format("Starting playback from Platform %d", platformNumber)
-        statusLabel.TextColor3 = Color3.fromRGB(0, 0, 255)
-
-        -- Walk to the platform before replaying (Pathfinding Integrated)
         local function walkToPlatform(destination)
             local humanoidCurrent = character:WaitForChild("Humanoid")
             local rootPart = character:WaitForChild("HumanoidRootPart")
 
-            -- Ensure the Humanoid is alive and can move
-            if not humanoidCurrent or humanoidCurrent.Health <= 0 then
-                return
-            end
-
-            -- FIX: Check if we are already at the destination to avoid halting
-            if (rootPart.Position - destination).Magnitude < 3 then
-                return
-            end
+            if not humanoidCurrent or humanoidCurrent.Health <= 0 then return end
+            if (rootPart.Position - destination).Magnitude < 3 then return end
 
             local path = calculatePath(rootPart.Position, destination)
 
@@ -276,100 +307,117 @@ local function addPlatformToScrollFrame(platformName)
                     humanoidCurrent.MoveToFinished:Wait()
                 end
             else
-                -- Fallback: Directly move to the destination if pathfinding fails
                 humanoidCurrent:MoveTo(destination)
                 humanoidCurrent.MoveToFinished:Wait()
             end
         end
 
-        -- Replay logic for sequential platforms (Improved)
         local function replayPlatforms(startIndex)
-            totalPlatformsToPlay = #platforms -- Total platforms
-            currentPlatformIndex = startIndex -- Starting point
+            while true do
+                totalPlatformsToPlay = #platforms
+                currentPlatformIndex = startIndex
 
-            for i = startIndex, #platforms do
-                if shouldStopReplay then break end
-                
-                -- Update status with absolute position
-                statusLabel.Text = string.format("Playing from Platform %d/%d", currentPlatformIndex, totalPlatformsToPlay)
-                statusLabel.TextColor3 = Color3.fromRGB(0, 0, 255)
-                
-                local currentPlatform = platforms[i]
-                
-                -- PHASE 1: Walk to platform using pathfinding (NO FORCE MOVEMENT)
-                local rootPart = character:WaitForChild("HumanoidRootPart")
-                local targetPos = currentPlatform.Position + Vector3.new(0, 3, 0)
-                
-                if (rootPart.Position - targetPos).Magnitude >= 3 then
-                    stopForceMovement() 
-                    walkToPlatform(targetPos)
-                end
-                
-                if shouldStopReplay then break end 
+                for i = startIndex, #platforms do
+                    if shouldStopReplay then break end
+                    
+                    statusLabel.Text = string.format("Playing from Platform %d/%d", currentPlatformIndex, totalPlatformsToPlay)
+                    statusLabel.TextColor3 = Color3.fromRGB(100, 150, 255)
+                    
+                    local currentPlatform = platforms[i]
+                    local rootPart = character:WaitForChild("HumanoidRootPart")
+                    local targetPos = currentPlatform.Position + Vector3.new(0, 3, 0)
+                    
+                    if (rootPart.Position - targetPos).Magnitude >= 3 then
+                        stopForceMovement() 
+                        walkToPlatform(targetPos)
+                    end
+                    
+                    if shouldStopReplay then break end 
 
-                local movements = platformData[currentPlatform]
-                if movements then
-                    -- PHASE 2: Interpolate movements (ACTIVATE FORCE MOVEMENT)
-                    startForceMovement() -- Activate force movement for interpolation
+                    local movements = platformData[currentPlatform]
+                    if movements then
+                        startForceMovement()
 
-                    for j = 1, #movements - 1 do
-                        if shouldStopReplay then break end 
+                        for j = 1, #movements - 1 do
+                            if shouldStopReplay then break end 
 
-                        local startMovement = movements[j]
-                        local endMovement = movements[j + 1]
-                        endMovement.isJumping = startMovement.isJumping
+                            local startMovement = movements[j]
+                            local endMovement = movements[j + 1]
+                            endMovement.isJumping = startMovement.isJumping
 
-                        local startTime = tick()
+                            local startTime = tick()
+                            local distance = (endMovement.position - startMovement.position).magnitude
+                            local speedFactor = 0.01  
+                            local duration = distance * speedFactor
+                            duration = math.max(duration, 0.01)
 
-                        local distance = (endMovement.position - startMovement.position).magnitude
-                        local speedFactor = 0.01  
-                        local duration = distance * speedFactor
-                        duration = math.max(duration, 0.01)
+                            local endTime = startTime + duration
+                            
+                            -- Calculate velocity to feed the animation script
+                            local velocity = (endMovement.position - startMovement.position) / duration
 
-                        local endTime = startTime + duration
+                            while tick() < endTime do
+                                if shouldStopReplay then break end
+                                local alpha = (tick() - startTime) / duration
+                                alpha = math.min(alpha, 1)
 
-                        while tick() < endTime do
-                            if shouldStopReplay then break end
-                            local alpha = (tick() - startTime) / duration
-                            alpha = math.min(alpha, 1)
+                                local interpolatedPosition = startMovement.position:Lerp(endMovement.position, alpha)
+                                local interpolatedOrientation = CFrame.fromEulerAnglesXYZ(
+                                    math.rad(startMovement.orientation.X), 
+                                    math.rad(startMovement.orientation.Y), 
+                                    math.rad(startMovement.orientation.Z)
+                                ):Lerp(
+                                    CFrame.fromEulerAnglesXYZ(
+                                        math.rad(endMovement.orientation.X),
+                                        math.rad(endMovement.orientation.Y),
+                                        math.rad(endMovement.orientation.Z)
+                                    ), 
+                                    alpha
+                                )
 
-                            local interpolatedPosition = startMovement.position:Lerp(endMovement.position, alpha)
-                            local startOrientation = startMovement.orientation
-                            local endOrientation = endMovement.orientation
-                            local interpolatedOrientation = CFrame.fromEulerAnglesXYZ(
-                                math.rad(startMovement.orientation.X), 
-                                math.rad(startMovement.orientation.Y), 
-                                math.rad(startMovement.orientation.Z)
-                            ):Lerp(
-                                CFrame.fromEulerAnglesXYZ(
-                                    math.rad(endMovement.orientation.X),
-                                    math.rad(endMovement.orientation.Y),
-                                    math.rad(endMovement.orientation.Z)
-                                ), 
-                                alpha
-                            )
+                                character:SetPrimaryPartCFrame(CFrame.new(interpolatedPosition) * interpolatedOrientation)
+                                
+                                -- Apply velocity so animations (like climbing) play correctly
+                                character.PrimaryPart.AssemblyLinearVelocity = velocity
 
-                            character:SetPrimaryPartCFrame(CFrame.new(interpolatedPosition) * interpolatedOrientation)
+                                -- Handle Climbing State
+                                if endMovement.isClimbing then
+                                    if humanoid:GetState() ~= Enum.HumanoidStateType.Climbing then
+                                        humanoid:ChangeState(Enum.HumanoidStateType.Climbing)
+                                    end
+                                else
+                                    if humanoid:GetState() == Enum.HumanoidStateType.Climbing then
+                                        humanoid:ChangeState(Enum.HumanoidStateType.Freefall)
+                                    end
+                                end
 
-                            if endMovement.isJumping then
-                                humanoid.Jump = true
+                                if endMovement.isJumping then
+                                    humanoid.Jump = true
+                                end
+
+                                game:GetService("RunService").Heartbeat:Wait()
                             end
-
-                            game:GetService("RunService").Heartbeat:Wait()
                         end
                     end
+                    currentPlatformIndex += 1 
                 end
-                currentPlatformIndex += 1 
+                
+                if shouldStopReplay then break end
+                
+                if not isLooping then
+                    break
+                else
+                    startIndex = 1 -- Reset to first platform for the loop
+                    task.wait(0.5) -- Small delay before restarting
+                end
             end
             
-            -- Final cleanup: Transition immediately to Idle
             replaying = false
             statusLabel.Text = "Status: Idle"
-            statusLabel.TextColor3 = Color3.fromRGB(0, 0, 0)
+            statusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
             stopForceMovement() 
         end
 
-        -- Start new replay in a tracked thread
         currentReplayThread = task.spawn(function()
             replayPlatforms(platformNumber)
             currentReplayThread = nil
@@ -377,24 +425,22 @@ local function addPlatformToScrollFrame(platformName)
     end)
 end
 
--- Modify the stopReplayButton click handler
 stopReplayButton.MouseButton1Click:Connect(function()
     if replaying then
         shouldStopReplay = true
         replaying = false
         statusLabel.Text = string.format("Stopped at Platform %d/%d", currentPlatformIndex-1, totalPlatformsToPlay)
-        statusLabel.TextColor3 = Color3.fromRGB(255, 165, 0)
+        statusLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
         task.wait(2)
         statusLabel.Text = "Status: Idle"
-        -- Cancel any ongoing movement
+        statusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
         if character:FindFirstChild("Humanoid") then
             character.Humanoid:MoveTo(character.HumanoidRootPart.Position)
         end
-        stopForceMovement() -- Ensure force movement is off when replay is stopped
+        stopForceMovement()
     end
 end)
 
--- Function to add text label to a platform
 local function addTextLabelToPlatform(platform, platformNumber)
     local billboardGui = Instance.new("BillboardGui")
     billboardGui.Size = UDim2.new(1, 0, 0.5, 0)
@@ -412,22 +458,17 @@ local function addTextLabelToPlatform(platform, platformNumber)
     billboardGui.Parent = platform
 end
 
--- Function to serialize platform data to JSON
 local function serializePlatformData()
-    local data = {
-        redPlatforms = {},
-        yellowPlatforms = {},
-        mappings = {}
-    }
+    local data = { redPlatforms = {}, yellowPlatforms = {}, mappings = {} }
 
-    -- Save red platforms
     for i, platform in ipairs(platforms) do
         local movementsData = {}
         for _, movement in ipairs(platformData[platform]) do
             table.insert(movementsData, {
                 position = {X = movement.position.X, Y = movement.position.Y, Z = movement.position.Z},
                 orientation = {X = movement.orientation.X, Y = movement.orientation.Y, Z = movement.orientation.Z},
-                isJumping = movement.isJumping
+                isJumping = movement.isJumping,
+                isClimbing = movement.isClimbing
             })
         end
         table.insert(data.redPlatforms, {
@@ -436,44 +477,36 @@ local function serializePlatformData()
         })
     end
 
-    -- Save yellow platforms and their mappings
     for i, yellowPlatform in ipairs(yellowPlatforms) do
         table.insert(data.yellowPlatforms, {
             position = {X = yellowPlatform.Position.X, Y = yellowPlatform.Position.Y, Z = yellowPlatform.Position.Z}
         })
-
-        -- Store mapping index (map yellow platform to the corresponding red platform index)
         if yellowToRedMapping[yellowPlatform] then
             local redIndex = table.find(platforms, yellowToRedMapping[yellowPlatform])
             table.insert(data.mappings, redIndex)
         end
     end
 
-    local rawData = HttpService:JSONEncode(data)
-    return rawData
+    return HttpService:JSONEncode(data)
 end
 
--- Function to deserialize platform data from JSON
 local function deserializePlatformData(jsonData)
     local success, data = pcall(function()
         return HttpService:JSONDecode(jsonData)
     end)
 
     if not success then
-        warn("Failed to decode JSON data:", data)
         statusLabel.Text = "Status: Invalid JSON data"
-        statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+        statusLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
         return
     end
 
     if not data or type(data) ~= "table" then
-        warn("Invalid data format after decoding JSON")
         statusLabel.Text = "Status: Invalid data format"
-        statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+        statusLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
         return
     end
 
-    -- Clear existing data
     for _, platform in ipairs(platforms) do platform:Destroy() end
     for _, yellowPlatform in ipairs(yellowPlatforms) do yellowPlatform:Destroy() end
     platforms = {}
@@ -483,13 +516,11 @@ local function deserializePlatformData(jsonData)
     platformCounter = 0
     currentRecordingPlatform = nil 
 
-    -- Clear scroll frame and recreate UIListLayout
     scrollFrame:ClearAllChildren()
     local uiListLayout = Instance.new("UIListLayout")
     uiListLayout.Parent = scrollFrame
     uiListLayout.Padding = UDim.new(0, 5)
 
-    -- Load red platforms
     if data.redPlatforms then
         for _, platformInfo in ipairs(data.redPlatforms) do
             local platform = Instance.new("Part")
@@ -506,7 +537,8 @@ local function deserializePlatformData(jsonData)
                     table.insert(restoredMovements, {
                         position = Vector3.new(movement.position.X, movement.position.Y, movement.position.Z),
                         orientation = Vector3.new(movement.orientation.X, movement.orientation.Y, movement.orientation.Z),
-                        isJumping = movement.isJumping
+                        isJumping = movement.isJumping,
+                        isClimbing = movement.isClimbing or false
                     })
                 end
             end
@@ -519,7 +551,6 @@ local function deserializePlatformData(jsonData)
         end
     end
 
-    -- Load yellow platforms and mappings
     if data.yellowPlatforms then
         for i, yellowInfo in ipairs(data.yellowPlatforms) do
             local yellowPlatform = Instance.new("Part")
@@ -542,16 +573,15 @@ local function deserializePlatformData(jsonData)
 
     scrollFrame.CanvasSize = UDim2.new(0, 0, 0, #platforms * 30)
     statusLabel.Text = "Status: Platform data loaded"
-    statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+    statusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
 end
 
--- Handle character respawn or reset
 player.CharacterAdded:Connect(function(newCharacter)
     character = newCharacter
     humanoid = newCharacter:WaitForChild("Humanoid")
     lastPosition = nil
     statusLabel.Text = "Status: Idle"
-    statusLabel.TextColor3 = Color3.fromRGB(0, 0, 0)
+    statusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
 
     for _, connection in ipairs(allConnections) do
         connection:Disconnect()
@@ -581,17 +611,15 @@ player.CharacterAdded:Connect(function(newCharacter)
     end
 end)
 
--- Initial setup for force movement
 if player.Character then
     setupCharacterForce(player.Character)
 end
 
--- Button Functions
 recordButton.MouseButton1Click:Connect(function()
     if not recording then
         recording = true
         statusLabel.Text = "Status: Recording"
-        statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+        statusLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
 
         if #yellowPlatforms > 0 then
             local lastYellowPlatform = yellowPlatforms[#yellowPlatforms]
@@ -636,19 +664,20 @@ recordButton.MouseButton1Click:Connect(function()
         addPlatformToScrollFrame("Platform " .. platformCounter)
         scrollFrame.CanvasSize = UDim2.new(0, 0, 0, #platforms * 30)
 
-        spawn(function()
+        task.spawn(function()
             while recording do
                 if not currentRecordingPlatform or not currentRecordingPlatform.Parent then
                     recording = false
-                    statusLabel.Text = "Error: Missing Red Platform (Recording Stopped)"
-                    statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+                    statusLabel.Text = "Error: Missing Red Platform"
+                    statusLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
                     break 
                 end
                 if isCharacterMoving() then
                     table.insert(platformData[currentRecordingPlatform], {
                         position = character.PrimaryPart.Position,
                         orientation = character.PrimaryPart.Orientation,
-                        isJumping = humanoid.Jump 
+                        isJumping = humanoid.Jump,
+                        isClimbing = isClimbing -- Record climbing state
                     })
                 end
                 game:GetService("RunService").Heartbeat:Wait()
@@ -661,14 +690,14 @@ stopRecordButton.MouseButton1Click:Connect(function()
     if recording then
         if not currentRecordingPlatform or not currentRecordingPlatform.Parent then
             recording = false 
-            statusLabel.Text = "Error: Missing Red Platform (Cannot Stop Record)"
-            statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+            statusLabel.Text = "Error: Missing Red Platform"
+            statusLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
             currentRecordingPlatform = nil 
             return 
         end
         recording = false
         statusLabel.Text = "Status: Stopped Recording"
-        statusLabel.TextColor3 = Color3.fromRGB(255, 165, 0)
+        statusLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
 
         local yellowPlatform = Instance.new("Part")
         yellowPlatform.Size = Vector3.new(5, 1, 5)
@@ -700,8 +729,8 @@ deleteButton.MouseButton1Click:Connect(function()
         local lastPlatform = platforms[#platforms]
         if recording and lastPlatform == currentRecordingPlatform then
             recording = false 
-            statusLabel.Text = "Error: Missing Red Platform (Recording Stopped)"
-            statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+            statusLabel.Text = "Error: Missing Red Platform"
+            statusLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
             currentRecordingPlatform = nil 
         end
         lastPlatform:Destroy()
@@ -729,14 +758,6 @@ local currentChunkIndex = 0
 local totalChunks = 0
 local CHUNK_SIZE = 20 
 
-local saveButton = Instance.new("TextButton")
-saveButton.Parent = frame
-saveButton.BackgroundColor3 = Color3.fromRGB(100, 255, 100)
-saveButton.Size = UDim2.new(0, 90, 0, 30)
-saveButton.Position = UDim2.new(0, 10, 0, 90)
-saveButton.Text = "Save"
-saveButton.TextScaled = true
-
 saveButton.MouseButton1Click:Connect(function()
     local jsonData = serializePlatformData()
     if #jsonData > 190000 then 
@@ -762,76 +783,29 @@ saveButton.MouseButton1Click:Connect(function()
         currentChunkIndex = 1
         setclipboard(saveChunks[currentChunkIndex])
         statusLabel.Text = string.format("Chunk %d/%d copied. Save it, then press Save again for next chunk", currentChunkIndex, totalChunks)
-        statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+        statusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
     else
         setclipboard(jsonData)
         statusLabel.Text = "Platform data copied to clipboard"
-        statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+        statusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
         saveChunks = {}; currentChunkIndex = 0; totalChunks = 0
     end
 end)
-
-local nextChunkButton = Instance.new("TextButton")
-nextChunkButton.Parent = frame
-nextChunkButton.BackgroundColor3 = Color3.fromRGB(100, 200, 255)
-nextChunkButton.Size = UDim2.new(0, 90, 0, 30)
-nextChunkButton.Position = UDim2.new(0, 120, 0, 90)
-nextChunkButton.Text = "Next Chunk"
-nextChunkButton.TextScaled = true
 
 nextChunkButton.MouseButton1Click:Connect(function()
     if #saveChunks > 0 and currentChunkIndex < totalChunks then
         currentChunkIndex = currentChunkIndex + 1
         setclipboard(saveChunks[currentChunkIndex])
         statusLabel.Text = string.format("Chunk %d/%d copied. Save it before continuing", currentChunkIndex, totalChunks)
-        statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+        statusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
     elseif currentChunkIndex == totalChunks then
         statusLabel.Text = "All chunks have been copied"
-        statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+        statusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
     else
         statusLabel.Text = "No chunks to copy"
-        statusLabel.TextColor3 = Color3.fromRGB(255, 165, 0)
+        statusLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
     end
 end)
-
-local pasteLabel = Instance.new("TextLabel")
-pasteLabel.Parent = screenGui
-pasteLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-pasteLabel.Size = UDim2.new(0, 200, 0, 30)
-pasteLabel.Position = UDim2.new(0, 10, 0, 140)
-pasteLabel.Text = "Paste Platform Data Here"
-pasteLabel.TextColor3 = Color3.fromRGB(0, 0, 0)
-pasteLabel.TextScaled = true
-pasteLabel.Visible = false 
-
-local pasteTextBox = Instance.new("TextBox")
-pasteTextBox.Parent = screenGui
-pasteTextBox.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-pasteTextBox.Size = UDim2.new(0, 200, 0, 50)
-pasteTextBox.Position = UDim2.new(0, 10, 0, 170)
-pasteTextBox.Text = ""
-pasteTextBox.PlaceholderText = "Paste JSON data here"
-pasteTextBox.ClearTextOnFocus = true 
-pasteTextBox.MultiLine = true
-pasteTextBox.TextScaled = true
-pasteTextBox.Visible = false 
-
-local loadButton = Instance.new("TextButton")
-loadButton.Parent = screenGui
-loadButton.BackgroundColor3 = Color3.fromRGB(255, 255, 100)
-loadButton.Size = UDim2.new(0, 90, 0, 30)
-loadButton.Position = UDim2.new(0, 10, 0, 230)
-loadButton.Text = "Load"
-loadButton.TextScaled = true
-loadButton.Visible = false 
-
-local toggleButton = Instance.new("TextButton")
-toggleButton.Parent = frame
-toggleButton.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
-toggleButton.Size = UDim2.new(0, 30, 0, 20)
-toggleButton.Position = UDim2.new(0, 10, 0, 175) 
-toggleButton.Text = "+"
-toggleButton.TextScaled = true
 
 toggleButton.MouseButton1Click:Connect(function()
     local isVisible = not pasteLabel.Visible
@@ -839,13 +813,20 @@ toggleButton.MouseButton1Click:Connect(function()
     pasteTextBox.Visible = isVisible
     loadButton.Visible = isVisible
     toggleButton.Text = isVisible and "-" or "+"
+    
+    -- Expand or collapse the frame cleanly
+    if isVisible then
+        frame.Size = UDim2.new(0, 240, 0, 340)
+    else
+        frame.Size = UDim2.new(0, 240, 0, 250)
+    end
 end)
 
 loadButton.MouseButton1Click:Connect(function()
     local input = pasteTextBox.Text
     if input:gsub("%s", "") == "" then
         statusLabel.Text = "Status: No data to load"
-        statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+        statusLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
         return 
     end
     local loadedSuccessfully = false
@@ -891,7 +872,7 @@ loadButton.MouseButton1Click:Connect(function()
             end
         else
             statusLabel.Text = "Load failed: "..tostring(response):sub(1,50)
-            statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+            statusLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
             return 
         end
     else
@@ -929,9 +910,9 @@ loadButton.MouseButton1Click:Connect(function()
     end
     if loadedSuccessfully then
         statusLabel.Text = "Status: Platform data loaded"
-        statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
-    elseif statusLabel.Text == "Status: Idle" or statusLabel.TextColor3 == Color3.fromRGB(0,0,0) then
+        statusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+    elseif statusLabel.Text == "Status: Idle" or statusLabel.TextColor3 == Color3.fromRGB(200, 200, 200) then
         statusLabel.Text = "Status: Failed to parse data"
-        statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+        statusLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
     end
 end)
