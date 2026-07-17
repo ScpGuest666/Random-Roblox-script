@@ -1,148 +1,145 @@
+-- Wait for player
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer or Players.PlayerAdded:Wait()
+local mouse = player:GetMouse()
+
+-- Determine the best parent for the GUI (Similar to Infinite Yield)
+-- Uses gethui() or CoreGui if available (for executors), otherwise falls back to PlayerGui
+local guiParent
+if type(gethui) == "function" then
+    guiParent = gethui()
+else
+    local success = pcall(function()
+        return game:GetService("CoreGui").Name
+    end)
+    if success then
+        guiParent = game:GetService("CoreGui")
+    else
+        guiParent = player:WaitForChild("PlayerGui")
+    end
+end
+
 -- Create ScreenGui
 local screenGui = Instance.new("ScreenGui")
-screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+screenGui.Name = "Gui_" .. math.random(10000, 99999)
 screenGui.ResetOnSpawn = false
+screenGui.DisplayOrder = 2147483647 -- Maximum value to ensure it renders on top of EVERYTHING
+screenGui.IgnoreGuiInset = true -- Prevents the Roblox topbar from pushing the UI down
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+screenGui.Parent = guiParent
 
--- Create Frame
-local frame = Instance.new("Frame")
-frame.Parent = screenGui
-frame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-frame.Size = UDim2.new(0, 200, 0, 130)
-frame.Position = UDim2.new(0.5, -100, 0.5, -65)
-frame.Active = true
-frame.Draggable = true
+-- Main draggable frame
+local mainFrame = Instance.new("Frame")
+mainFrame.Parent = screenGui
+mainFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+mainFrame.Size = UDim2.new(0, 200, 0, 100)
+mainFrame.Position = UDim2.new(0.3, 0, 0.5, -50)
+mainFrame.Draggable = true
+mainFrame.Active = true
 
--- Create On Button
-local onButton = Instance.new("TextButton")
-onButton.Parent = frame
-onButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-onButton.Size = UDim2.new(0, 60, 0, 30)
-onButton.Position = UDim2.new(0, 20, 0, 20)
-onButton.Text = "On"
-onButton.TextScaled = true
+-- Status label
+local status = Instance.new("TextLabel")
+status.Parent = mainFrame
+status.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+status.Size = UDim2.new(0, 200, 0, 30)
+status.Position = UDim2.new(0, 0, 0, -30)
+status.Text = "Status: Offline"
+status.TextColor3 = Color3.fromRGB(255, 0, 0)
+status.TextScaled = true
 
--- Create Off Button
-local offButton = Instance.new("TextButton")
-offButton.Parent = frame
-offButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-offButton.Size = UDim2.new(0, 60, 0, 30)
-offButton.Position = UDim2.new(0, 120, 0, 20)
-offButton.Text = "Off"
-offButton.TextScaled = true
+-- Helper to create a proper TextButton
+local function createButton(name, text, x, y, width, height)
+    local btn = Instance.new("TextButton")
+    btn.Name = name
+    btn.Parent = mainFrame
+    btn.Text = text
+    btn.Size = UDim2.new(0, width, 0, height)
+    btn.Position = UDim2.new(0, x, 0, y)
+    btn.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.TextScaled = true
+    btn.AutoButtonColor = true
+    btn.BorderSizePixel = 0
+    return btn
+end
 
--- Create Destroy Button
-local destroyButton = Instance.new("TextButton")
-destroyButton.Parent = frame
-destroyButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-destroyButton.Size = UDim2.new(0, 160, 0, 30)
-destroyButton.Position = UDim2.new(0, 20, 0, 60)
-destroyButton.Text = "Destroy"
-destroyButton.TextScaled = true
+-- Create buttons (Organized into a 2x2 grid to keep the UI compact)
+local onBtn = createButton("OnBtn", "On", 10, 20, 80, 30)
+local offBtn = createButton("OffBtn", "Off", 110, 20, 80, 30)
+local recoverBtn = createButton("RecoverBtn", "Recover", 10, 60, 80, 30)
+local destroyBtn = createButton("DestroyBtn", "Destroy", 110, 60, 80, 30)
 
--- Create Recover Button
-local recoverButton = Instance.new("TextButton")
-recoverButton.Parent = frame
-recoverButton.BackgroundColor3 = Color3.fromRGB(0, 0, 255)
-recoverButton.Size = UDim2.new(0, 160, 0, 30)
-recoverButton.Position = UDim2.new(0, 20, 0, 100)
-recoverButton.Text = "Recover"
-recoverButton.TextScaled = true
-
--- Create Status Indicator
-local statusLabel = Instance.new("TextLabel")
-statusLabel.Parent = frame
-statusLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-statusLabel.Size = UDim2.new(0, 200, 0, 30)
-statusLabel.Position = UDim2.new(0, 0, 0, -30)
-statusLabel.Text = "Status: Off"
-statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
-statusLabel.TextScaled = true
-
--- Create Destroy Functionality
+-- Functionality Variables
 local buildingEnabled = false
-local selectedPart = nil
-local deletedParts = {}  -- Table to store deleted parts and their original positions
-local debounce = false  -- Debounce flag to prevent multiple deletions
+local deletedParts = {}
+local debounce = false
+local clickConnection = nil
 
-local function enableBuilding()
+-- Improved Restoration Logic
+-- Instead of :Destroy() and :Clone(), we set Parent to nil. 
+-- This preserves all scripts, constraints (like door hinges), and internal states.
+local function recoverParts()
+    for _, data in ipairs(deletedParts) do
+        if data.Instance then
+            -- Restore the part to its exact original parent
+            data.Instance.Parent = data.Parent
+        end
+    end
+    deletedParts = {} -- Clear the cache after recovery
+end
+
+-- Status toggle functions
+local function setOnline()
+    if buildingEnabled then return end
     buildingEnabled = true
-    statusLabel.Text = "Status: On"
-    statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+    status.Text = "Status: Online"
+    status.TextColor3 = Color3.fromRGB(0, 255, 0)
 
-    local player = game.Players.LocalPlayer
-    local mouse = player:GetMouse()
-
-    -- Mouse Button Down
-    mouse.Button1Down:Connect(function()
+    -- Connect mouse click
+    clickConnection = mouse.Button1Down:Connect(function()
         if buildingEnabled and not debounce then
             debounce = true
             local target = mouse.Target
-            if target and target ~= selectedPart then
-                -- If there's already a selected part, destroy it
-                if selectedPart then
-                    selectedPart:Destroy()
-                end
-                -- Select and destroy the new target
-                selectedPart = target
-                print("Selected Part: " .. selectedPart.Name)
-
-                -- Store the deleted part and its original position
-                local partClone = selectedPart:Clone()
+            
+            -- Ensure we have a target and we aren't accidentally clicking the GUI
+            if target and not target:IsDescendantOf(screenGui) then
+                -- Cache the instance and its original parent
                 table.insert(deletedParts, {
-                    Part = partClone,
-                    Position = selectedPart.Position
+                    Instance = target,
+                    Parent = target.Parent
                 })
-                selectedPart:Destroy()
-                selectedPart = nil
+                
+                -- "Delete" it by removing it from the workspace safely
+                target.Parent = nil
             end
-            -- Reset debounce after a short delay
-            wait(0.1)  -- Adjust the delay as needed
+            
+            task.wait(0.1) -- Modern wait function
             debounce = false
         end
     end)
 end
 
-local function disableBuilding()
+local function setOffline()
+    if not buildingEnabled then return end
     buildingEnabled = false
-    statusLabel.Text = "Status: Off"
-    statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
-    selectedPart = nil
-end
-
-local function recoverParts()
-    for _, partData in ipairs(deletedParts) do
-        local recoveredPart = partData.Part
-        recoveredPart.Parent = workspace
-        recoveredPart.Position = partData.Position
-        print("Recovered Part: " .. recoveredPart.Name)
+    status.Text = "Status: Offline"
+    status.TextColor3 = Color3.fromRGB(255, 0, 0)
+    
+    -- Disconnect the mouse event to prevent memory leaks
+    if clickConnection then
+        clickConnection:Disconnect()
+        clickConnection = nil
     end
-    deletedParts = {}  -- Clear the list after recovery
 end
 
 local function destroyGui()
-    -- Recover all deleted parts when GUI is destroyed
-    recoverParts()
+    setOffline()
+    recoverParts() -- Automatically recover everything before destroying the GUI
     screenGui:Destroy()
-    disableBuilding()
 end
 
--- Button Functions
-onButton.MouseButton1Click:Connect(function()
-    if not buildingEnabled then
-        enableBuilding()
-    end
-end)
-
-offButton.MouseButton1Click:Connect(function()
-    if buildingEnabled then
-        disableBuilding()
-    end
-end)
-
-destroyButton.MouseButton1Click:Connect(function()
-    destroyGui()
-end)
-
-recoverButton.MouseButton1Click:Connect(function()
-    recoverParts()
-end)
+-- Connect clicks
+onBtn.MouseButton1Click:Connect(setOnline)
+offBtn.MouseButton1Click:Connect(setOffline)
+recoverBtn.MouseButton1Click:Connect(recoverParts)
+destroyBtn.MouseButton1Click:Connect(destroyGui)
