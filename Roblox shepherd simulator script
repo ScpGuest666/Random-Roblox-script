@@ -2,7 +2,6 @@
 local Players = game:GetService("Players")
 local vim = game:GetService("VirtualInputManager")
 local RunService = game:GetService("RunService")
-
 local player = Players.LocalPlayer or Players.PlayerAdded:Wait()
 
 -- Determine the best parent for the GUI
@@ -10,9 +9,7 @@ local guiParent
 if type(gethui) == "function" then
     guiParent = gethui()
 else
-    local success = pcall(function()
-        return game:GetService("CoreGui").Name
-    end)
+    local success = pcall(function() return game:GetService("CoreGui").Name end)
     if success then
         guiParent = game:GetService("CoreGui")
     else
@@ -38,7 +35,7 @@ mainFrame.Position = UDim2.new(0.3, 0, 0.5, -50)
 mainFrame.Draggable = true
 mainFrame.Active = true
 
--- Status label
+-- Status label (positioned above the main frame)
 local status = Instance.new("TextLabel")
 status.Parent = mainFrame
 status.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
@@ -47,6 +44,25 @@ status.Position = UDim2.new(0, 0, 0, -30)
 status.Text = "Status: Offline"
 status.TextColor3 = Color3.fromRGB(255, 0, 0)
 status.TextScaled = true
+
+-- Helper to create a TextBox
+local function createTextBox(name, x, y, width, height, placeholder)
+    local tb = Instance.new("TextBox")
+    tb.Name = name
+    tb.Parent = mainFrame
+    tb.Size = UDim2.new(0, width, 0, height)
+    tb.Position = UDim2.new(0, x, 0, y)
+    tb.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    tb.TextColor3 = Color3.fromRGB(255, 255, 255)
+    tb.TextScaled = false
+    tb.TextSize = 14
+    tb.Font = Enum.Font.SourceSans
+    tb.PlaceholderText = placeholder
+    tb.PlaceholderColor3 = Color3.fromRGB(170, 170, 170)
+    tb.BorderSizePixel = 0
+    tb.ClearTextOnFocus = false   -- we handle clearing manually
+    return tb
+end
 
 -- Helper to create a proper TextButton
 local function createButton(name, text, x, y, width, height)
@@ -64,10 +80,68 @@ local function createButton(name, text, x, y, width, height)
     return btn
 end
 
--- Create buttons
-local onBtn = createButton("OnBtn", "On", 10, 20, 80, 30)
-local offBtn = createButton("OffBtn", "Off", 110, 20, 80, 30)
-local destroyBtn = createButton("DestroyBtn", "Destroy", 20, 60, 160, 30)
+-- Default offset values
+local defaultOffsetX = 290
+local defaultOffsetY = 0
+local offsetX = defaultOffsetX
+local offsetY = defaultOffsetY
+
+-- Create X and Y text boxes (placed at top)
+local xTextBox = createTextBox("XOffsetBox", 10, 5, 80, 20, "X offset")
+local yTextBox = createTextBox("YOffsetBox", 110, 5, 80, 20, "Y offset")
+
+-- Set initial text to defaults
+xTextBox.Text = tostring(offsetX)
+yTextBox.Text = tostring(offsetY)
+
+-- Focused: clear the text so user can type easily
+xTextBox.Focused:Connect(function()
+    xTextBox.Text = ""
+end)
+yTextBox.Focused:Connect(function()
+    yTextBox.Text = ""
+end)
+
+-- FocusLost: parse and update offset, fallback to default if invalid
+local function handleXFocusLost()
+    local text = xTextBox.Text:match("%S+") or ""
+    if text == "" then
+        offsetX = defaultOffsetX
+        xTextBox.Text = tostring(offsetX)
+    else
+        local num = tonumber(text)
+        if num ~= nil then
+            offsetX = num
+            xTextBox.Text = tostring(offsetX)
+        else
+            offsetX = defaultOffsetX
+            xTextBox.Text = tostring(offsetX)
+        end
+    end
+end
+local function handleYFocusLost()
+    local text = yTextBox.Text:match("%S+") or ""
+    if text == "" then
+        offsetY = defaultOffsetY
+        yTextBox.Text = tostring(offsetY)
+    else
+        local num = tonumber(text)
+        if num ~= nil then
+            offsetY = num
+            yTextBox.Text = tostring(offsetY)
+        else
+            offsetY = defaultOffsetY
+            yTextBox.Text = tostring(offsetY)
+        end
+    end
+end
+xTextBox.FocusLost:Connect(handleXFocusLost)
+yTextBox.FocusLost:Connect(handleYFocusLost)
+
+-- Create buttons (positions adjusted to fit text boxes)
+local onBtn = createButton("OnBtn", "On", 10, 30, 80, 30)
+local offBtn = createButton("OffBtn", "Off", 110, 30, 80, 30)
+local destroyBtn = createButton("DestroyBtn", "Destroy", 20, 65, 160, 30)
 
 -- Visual Pointer (Red Dot) to show exactly where the script is clicking
 local pointer = Instance.new("Frame")
@@ -78,22 +152,17 @@ pointer.AnchorPoint = Vector2.new(0.5, 0.5)
 pointer.ZIndex = 2147483647
 pointer.Visible = false
 pointer.Parent = screenGui
-
 local uiCorner = Instance.new("UICorner")
 uiCorner.CornerRadius = UDim.new(1, 0)
 uiCorner.Parent = pointer
 
--------------------------------------------------------------------------------
+------------------------------------------------------------------------------
 -- BUTTON TRACKING LOGIC
--------------------------------------------------------------------------------
-
--- [[ ADJUST MOUSE POSITION HERE ]] --
-local offsetX = 290 
-local offsetY = 0  
+------------------------------------------------------------------------------
 
 -- [[ ADJUST POINTER (RED DOT) POSITION RELATIVE TO MOUSE HERE ]] --
-local pointerOffsetX = -38 
-local pointerOffsetY = 0   
+local pointerOffsetX = -38
+local pointerOffsetY = 0
 --------------------------------------
 
 local isRunning = false
@@ -106,13 +175,9 @@ local TOUCH_ID = 8823 -- Unique ID to simulate a specific finger touch
 local function isTrulyVisible(guiObject)
     local current = guiObject
     while current and current:IsA("GuiObject") do
-        if not current.Visible then
-            return false
-        end
+        if not current.Visible then return false end
         if current:IsA("TextLabel") or current:IsA("TextButton") then
-            if current.TextTransparency >= 1 then
-                return false
-            end
+            if current.TextTransparency >= 1 then return false end
         end
         current = current.Parent
     end
@@ -123,21 +188,14 @@ end
 local function findTargetButton()
     local playerGui = player:FindFirstChild("PlayerGui")
     if not playerGui then return nil end
-
     for _, desc in ipairs(playerGui:GetDescendants()) do
         if desc:IsA("TextLabel") or desc:IsA("TextButton") then
             if desc.Text then
                 local text = string.upper(desc.Text)
                 local trimmedText = string.gsub(text, "%s+", "") -- Remove spaces for exact matching
-                
                 -- Check if the text matches any of our target buttons
-                local isMatch = string.find(text, "HOLD") 
-                    or string.find(text, "WASD") 
-                    or trimmedText == "W" 
-                    or trimmedText == "A" 
-                    or trimmedText == "S" 
-                    or trimmedText == "D"
-
+                local isMatch = string.find(text, "HOLD") or string.find(text, "WASD") or
+                                trimmedText == "W" or trimmedText == "A" or trimmedText == "S" or trimmedText == "D"
                 if isMatch and isTrulyVisible(desc) then
                     return desc
                 end
@@ -151,11 +209,9 @@ end
 local function startHolding()
     while isRunning do
         local button = findTargetButton()
-
         if button then
             local absPos = button.AbsolutePosition
             local absSize = button.AbsoluteSize
-
             -- Calculate the exact center of the UI element, applying your custom offsets
             local x = absPos.X + (absSize.X / 2) + offsetX
             local y = absPos.Y + (absSize.Y / 2) + offsetY
@@ -167,7 +223,6 @@ local function startHolding()
             if not isHolding then
                 -- Wait a tiny fraction of a second to ensure the game has fully initialized the button's click detectors
                 task.wait(0.05)
-                
                 -- Re-calculate in case the button moved during the wait
                 absPos = button.AbsolutePosition
                 absSize = button.AbsoluteSize
@@ -180,7 +235,6 @@ local function startHolding()
                 task.wait(0.02)
                 -- Send Touch Moved event (1 = Moved) to force Roblox to register the touch
                 vim:SendTouchEvent(TOUCH_ID, 1, x, y)
-                
                 isHolding = true
                 lastX = x
                 lastY = y
@@ -189,16 +243,13 @@ local function startHolding()
                 if math.abs(lastX - x) > 5 or math.abs(lastY - y) > 5 then
                     -- 1. Release the touch at the old location (2 = Ended)
                     vim:SendTouchEvent(TOUCH_ID, 2, lastX, lastY)
-                    
                     -- 2. Wait a tiny bit
-                    task.wait(0.02) 
-                    
+                    task.wait(0.02)
                     -- 3. Press down again at the new location (0 = Began)
                     vim:SendTouchEvent(TOUCH_ID, 0, x, y)
                     task.wait(0.02)
                     -- 4. Send Touch Moved event (1 = Moved) to force registration
                     vim:SendTouchEvent(TOUCH_ID, 1, x, y)
-                    
                     -- Update last known coordinates
                     lastX = x
                     lastY = y
@@ -212,11 +263,9 @@ local function startHolding()
                 isHolding = false
             end
         end
-
         -- Wait for the next frame
         RunService.RenderStepped:Wait()
     end
-    
     -- Ensure touch is released when turned off
     pointer.Visible = false
     if isHolding then
@@ -225,15 +274,15 @@ local function startHolding()
     end
 end
 
--------------------------------------------------------------------------------
+------------------------------------------------------------------------------
 -- BUTTON CONNECTIONS
--------------------------------------------------------------------------------
+------------------------------------------------------------------------------
+
 local function setOnline()
     if isRunning then return end
     isRunning = true
     status.Text = "Status: Online"
     status.TextColor3 = Color3.fromRGB(0, 255, 0)
-    
     holdCoroutine = task.spawn(startHolding)
 end
 
@@ -241,12 +290,10 @@ local function setOffline()
     isRunning = false
     status.Text = "Status: Offline"
     status.TextColor3 = Color3.fromRGB(255, 0, 0)
-    
     if holdCoroutine then
         task.cancel(holdCoroutine)
         holdCoroutine = nil
     end
-    
     -- Cleanup
     pointer.Visible = false
     if isHolding then
