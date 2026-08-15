@@ -65,7 +65,7 @@ end
 
 -- 5-Button Layout inside 200x100
 local toggleBtn    = createButton("ToggleBtn", "START", 8, 8, 88, 26, Color3.fromRGB(0, 255, 0))
-local fastBtn      = createButton("FastBtn", "FAST TP: OFF", 104, 8, 88, 26, Color3.fromRGB(0, 255, 255))
+local fastBtn      = createButton("FastBtn", "AUTO TOUCH: OFF", 104, 8, 88, 26, Color3.fromRGB(0, 255, 255))
 local antiLagBtn   = createButton("AntiLagBtn", "ANTI-LAG: OFF", 8, 38, 88, 26, Color3.fromRGB(255, 255, 255))
 local billboardBtn = createButton("BillboardBtn", "BILLBOARD: OFF", 104, 38, 88, 26, Color3.fromRGB(255, 255, 0))
 local destroyBtn   = createButton("DestroyBtn", "Destroy UI", 8, 68, 184, 24, Color3.fromRGB(255, 100, 100))
@@ -75,7 +75,7 @@ local destroyBtn   = createButton("DestroyBtn", "Destroy UI", 8, 68, 184, 24, Co
 -------------------------------------------------------------------------------
 
 local isScanning = false
-local isFastTPing = false
+local isAutoTouching = false
 local isAntiLagOn = false
 local isBillboardOn = false
 
@@ -89,34 +89,6 @@ local currentBestGuess = nil
 local connections = {}
 local pendingReset = false 
 local trackedBillboards = {}
-
--- Fast TP & Platform References
-local originalCFrame = nil
-local tpPlatform = nil
-
--------------------------------------------------------------------------------
--- PLATFORM CONTROLLER
--------------------------------------------------------------------------------
-
-local function ensurePlatform(pos, size)
-    if not tpPlatform or not tpPlatform.Parent then
-        tpPlatform = Instance.new("Part")
-        tpPlatform.Name = "Minesweeper_AntiFallPlatform"
-        tpPlatform.Anchored = true
-        tpPlatform.CanCollide = true
-        tpPlatform.Transparency = 1
-        tpPlatform.Parent = Workspace
-    end
-    tpPlatform.Size = size or Vector3.new(8, 1, 8)
-    tpPlatform.CFrame = CFrame.new(pos)
-end
-
-local function destroyPlatform()
-    if tpPlatform then
-        tpPlatform:Destroy()
-        tpPlatform = nil
-    end
-end
 
 -------------------------------------------------------------------------------
 -- COLOR & TILE RECOGNITION
@@ -157,7 +129,6 @@ end
 
 local function isTileCandidate(part)
     if not part or not part:IsA("BasePart") then return false end
-    if part.Name == "Minesweeper_AntiFallPlatform" then return false end
     if isExcluded(part) then return false end
     
     if isUnrevealed(part) or getNumber(part) ~= nil then return true end
@@ -191,6 +162,45 @@ local function createHighlight(part, color, name)
     h.OutlineTransparency = 0.5
     h.DepthMode = Enum.HighlightDepthMode.Occluded 
     h.Parent = part
+end
+
+-------------------------------------------------------------------------------
+-- DETACHED LEG / TOUCH DISPATCHER (NO TELEPORTATION)
+-------------------------------------------------------------------------------
+
+local function triggerTileTouch(targetTile)
+    if not targetTile or not targetTile:IsDescendantOf(workspace) then return end
+    
+    local char = player.Character
+    if not char then return end
+    
+    -- Find a valid character limb (R15 and R6 compatible)
+    local leg = char:FindFirstChild("RightFoot") 
+        or char:FindFirstChild("Right Leg") 
+        or char:FindFirstChild("LeftFoot") 
+        or char:FindFirstChild("Left Leg") 
+        or char:FindFirstChild("HumanoidRootPart")
+        
+    if not leg then return end
+
+    -- Method 1: Native executor touch interest (Completely invisible & instant)
+    if typeof(firetouchinterest) == "function" then
+        firetouchinterest(leg, targetTile, 0)
+        task.wait(0.02)
+        firetouchinterest(leg, targetTile, 1)
+    else
+        -- Method 2: Fake limb projection parented to Character (Triggers server .Touched)
+        local probe = Instance.new("Part")
+        probe.Name = "LegProbe"
+        probe.Size = leg.Size
+        probe.CanCollide = false
+        probe.Transparency = 1
+        probe.CFrame = targetTile.CFrame
+        probe.Parent = char
+        
+        task.wait(0.04)
+        probe:Destroy()
+    end
 end
 
 -------------------------------------------------------------------------------
@@ -563,7 +573,6 @@ local function startSolverLoop()
                         end
                     end
 
-                    -- Update Billboard
                     if isBillboardOn then
                         updateBillboard(part)
                     end
@@ -602,31 +611,19 @@ end
 -- UI CONNECTIONS
 -------------------------------------------------------------------------------
 
-local function returnToOriginalPosition()
-    destroyPlatform()
-    if originalCFrame and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-        local root = player.Character.HumanoidRootPart
-        root.AssemblyLinearVelocity = Vector3.zero
-        root.AssemblyAngularVelocity = Vector3.zero
-        root.CFrame = originalCFrame
-        originalCFrame = nil
-    end
-end
-
 toggleBtn.MouseButton1Click:Connect(function()
     if isScanning then
         isScanning = false
-        isFastTPing = false
+        isAutoTouching = false
         pendingReset = false
         
         toggleBtn.Text = "START"
         toggleBtn.TextColor3 = Color3.fromRGB(0, 255, 0)
-        fastBtn.Text = "FAST TP: OFF"
+        fastBtn.Text = "AUTO TOUCH: OFF"
         fastBtn.TextColor3 = Color3.fromRGB(0, 255, 255)
         status.Text = "Status: Offline"
         status.TextColor3 = Color3.fromRGB(255, 0, 0)
         
-        returnToOriginalPosition()
         for _, conn in pairs(connections) do conn:Disconnect() end
         connections = {}
         for _, p in pairs(cachedParts) do if p:IsDescendantOf(workspace) then clearVisuals(p) end end
@@ -652,93 +649,52 @@ toggleBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- Fast TP: Inverts character UPSIDE DOWN so legs point upward into the block
+-- AUTO TOUCH: Simulates limb contact on safe blocks without moving the player at all
 fastBtn.MouseButton1Click:Connect(function()
     if not isScanning then return end
     
-    isFastTPing = not isFastTPing 
+    isAutoTouching = not isAutoTouching 
     
-    if isFastTPing then
-        fastBtn.Text = "FAST TP: ON"
+    if isAutoTouching then
+        fastBtn.Text = "AUTO TOUCH: ON"
         fastBtn.TextColor3 = Color3.fromRGB(0, 255, 0)
-        status.Text = "Status: Fast TP Active"
-        
-        local char = player.Character
-        local root = char and char:FindFirstChild("HumanoidRootPart")
-        if root then
-            originalCFrame = root.CFrame
-        end
+        status.Text = "Status: Auto Touch Active"
         
         task.spawn(function()
-            while isFastTPing and isScanning do
+            while isAutoTouching and isScanning do
                 if not pendingReset then
-                    local currentRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-                    
-                    if currentRoot then
-                        local safeParts = {}
-                        for part, _ in pairs(knownSafe) do
-                            if part and part:IsDescendantOf(workspace) and isUnrevealed(part) then
-                                table.insert(safeParts, part)
-                            end
+                    local safeParts = {}
+                    for part, _ in pairs(knownSafe) do
+                        if part and part:IsDescendantOf(workspace) and isUnrevealed(part) then
+                            table.insert(safeParts, part)
                         end
-                        
-                        if #safeParts > 0 then
-                            for _, part in ipairs(safeParts) do
-                                if not isFastTPing or not isScanning or pendingReset then break end 
-                                
-                                if part:IsDescendantOf(workspace) and isUnrevealed(part) then
-                                    local bottomFaceY = part.Position.Y - (part.Size.Y / 2)
-                                    
-                                    -- When inverted upside down, feet extend ~2.2 studs UP from HRP
-                                    -- Placing HRP at (bottomFaceY - 2.2) pushes feet directly into the bottom face
-                                    local targetHRP_Y = bottomFaceY - 2.2
-                                    local targetPos = Vector3.new(part.Position.X, targetHRP_Y, part.Position.Z)
-                                    
-                                    -- Rotate 180 degrees (upside down) around X-axis
-                                    local invertedCFrame = CFrame.new(targetPos) * CFrame.Angles(math.rad(180), 0, 0)
-                                    
-                                    -- Support platform placed beneath the upside-down head to prevent falling
-                                    local platformY = targetHRP_Y - 2.6
-                                    ensurePlatform(Vector3.new(part.Position.X, platformY, part.Position.Z), Vector3.new(part.Size.X + 1, 0.6, part.Size.Z + 1))
-                                    
-                                    -- Teleport and zero out momentum
-                                    currentRoot.AssemblyLinearVelocity = Vector3.zero
-                                    currentRoot.AssemblyAngularVelocity = Vector3.zero
-                                    currentRoot.CFrame = invertedCFrame
-                                    
-                                    task.wait(0.06) 
-                                end
-                            end
+                    end
+                    
+                    if #safeParts > 0 then
+                        for _, part in ipairs(safeParts) do
+                            if not isAutoTouching or not isScanning or pendingReset then break end 
                             
-                            -- Return upright to original position after clearing current batch
-                            destroyPlatform()
-                            if originalCFrame and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-                                local r = player.Character.HumanoidRootPart
-                                r.AssemblyLinearVelocity = Vector3.zero
-                                r.AssemblyAngularVelocity = Vector3.zero
-                                r.CFrame = originalCFrame
+                            if part:IsDescendantOf(workspace) and isUnrevealed(part) then
+                                triggerTileTouch(part)
+                                task.wait(0.05) 
                             end
-                        else
-                            task.wait(0.1) 
                         end
                     else
-                        task.wait(0.1)
+                        task.wait(0.1) 
                     end
                 else
                     task.wait(0.1) 
                 end
             end
             
-            returnToOriginalPosition()
-            isFastTPing = false
-            fastBtn.Text = "FAST TP: OFF"
+            isAutoTouching = false
+            fastBtn.Text = "AUTO TOUCH: OFF"
             fastBtn.TextColor3 = Color3.fromRGB(0, 255, 255)
             if isScanning then status.Text = "Status: Scanning..." end
         end)
     else
-        isFastTPing = false
-        returnToOriginalPosition()
-        fastBtn.Text = "FAST TP: OFF"
+        isAutoTouching = false
+        fastBtn.Text = "AUTO TOUCH: OFF"
         fastBtn.TextColor3 = Color3.fromRGB(0, 255, 255)
         status.Text = "Status: Scanning..."
     end
@@ -774,10 +730,9 @@ end)
 
 destroyBtn.MouseButton1Click:Connect(function()
     isScanning = false
-    isFastTPing = false
+    isAutoTouching = false
     isBillboardOn = false
     isAntiLagOn = false
-    returnToOriginalPosition()
     for _, conn in pairs(connections) do conn:Disconnect() end
     removeAllBillboards()
     screenGui:Destroy()
