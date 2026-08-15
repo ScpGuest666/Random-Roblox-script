@@ -71,8 +71,10 @@ local billboardBtn = createButton("BillboardBtn", "BILLBOARD: OFF", 104, 38, 88,
 local destroyBtn   = createButton("DestroyBtn", "Destroy UI", 8, 68, 184, 24, Color3.fromRGB(255, 100, 100))
 
 -------------------------------------------------------------------------------
--- CORE VARIABLES
+-- CORE VARIABLES & CONFIG
 -------------------------------------------------------------------------------
+
+local BATCH_SIZE = 30 -- High-speed parallel batch size
 
 local isScanning = false
 local isAutoTouching = false
@@ -89,10 +91,24 @@ local currentBestGuess = nil
 local connections = {}
 local pendingReset = false 
 local trackedBillboards = {}
+local activeFlagPositions = {} -- Lightweight Vector3 cache
 
 -------------------------------------------------------------------------------
--- COLOR & TILE RECOGNITION
+-- HELPER & PROXIMITY FUNCTIONS
 -------------------------------------------------------------------------------
+
+local function getCharPos()
+    local char = player.Character
+    local root = char and (char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Head"))
+    return root and root.Position or nil
+end
+
+local function sortByProximity(list, charPos)
+    if not charPos or #list <= 1 then return end
+    table.sort(list, function(a, b)
+        return (a.Position - charPos).Magnitude < (b.Position - charPos).Magnitude
+    end)
+end
 
 local function isColorMatch(c1, r, g, b)
     return math.abs(c1.R - r) < 0.05 and math.abs(c1.G - g) < 0.05 and math.abs(c1.B - b) < 0.05
@@ -104,7 +120,7 @@ local function isExcluded(part)
 end
 
 local function isUnrevealed(part)
-    if not part or not part:IsA("BasePart") or isExcluded(part) then return false end
+    if not part or not part:IsA("BasePart") or isExcluded(part) or numberTiles[part] then return false end
     
     local green1 = isColorMatch(part.Color, 0.459, 0.804, 0.392)
     local green2 = isColorMatch(part.Color, 0.404, 0.706, 0.345)
@@ -130,13 +146,102 @@ end
 local function isTileCandidate(part)
     if not part or not part:IsA("BasePart") then return false end
     if isExcluded(part) then return false end
-    
-    if isUnrevealed(part) or getNumber(part) ~= nil then return true end
+    if numberTiles[part] or isUnrevealed(part) or getNumber(part) ~= nil then return true end
     if part.Name == "Part" and part.Parent and string.find(string.lower(part.Parent.Name), "part") then
         return true
     end
     return false
 end
+
+-------------------------------------------------------------------------------
+-- ULTRA-FAST SPATIAL FLAG CACHE
+-------------------------------------------------------------------------------
+
+local function refreshFlagCache()
+    table.clear(activeFlagPositions)
+    
+    local flagFolder = Workspace:FindFirstChild("Flag") or Workspace:FindFirstChild("Flags")
+    if flagFolder then
+        for _, desc in ipairs(flagFolder:GetDescendants()) do
+            if desc:IsA("BasePart") then
+                table.insert(activeFlagPositions, desc.Position)
+            end
+        end
+    end
+    
+    for _, obj in ipairs(Workspace:GetChildren()) do
+        if obj:IsA("Model") and string.find(string.lower(obj.Name), "flag") then
+            local primary = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")
+            if primary then
+                table.insert(activeFlagPositions, primary.Position)
+            end
+        end
+    end
+end
+
+local function hasFlag(part)
+    if not part or not part:IsDescendantOf(workspace) then return false end
+    local pPos = part.Position
+    local pSizeX = part.Size.X * 0.55
+    local pSizeZ = part.Size.Z * 0.55
+
+    for _, fPos in ipairs(activeFlagPositions) do
+        local dx = math.abs(fPos.X - pPos.X)
+        local dz = math.abs(fPos.Z - pPos.Z)
+        local dy = fPos.Y - pPos.Y
+        if dx < pSizeX and dz < pSizeZ and dy > 0.3 and dy < 6 then
+            return true
+        end
+    end
+    return false
+end
+
+local function clickTile(part)
+    if not part or not part:IsDescendantOf(workspace) then return end
+    local cd = part:FindFirstChildOfClass("ClickDetector") or part:FindFirstChildWhichIsA("ClickDetector", true)
+    if cd and typeof(fireclickdetector) == "function" then
+        fireclickdetector(cd, 0)
+    end
+end
+
+-------------------------------------------------------------------------------
+-- TOUCH TRIGGER (NO LEG OFFSET)
+-------------------------------------------------------------------------------
+
+local function triggerTileTouch(targetTile)
+    if not targetTile or not targetTile:IsDescendantOf(workspace) then return end
+    
+    local char = player.Character
+    if not char then return end
+    
+    local limb = char:FindFirstChild("RightFoot") 
+        or char:FindFirstChild("Right Leg") 
+        or char:FindFirstChild("LeftFoot") 
+        or char:FindFirstChild("Left Leg")
+        or char:FindFirstChild("HumanoidRootPart")
+        
+    if not limb then return end
+
+    if typeof(firetouchinterest) == "function" then
+        firetouchinterest(limb, targetTile, 0)
+        task.wait(0.015)
+        firetouchinterest(limb, targetTile, 1)
+    else
+        local probe = Instance.new("Part")
+        probe.Name = "LegProbe"
+        probe.Size = limb.Size
+        probe.CanCollide = false
+        probe.Transparency = 1
+        probe.CFrame = targetTile.CFrame
+        probe.Parent = char
+        task.wait(0.02)
+        probe:Destroy()
+    end
+end
+
+-------------------------------------------------------------------------------
+-- HIGHLIGHT VISUALS
+-------------------------------------------------------------------------------
 
 local function clearVisuals(part)
     if not part then return end
@@ -165,46 +270,7 @@ local function createHighlight(part, color, name)
 end
 
 -------------------------------------------------------------------------------
--- DETACHED LEG / TOUCH DISPATCHER (NO TELEPORTATION)
--------------------------------------------------------------------------------
-
-local function triggerTileTouch(targetTile)
-    if not targetTile or not targetTile:IsDescendantOf(workspace) then return end
-    
-    local char = player.Character
-    if not char then return end
-    
-    -- Find a valid character limb (R15 and R6 compatible)
-    local leg = char:FindFirstChild("RightFoot") 
-        or char:FindFirstChild("Right Leg") 
-        or char:FindFirstChild("LeftFoot") 
-        or char:FindFirstChild("Left Leg") 
-        or char:FindFirstChild("HumanoidRootPart")
-        
-    if not leg then return end
-
-    -- Method 1: Native executor touch interest (Completely invisible & instant)
-    if typeof(firetouchinterest) == "function" then
-        firetouchinterest(leg, targetTile, 0)
-        task.wait(0.02)
-        firetouchinterest(leg, targetTile, 1)
-    else
-        -- Method 2: Fake limb projection parented to Character (Triggers server .Touched)
-        local probe = Instance.new("Part")
-        probe.Name = "LegProbe"
-        probe.Size = leg.Size
-        probe.CanCollide = false
-        probe.Transparency = 1
-        probe.CFrame = targetTile.CFrame
-        probe.Parent = char
-        
-        task.wait(0.04)
-        probe:Destroy()
-    end
-end
-
--------------------------------------------------------------------------------
--- COMPLETE BILLBOARD INSPECTOR
+-- BILLBOARD INSPECTOR (OPTIMIZED)
 -------------------------------------------------------------------------------
 
 local function removeBillboard(part)
@@ -262,38 +328,29 @@ local function updateBillboard(part)
 
     local num = numberTiles[part] or getNumber(part)
     local unrev = isUnrevealed(part)
+    local isFlagged = hasFlag(part)
     local c = part.Color
     local hexColor = string.format("#%02X%02X%02X", math.floor(c.R * 255), math.floor(c.G * 255), math.floor(c.B * 255))
     
-    local childList = {}
-    local textContents = {}
-    local specialInteractions = {}
-
-    for _, desc in ipairs(part:GetDescendants()) do
-        if not desc:IsA("Highlight") and desc ~= bb then
-            table.insert(childList, desc.ClassName .. ":" .. desc.Name)
-            if desc:IsA("TextLabel") or desc:IsA("TextBox") then
-                table.insert(textContents, string.format('"%s"', desc.Text))
-            elseif desc:IsA("ClickDetector") or desc:IsA("ProximityPrompt") or desc:IsA("TouchTransmitter") then
-                table.insert(specialInteractions, desc.ClassName)
-            end
-        end
-    end
-
-    local attributes = {}
-    for attrKey, attrVal in pairs(part:GetAttributes()) do
-        table.insert(attributes, string.format("%s=%s", tostring(attrKey), tostring(attrVal)))
-    end
-
     local tag = "🔍 [CANDIDATE BLOCK]"
     local borderColor = Color3.fromRGB(255, 170, 0)
 
     if knownSafe[part] then
-        tag = "✅ [CONFIRMED SAFE (100%)]"
-        borderColor = Color3.fromRGB(0, 255, 0)
+        if isFlagged then
+            tag = "⚠️ [SAFE TILE - HAS FLAG] (Will Unflag)"
+            borderColor = Color3.fromRGB(255, 150, 0)
+        else
+            tag = "✅ [CONFIRMED SAFE (100%)]"
+            borderColor = Color3.fromRGB(0, 255, 0)
+        end
     elseif knownMines[part] then
-        tag = "💣 [CONFIRMED MINE (100%)]"
-        borderColor = Color3.fromRGB(255, 0, 0)
+        if isFlagged then
+            tag = "🚩 [MINE - FLAGGED ✅] (Protected)"
+            borderColor = Color3.fromRGB(0, 200, 255)
+        else
+            tag = "💣 [MINE - UNFLAGGED] (Will Flag)"
+            borderColor = Color3.fromRGB(255, 0, 0)
+        end
     elseif currentBestGuess == part then
         tag = string.format("⚡ [BEST GUESS] (Prob: %.2f)", probabilityMap[part] or 0)
         borderColor = Color3.fromRGB(255, 255, 0)
@@ -305,26 +362,20 @@ local function updateBillboard(part)
         tag = prob and string.format("🟩 [UNREVEALED TILE] (Prob: %.2f)", prob) or "🟩 [UNREVEALED TILE]"
     end
 
-    local childrenStr = #childList > 0 and table.concat(childList, ", ") or "None"
-    local textsStr = #textContents > 0 and table.concat(textContents, ", ") or "None"
-    local attrStr = #attributes > 0 and table.concat(attributes, ", ") or "None"
-    local interStr = #specialInteractions > 0 and table.concat(specialInteractions, ", ") or "None"
     local neighborCount = neighborMap[part] and #neighborMap[part] or 0
-
     local bg = bb:FindFirstChild("BG")
     local lbl = bg and bg:FindFirstChild("InfoLabel")
     if bg and lbl then
         bg.BorderColor3 = borderColor
         lbl.Text = string.format(
-            "%s\n• Name: %s\n• Class: %s\n• Parent: %s\n• Path: %s\n• Color: RGB(%.2f, %.2f, %.2f) | Hex: %s | Mat: %s | Trans: %.2f\n• Size: (%.1f, %.1f, %.1f) | Unrevealed: %s | Number: %s | Neighbors: %d\n• Descendants: %s\n• Texts: %s | Interactions: %s | Attr: %s",
+            "%s\n• Name: %s | Flagged: %s\n• Class: %s | Parent: %s\n• Path: %s\n• Color: RGB(%.2f, %.2f, %.2f) | Hex: %s | Mat: %s\n• Size: (%.1f, %.1f, %.1f) | Unrevealed: %s | Number: %s | Neighbors: %d",
             tag,
-            part.Name,
+            part.Name, tostring(isFlagged),
             part.ClassName,
             part.Parent and part.Parent.Name or "None",
             part:GetFullName(),
-            c.R, c.G, c.B, hexColor, tostring(part.Material.Name), part.Transparency,
-            part.Size.X, part.Size.Y, part.Size.Z, tostring(unrev), tostring(num or "N/A"), neighborCount,
-            childrenStr, textsStr, interStr, attrStr
+            c.R, c.G, c.B, hexColor, tostring(part.Material.Name),
+            part.Size.X, part.Size.Y, part.Size.Z, tostring(unrev), tostring(num or "N/A"), neighborCount
         )
     end
 end
@@ -441,10 +492,12 @@ local function solveBoard()
     end
     
     -- PASS 2: Advanced Set Difference
-    for i = 1, #activeNumbers do
-        for j = 1, #activeNumbers do
+    local numActive = #activeNumbers
+    for i = 1, numActive do
+        local A = activeNumbers[i]
+        for j = 1, numActive do
             if i == j then continue end
-            local A = activeNumbers[i]; local B = activeNumbers[j]
+            local B = activeNumbers[j]
             if (A.part.Position - B.part.Position).Magnitude > (A.part.Size.X * 3) then continue end
             
             local isSubset = true
@@ -532,11 +585,7 @@ local function startSolverLoop()
     task.spawn(function()
         while isScanning do
             local validParts = {}
-            
-            local charPos = nil
-            if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-                charPos = player.Character.HumanoidRootPart.Position
-            end
+            local charPos = getCharPos()
             
             for _, part in ipairs(cachedParts) do
                 if part and part:IsDescendantOf(workspace) then
@@ -562,14 +611,12 @@ local function startSolverLoop()
                             numberTiles[part] = nil; knownSafe[part] = nil; knownMines[part] = nil
                             clearVisuals(part)
                         end
-                    elseif not isUnrevealed(part) then
+                    elseif not isUnrevealed(part) and not numberTiles[part] then
                         local num = getNumber(part)
                         if num then
-                            if not numberTiles[part] then
-                                numberTiles[part] = num
-                                knownSafe[part] = nil; knownMines[part] = nil
-                                clearVisuals(part)
-                            end
+                            numberTiles[part] = num
+                            knownSafe[part] = nil; knownMines[part] = nil
+                            clearVisuals(part)
                         end
                     end
 
@@ -587,7 +634,7 @@ local function startSolverLoop()
             cachedParts = validParts
             
             solveBoard()
-            task.wait(0.1)
+            task.wait(0.12) -- Optimized loop yield
         end
     end)
 end
@@ -649,7 +696,7 @@ toggleBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- AUTO TOUCH: Simulates limb contact on safe blocks without moving the player at all
+-- AUTO TOUCH: Proximity-Prioritized Flagging & Touching
 fastBtn.MouseButton1Click:Connect(function()
     if not isScanning then return end
     
@@ -658,29 +705,66 @@ fastBtn.MouseButton1Click:Connect(function()
     if isAutoTouching then
         fastBtn.Text = "AUTO TOUCH: ON"
         fastBtn.TextColor3 = Color3.fromRGB(0, 255, 0)
-        status.Text = "Status: Auto Touch Active"
+        status.Text = "Status: Proximity Active"
         
         task.spawn(function()
             while isAutoTouching and isScanning do
                 if not pendingReset then
-                    local safeParts = {}
+                    local charPos = getCharPos()
+                    refreshFlagCache() -- Ultra-fast cache refresh
+                    
+                    -- 1. GATHER & REMOVE MISPLACED FLAGS (CLOSEST FIRST)
+                    local misplacedFlags = {}
                     for part, _ in pairs(knownSafe) do
-                        if part and part:IsDescendantOf(workspace) and isUnrevealed(part) then
-                            table.insert(safeParts, part)
+                        if part and part:IsDescendantOf(workspace) and isUnrevealed(part) and hasFlag(part) then
+                            table.insert(misplacedFlags, part)
                         end
                     end
+                    sortByProximity(misplacedFlags, charPos)
                     
-                    if #safeParts > 0 then
-                        for _, part in ipairs(safeParts) do
-                            if not isAutoTouching or not isScanning or pendingReset then break end 
-                            
-                            if part:IsDescendantOf(workspace) and isUnrevealed(part) then
-                                triggerTileTouch(part)
-                                task.wait(0.05) 
-                            end
+                    for _, part in ipairs(misplacedFlags) do
+                        if not isAutoTouching or not isScanning or pendingReset then break end
+                        clickTile(part)
+                        task.wait(0.02)
+                    end
+                    
+                    -- 2. GATHER & FLAG MINES (CLOSEST FIRST)
+                    local minesToFlag = {}
+                    for part, _ in pairs(knownMines) do
+                        if part and part:IsDescendantOf(workspace) and isUnrevealed(part) and not hasFlag(part) then
+                            table.insert(minesToFlag, part)
                         end
+                    end
+                    sortByProximity(minesToFlag, charPos)
+                    
+                    for _, part in ipairs(minesToFlag) do
+                        if not isAutoTouching or not isScanning or pendingReset then break end
+                        clickTile(part)
+                        task.wait(0.02)
+                    end
+                    
+                    -- 3. GATHER & REVEAL SAFE TILES (CLOSEST FIRST)
+                    local safeToReveal = {}
+                    for part, _ in pairs(knownSafe) do
+                        if part and part:IsDescendantOf(workspace) and isUnrevealed(part) and not hasFlag(part) then
+                            table.insert(safeToReveal, part)
+                        end
+                    end
+                    sortByProximity(safeToReveal, charPos)
+                    
+                    if #safeToReveal > 0 then
+                        local batchCount = math.min(#safeToReveal, BATCH_SIZE)
+                        for i = 1, batchCount do
+                            local part = safeToReveal[i]
+                            task.spawn(function()
+                                if isAutoTouching and isScanning and not pendingReset then
+                                    triggerTileTouch(part)
+                                end
+                            end)
+                        end
+                        task.wait(0.05)
                     else
-                        task.wait(0.1) 
+                        task.wait(0.08)
                     end
                 else
                     task.wait(0.1) 
