@@ -1,0 +1,905 @@
+-- Wait for player
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local Lighting = game:GetService("Lighting")
+local player = Players.LocalPlayer or Players.PlayerAdded:Wait()
+
+-- ==========================================
+-- PERMANENT FULLBRIGHT (Activates Immediately)
+-- ==========================================
+local function applyFullbright()
+    Lighting.Ambient = Color3.new(1, 1, 1)
+    Lighting.ColorShift_Bottom = Color3.new(1, 1, 1)
+    Lighting.ColorShift_Top = Color3.new(1, 1, 1)
+    Lighting.Brightness = 3
+    Lighting.GlobalShadows = false
+    Lighting.FogEnd = 100000
+    Lighting.OutdoorAmbient = Color3.new(1, 1, 1)
+end
+
+applyFullbright()
+Lighting.LightingChanged:Connect(applyFullbright)
+Lighting:GetPropertyChangedSignal("Ambient"):Connect(applyFullbright)
+Lighting:GetPropertyChangedSignal("Brightness"):Connect(applyFullbright)
+Lighting:GetPropertyChangedSignal("GlobalShadows"):Connect(applyFullbright)
+
+-- Determine the best parent for the GUI
+local guiParent
+if type(gethui) == "function" then
+    guiParent = gethui()
+else
+    local success = pcall(function() return game:GetService("CoreGui").Name end)
+    if success then guiParent = game:GetService("CoreGui") else guiParent = player:WaitForChild("PlayerGui") end
+end
+
+-- Create ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "Gui_" .. math.random(10000, 99999)
+screenGui.ResetOnSpawn = false
+screenGui.DisplayOrder = 2147483647
+screenGui.IgnoreGuiInset = true
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+screenGui.Parent = guiParent
+
+-- Main draggable frame (Compact 170x50)
+local mainFrame = Instance.new("Frame")
+mainFrame.Parent = screenGui
+mainFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+mainFrame.Size = UDim2.new(0, 170, 0, 50)
+mainFrame.Position = UDim2.new(0.3, 0, 0.5, -25)
+mainFrame.Draggable = true
+mainFrame.Active = true
+
+-- Status label
+local status = Instance.new("TextLabel")
+status.Parent = mainFrame
+status.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+status.Size = UDim2.new(0, 170, 0, 15)
+status.Position = UDim2.new(0, 0, 0, -15)
+status.Text = "Status: Offline"
+status.TextColor3 = Color3.fromRGB(255, 0, 0)
+status.TextScaled = true
+
+-- Helper to create a proper TextButton
+local function createButton(name, text, x, y, width, height)
+    local btn = Instance.new("TextButton")
+    btn.Name = name
+    btn.Parent = mainFrame
+    btn.Text = text
+    btn.Size = UDim2.new(0, width, 0, height)
+    btn.Position = UDim2.new(0, x, 0, y)
+    btn.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.TextScaled = true
+    btn.AutoButtonColor = true
+    btn.BorderSizePixel = 0
+    return btn
+end
+
+-- Create buttons
+local onBtn = createButton("OnBtn", "On", 4, 5, 36, 18)
+local offBtn = createButton("OffBtn", "Off", 44, 5, 36, 18)
+local reloadBtn = createButton("ReloadBtn", "Rld", 84, 5, 36, 18)
+local inviBtn = createButton("InviBtn", "Invi", 124, 5, 42, 18)
+local destroyBtn = createButton("DestroyBtn", "Destroy", 4, 27, 162, 18)
+
+-- Script State Variables
+local isScriptOnline = false
+local isInvisible = false
+local backpackConn = nil
+local renderConn = nil
+local charAddedConn = nil
+local charRemovedConn = nil
+local speedConn = nil
+local touchGuiListener = nil
+local wsDescendantConn = nil
+local camDescendantConn = nil
+local cachedWelds = {}
+local cachedGunNames = {}
+local defaultWalkSpeed = 16
+
+-- ==========================================
+-- NAME SEARCH & NORMALIZATION HARVESTER
+-- ==========================================
+local function sanitize(str)
+    if type(str) ~= "string" then return "" end
+    return string.lower(str):gsub("[%s%p%c]", "")
+end
+
+local function updateGunNamesCache()
+    local names = {}
+    local added = {}
+
+    local function addName(str)
+        local clean = sanitize(str)
+        if clean ~= "" and not added[clean] and #clean >= 2 then
+            added[clean] = true
+            table.insert(names, clean)
+        end
+    end
+
+    local backpack = player:FindFirstChild("Backpack")
+    local character = player.Character
+
+    local function scanTools(container)
+        if not container then return end
+        for _, item in ipairs(container:GetChildren()) do
+            if item:IsA("Tool") then
+                addName(item.Name)
+                for _, val in ipairs(item:GetChildren()) do
+                    if val:IsA("StringValue") and val.Value ~= "" then addName(val.Value) end
+                end
+                for attrName, attrVal in pairs(item:GetAttributes()) do
+                    if type(attrVal) == "string" and attrVal ~= "" then addName(attrVal) end
+                end
+            end
+        end
+    end
+
+    scanTools(backpack)
+    scanTools(character)
+
+    local playerGui = player:FindFirstChild("PlayerGui")
+    if playerGui then
+        for _, gui in ipairs(playerGui:GetChildren()) do
+            if gui:IsA("ScreenGui") and gui ~= screenGui then
+                for _, desc in ipairs(gui:GetDescendants()) do
+                    if desc:IsA("TextLabel") or desc:IsA("TextButton") then
+                        local txt = desc.Text
+                        if txt ~= "" and not string.find(txt, "Equip") and not string.find(txt, "Shop") and not string.find(txt, "$") then
+                            addName(txt)
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    cachedGunNames = names
+end
+
+local function matchesGunName(inst)
+    if not inst then return false end
+    local clean = sanitize(inst.Name)
+    for _, name in ipairs(cachedGunNames) do
+        if clean == name or string.find(clean, name, 1, true) or string.find(name, clean, 1, true) then
+            return true
+        end
+    end
+    return false
+end
+
+-- ==========================================
+-- EVENT-DRIVEN ANTI-LAG & INVISIBILITY (ZERO CPU COST)
+-- ==========================================
+local function isCharacterRigPart(part)
+    if not part:IsA("BasePart") then return false end
+    local char = player.Character
+    if not char then return false end
+    if part.Parent == char then
+        local name = part.Name
+        local standardParts = {
+            ["Head"] = true, ["Torso"] = true, ["HumanoidRootPart"] = true,
+            ["Left Arm"] = true, ["Right Arm"] = true, ["Left Leg"] = true, ["Right Leg"] = true,
+            ["UpperTorso"] = true, ["LowerTorso"] = true,
+            ["LeftUpperArm"] = true, ["LeftLowerArm"] = true, ["LeftHand"] = true,
+            ["RightUpperArm"] = true, ["RightLowerArm"] = true, ["RightHand"] = true,
+            ["LeftUpperLeg"] = true, ["LeftLowerLeg"] = true, ["LeftFoot"] = true,
+            ["RightUpperLeg"] = true, ["RightLowerLeg"] = true, ["RightFoot"] = true
+        }
+        if standardParts[name] then return true end
+    end
+    return false
+end
+
+local function applyInvisibility(inst, makeInvi)
+    if inst:IsA("BasePart") then
+        if isCharacterRigPart(inst) then return end
+        if makeInvi then
+            if not inst:GetAttribute("OrigTrans") then
+                inst:SetAttribute("OrigTrans", inst.Transparency)
+                inst:SetAttribute("OrigLocalTrans", inst.LocalTransparencyModifier)
+                inst:SetAttribute("OrigShadow", inst.CastShadow)
+            end
+            inst.Transparency = 1
+            inst.LocalTransparencyModifier = 1
+            inst.CastShadow = false
+        else
+            local origT = inst:GetAttribute("OrigTrans")
+            if origT then inst.Transparency = origT end
+            local origLT = inst:GetAttribute("OrigLocalTrans")
+            if origLT then inst.LocalTransparencyModifier = origLT end
+            local origS = inst:GetAttribute("OrigShadow")
+            if origS ~= nil then inst.CastShadow = origS end
+        end
+    elseif inst:IsA("Decal") or inst:IsA("Texture") then
+        if inst.Parent and isCharacterRigPart(inst.Parent) and string.lower(inst.Name) == "face" then return end
+        if makeInvi then
+            if not inst:GetAttribute("OrigTrans") then inst:SetAttribute("OrigTrans", inst.Transparency) end
+            inst.Transparency = 1
+        else
+            local orig = inst:GetAttribute("OrigTrans")
+            if orig then inst.Transparency = orig end
+        end
+    elseif inst:IsA("ParticleEmitter") or inst:IsA("Beam") or inst:IsA("Trail") or inst:IsA("Highlight") or inst:IsA("PointLight") or inst:IsA("SurfaceLight") or inst:IsA("SpotLight") then
+        if makeInvi then
+            if not inst:GetAttribute("OrigEnabled") then inst:SetAttribute("OrigEnabled", inst.Enabled) end
+            inst.Enabled = false
+        else
+            local orig = inst:GetAttribute("OrigEnabled")
+            if orig ~= nil then inst.Enabled = orig else inst.Enabled = true end
+        end
+    elseif inst:IsA("Sound") then
+        if makeInvi then
+            if not inst:GetAttribute("OrigVol") then inst:SetAttribute("OrigVol", inst.Volume) end
+            inst.Volume = 0
+        else
+            local orig = inst:GetAttribute("OrigVol")
+            if orig ~= nil then inst.Volume = orig end
+        end
+    end
+end
+
+-- Intercepts laggy effects and fake arms the millisecond they spawn
+local function handleNewDescendant(desc)
+    if not isInvisible then return end
+    
+    local class = desc.ClassName
+    -- 1. Instant Lag Neutralizer
+    if class == "ParticleEmitter" or class == "Trail" or class == "Beam" or class == "Fire" or class == "Smoke" or class == "Sparkles" or class == "PointLight" or class == "SurfaceLight" or class == "SpotLight" then
+        desc.Enabled = false
+        return
+    elseif class == "Sound" then
+        desc.Volume = 0
+        return
+    elseif class == "Explosion" then
+        desc.Visible = false
+        return
+    end
+
+    if desc:IsA("BasePart") then
+        local name = string.lower(desc.Name)
+        if string.find(name, "muzzle") or string.find(name, "flash") or string.find(name, "effect") or string.find(name, "impact") or string.find(name, "spark") or string.find(name, "bullet") or string.find(name, "laser") or string.find(name, "projectile") then
+            desc.Transparency = 1
+            desc.CastShadow = false
+            desc.CanCollide = false
+            return
+        end
+    end
+
+    -- 2. Instant ViewModel (Fake Arms) Hider
+    local parent = desc.Parent
+    if parent and parent:IsA("Model") and parent ~= player.Character then
+        local pName = string.lower(parent.Name)
+        if string.find(pName, "viewmodel") or string.find(pName, "arm") or string.find(pName, "v_") or matchesGunName(parent) then
+            applyInvisibility(desc, true)
+        end
+    end
+end
+
+-- Connect the event listeners
+wsDescendantConn = workspace.DescendantAdded:Connect(handleNewDescendant)
+if workspace.CurrentCamera then
+    camDescendantConn = workspace.CurrentCamera.DescendantAdded:Connect(handleNewDescendant)
+end
+workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+    if camDescendantConn then camDescendantConn:Disconnect() end
+    if workspace.CurrentCamera then
+        camDescendantConn = workspace.CurrentCamera.DescendantAdded:Connect(handleNewDescendant)
+    end
+end)
+
+local function updateGunInvisibility()
+    local character = player.Character
+    
+    -- 1. Hide Character Tools
+    if character then
+        for _, item in ipairs(character:GetChildren()) do
+            if item:IsA("Tool") then
+                for _, desc in ipairs(item:GetDescendants()) do
+                    applyInvisibility(desc, isInvisible)
+                end
+            end
+        end
+    end
+
+    -- 2. Hide Camera ViewModels
+    local cam = workspace.CurrentCamera
+    if cam then
+        for _, child in ipairs(cam:GetChildren()) do
+            for _, desc in ipairs(child:GetDescendants()) do
+                applyInvisibility(desc, isInvisible)
+            end
+            applyInvisibility(child, isInvisible)
+        end
+    end
+
+    -- 3. Hide Workspace ViewModels (Only scans children, NOT descendants, to prevent lag)
+    for _, child in ipairs(workspace:GetChildren()) do
+        if child:IsA("Model") and child ~= character then
+            local cName = string.lower(child.Name)
+            if string.find(cName, "viewmodel") or string.find(cName, "arm") or string.find(cName, "v_") or matchesGunName(child) then
+                for _, desc in ipairs(child:GetDescendants()) do
+                    applyInvisibility(desc, isInvisible)
+                end
+                applyInvisibility(child, isInvisible)
+            end
+        end
+    end
+end
+
+-- ==========================================
+-- CUSTOM ROBLOX MOBILE CONTROLS (JOYSTICK, JUMP & FIRE)
+-- ==========================================
+local controlsGui = Instance.new("ScreenGui")
+controlsGui.Name = "CustomMobileControls_" .. math.random(10000, 99999)
+controlsGui.ResetOnSpawn = false
+controlsGui.DisplayOrder = 2147483640
+controlsGui.IgnoreGuiInset = true
+controlsGui.Enabled = false
+controlsGui.Parent = guiParent
+
+-- Fixed Classic Joystick Base
+local joyBase = Instance.new("ImageButton")
+joyBase.Name = "JoystickBase"
+joyBase.Parent = controlsGui
+joyBase.AnchorPoint = Vector2.new(0, 1)
+joyBase.Position = UDim2.new(0, 40, 1, -20)
+joyBase.Size = UDim2.new(0, 110, 0, 110)
+joyBase.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+joyBase.BackgroundTransparency = 0.65
+joyBase.AutoButtonColor = false
+joyBase.Active = true
+
+local baseCorner = Instance.new("UICorner")
+baseCorner.CornerRadius = UDim.new(1, 0)
+baseCorner.Parent = joyBase
+
+local baseStroke = Instance.new("UIStroke")
+baseStroke.Color = Color3.fromRGB(255, 255, 255)
+baseStroke.Transparency = 0.6
+baseStroke.Thickness = 2
+baseStroke.Parent = joyBase
+
+-- Inner Thumbstick Knob
+local joyKnob = Instance.new("Frame")
+joyKnob.Name = "JoystickKnob"
+joyKnob.Parent = joyBase
+joyKnob.AnchorPoint = Vector2.new(0.5, 0.5)
+joyKnob.Position = UDim2.new(0.5, 0, 0.5, 0)
+joyKnob.Size = UDim2.new(0, 50, 0, 50)
+joyKnob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+joyKnob.BackgroundTransparency = 0.35
+joyKnob.Active = false
+
+local knobCorner = Instance.new("UICorner")
+knobCorner.CornerRadius = UDim.new(1, 0)
+knobCorner.Parent = joyKnob
+
+-- Jump Button
+local jumpBtn = Instance.new("ImageButton")
+jumpBtn.Name = "CustomJumpButton"
+jumpBtn.Parent = controlsGui
+jumpBtn.AnchorPoint = Vector2.new(1, 1)
+jumpBtn.Position = UDim2.new(1, -40, 1, -20)
+jumpBtn.Size = UDim2.new(0, 75, 0, 75)
+jumpBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+jumpBtn.BackgroundTransparency = 0.65
+jumpBtn.AutoButtonColor = false
+jumpBtn.Active = false
+
+local jumpCorner = Instance.new("UICorner")
+jumpCorner.CornerRadius = UDim.new(1, 0)
+jumpCorner.Parent = jumpBtn
+
+local jumpStroke = Instance.new("UIStroke")
+jumpStroke.Color = Color3.fromRGB(255, 255, 255)
+jumpStroke.Transparency = 0.6
+jumpStroke.Thickness = 2
+jumpStroke.Parent = jumpBtn
+
+local jumpIcon = Instance.new("TextLabel")
+jumpIcon.Parent = jumpBtn
+jumpIcon.BackgroundTransparency = 1
+jumpIcon.Size = UDim2.new(1, 0, 1, 0)
+jumpIcon.Text = "▲"
+jumpIcon.TextColor3 = Color3.fromRGB(255, 255, 255)
+jumpIcon.TextSize = 28
+jumpIcon.Font = Enum.Font.GothamBold
+
+-- Fire Button
+local fireBtn = Instance.new("ImageButton")
+fireBtn.Name = "CustomFireButton"
+fireBtn.Parent = controlsGui
+fireBtn.AnchorPoint = Vector2.new(1, 1)
+fireBtn.Position = UDim2.new(1, -145, 1, -75)
+fireBtn.Size = UDim2.new(0, 80, 0, 80)
+fireBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+fireBtn.BackgroundTransparency = 0.65
+fireBtn.AutoButtonColor = false
+fireBtn.Active = false
+
+local fireCorner = Instance.new("UICorner")
+fireCorner.CornerRadius = UDim.new(1, 0)
+fireCorner.Parent = fireBtn
+
+local fireStroke = Instance.new("UIStroke")
+fireStroke.Color = Color3.fromRGB(255, 255, 255)
+fireStroke.Transparency = 0.6
+fireStroke.Thickness = 2
+fireStroke.Parent = fireBtn
+
+local fireIcon = Instance.new("TextLabel")
+fireIcon.Parent = fireBtn
+fireIcon.BackgroundTransparency = 1
+fireIcon.Size = UDim2.new(1, 0, 1, 0)
+fireIcon.Text = "⁍"
+fireIcon.TextColor3 = Color3.fromRGB(255, 255, 255)
+fireIcon.TextSize = 42
+fireIcon.Font = Enum.Font.GothamBold
+
+-- Touch States
+local currentMoveVector = Vector2.zero
+local activeJoystickTouch = nil
+local activeJumpTouch = nil
+local activeFireTouch = nil
+local isJumpHeld = false
+local isFiring = false
+local MAX_RADIUS = 45
+
+local function isInsideGui(pos, gui)
+    if not gui or not gui.Visible then return false end
+    local gPos = gui.AbsolutePosition
+    local gSize = gui.AbsoluteSize
+    return pos.X >= gPos.X and pos.X <= (gPos.X + gSize.X) and pos.Y >= gPos.Y and pos.Y <= (gPos.Y + gSize.Y)
+end
+
+-- Joystick Input Tracking
+joyBase.InputBegan:Connect(function(input)
+    if (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1) and not activeJoystickTouch then
+        activeJoystickTouch = input
+        local baseCenter = joyBase.AbsolutePosition + (joyBase.AbsoluteSize / 2)
+        local inputPos = Vector2.new(input.Position.X, input.Position.Y)
+        local delta = inputPos - baseCenter
+        local dist = delta.Magnitude
+        local clampedDist = math.min(dist, MAX_RADIUS)
+        local dir = (dist > 0) and (delta / dist) or Vector2.zero
+        local knobOffset = dir * clampedDist
+        
+        joyKnob.Position = UDim2.new(0.5, knobOffset.X, 0.5, knobOffset.Y)
+        currentMoveVector = Vector2.new(knobOffset.X / MAX_RADIUS, knobOffset.Y / MAX_RADIUS)
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == activeJoystickTouch then
+        local baseCenter = joyBase.AbsolutePosition + (joyBase.AbsoluteSize / 2)
+        local inputPos = Vector2.new(input.Position.X, input.Position.Y)
+        local delta = inputPos - baseCenter
+        local dist = delta.Magnitude
+        local clampedDist = math.min(dist, MAX_RADIUS)
+        local dir = (dist > 0) and (delta / dist) or Vector2.zero
+        local knobOffset = dir * clampedDist
+        
+        joyKnob.Position = UDim2.new(0.5, knobOffset.X, 0.5, knobOffset.Y)
+        currentMoveVector = Vector2.new(knobOffset.X / MAX_RADIUS, knobOffset.Y / MAX_RADIUS)
+    end
+end)
+
+local function resetJoystick()
+    activeJoystickTouch = nil
+    currentMoveVector = Vector2.zero
+    joyKnob.Position = UDim2.new(0.5, 0, 0.5, 0)
+end
+
+-- STRICT TOUCH INITIATION FOR JUMP & FIRE
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+        if input.UserInputState == Enum.UserInputState.Begin then
+            local touchPos = Vector2.new(input.Position.X, input.Position.Y)
+            
+            if controlsGui.Enabled and isInsideGui(touchPos, jumpBtn) and not activeJumpTouch then
+                activeJumpTouch = input
+                isJumpHeld = true
+                jumpBtn.BackgroundTransparency = 0.4
+                local char = player.Character
+                if char then
+                    local hum = char:FindFirstChildOfClass("Humanoid")
+                    if hum then hum.Jump = true end
+                end
+            elseif controlsGui.Enabled and isInsideGui(touchPos, fireBtn) and not activeFireTouch then
+                activeFireTouch = input
+                isFiring = true
+                fireBtn.BackgroundTransparency = 0.4
+                
+                -- 100Hz Smart Firing Engine
+                task.spawn(function()
+                    while isFiring and isScriptOnline do
+                        local character = player.Character
+                        if character then
+                            local tools = {}
+                            for _, item in ipairs(character:GetChildren()) do
+                                if item:IsA("Tool") then table.insert(tools, item) end
+                            end
+                            for _, tool in ipairs(tools) do pcall(function() tool:Activate() end) end
+                            task.wait(0.01)
+                            for _, tool in ipairs(tools) do pcall(function() tool:Deactivate() end) end
+                            task.wait(0.01)
+                        else
+                            task.wait(0.05)
+                        end
+                    end
+                    local character = player.Character
+                    if character then
+                        for _, item in ipairs(character:GetChildren()) do
+                            if item:IsA("Tool") then pcall(function() item:Deactivate() end) end
+                        end
+                    end
+                end)
+            end
+        end
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input == activeJoystickTouch then
+        resetJoystick()
+    end
+    if input == activeJumpTouch then
+        activeJumpTouch = nil
+        isJumpHeld = false
+        jumpBtn.BackgroundTransparency = 0.65
+    end
+    if input == activeFireTouch then
+        activeFireTouch = nil
+        isFiring = false
+        fireBtn.BackgroundTransparency = 0.65
+    end
+end)
+
+local function setNativeTouchControlsHidden(hidden)
+    controlsGui.Enabled = hidden
+    local playerGui = player:FindFirstChild("PlayerGui")
+    if playerGui then
+        local touchGui = playerGui:FindFirstChild("TouchGui")
+        if touchGui then
+            touchGui.Enabled = not hidden
+            if hidden and not touchGuiListener then
+                touchGuiListener = touchGui:GetPropertyChangedSignal("Enabled"):Connect(function()
+                    if isScriptOnline and touchGui.Enabled then
+                        touchGui.Enabled = false
+                    end
+                end)
+            elseif not hidden and touchGuiListener then
+                touchGuiListener:Disconnect()
+                touchGuiListener = nil
+            end
+        end
+    end
+end
+
+-- ==========================================
+-- WALKSPEED CAPTURE & LOCK
+-- ==========================================
+local function setupWalkSpeedLock(character)
+    if not character then return end
+    local humanoid = character:WaitForChild("Humanoid", 5)
+    if humanoid then
+        if humanoid.WalkSpeed > 0 then
+            defaultWalkSpeed = humanoid.WalkSpeed
+        end
+
+        if speedConn then speedConn:Disconnect() end
+        speedConn = humanoid:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
+            if isScriptOnline and humanoid.WalkSpeed ~= defaultWalkSpeed then
+                humanoid.WalkSpeed = defaultWalkSpeed
+            end
+        end)
+    end
+end
+
+if player.Character then setupWalkSpeedLock(player.Character) end
+player.CharacterAdded:Connect(setupWalkSpeedLock)
+
+-- ==========================================
+-- 9E9 HOOKS (CAMERA & SPEED LOCK)
+-- ==========================================
+pcall(function()
+    local oldNewIndex
+    oldNewIndex = hookmetamethod(game, "__newindex", function(t, k, v)
+        if isScriptOnline then
+            if t == workspace.CurrentCamera and k == "CFrame" then
+                if not checkcaller() then
+                    local callingScript = getcallingscript()
+                    if callingScript then
+                        local isDefaultCamera = false
+                        local playerScripts = player:FindFirstChild("PlayerScripts")
+                        if playerScripts then
+                            local playerModule = playerScripts:FindFirstChild("PlayerModule")
+                            if playerModule and callingScript:IsDescendantOf(playerModule) then
+                                isDefaultCamera = true
+                            end
+                        end
+                        local name = callingScript.Name
+                        if name == "CameraModule" or name == "BaseCamera" or name == "ClassicCamera" then
+                            isDefaultCamera = true
+                        end
+                        if not isDefaultCamera then return end
+                    end
+                end
+            end
+
+            if typeof(t) == "Instance" and t:IsA("Humanoid") and k == "WalkSpeed" then
+                if not checkcaller() and v ~= defaultWalkSpeed then
+                    return
+                end
+            end
+
+            if typeof(t) == "Instance" and t:IsA("BasePart") and k == "Anchored" then
+                if not checkcaller() and t.Parent == player.Character and v == true then
+                    return
+                end
+            end
+        end
+        return oldNewIndex(t, k, v)
+    end)
+end)
+
+-- ==========================================
+-- WELD CACHING (ZERO LAG ARCH)
+-- ==========================================
+local function refreshCache()
+    cachedWelds = {}
+    updateGunNamesCache()
+    
+    local character = player.Character
+    if not character then return end
+    
+    local tools = {}
+    for _, item in ipairs(character:GetChildren()) do
+        if item:IsA("Tool") then table.insert(tools, item) end
+    end
+    
+    for index, tool in ipairs(tools) do
+        local handle = tool:FindFirstChild("Handle") or tool:FindFirstChildWhichIsA("BasePart")
+        if handle then
+            local weld = nil
+            for _, desc in ipairs(character:GetDescendants()) do
+                if (desc:IsA("Weld") or desc:IsA("Motor6D")) and desc.Part1 == handle then
+                    weld = desc
+                    break
+                end
+            end
+            if weld and weld.Part0 then
+                table.insert(cachedWelds, {Weld = weld, Index = index, Total = #tools})
+            end
+        end
+    end
+end
+
+local function setupCharacterListeners()
+    local character = player.Character
+    if not character then return end
+    
+    if charAddedConn then charAddedConn:Disconnect() end
+    if charRemovedConn then charRemovedConn:Disconnect() end
+    
+    charAddedConn = character.ChildAdded:Connect(function(child)
+        if child:IsA("Tool") or child:IsA("Model") or child:IsA("BasePart") then
+            task.wait(0.08)
+            refreshCache()
+            if isInvisible then updateGunInvisibility() end
+        end
+    end)
+    
+    charRemovedConn = character.ChildRemoved:Connect(function(child)
+        if child:IsA("Tool") then refreshCache() end
+    end)
+end
+
+-- ==========================================
+-- MULTI-EQUIP & UNEQUIP
+-- ==========================================
+local function equipMultipleItems()
+    if not isScriptOnline then return end
+    local character = player.Character
+    local backpack = player:FindFirstChild("Backpack")
+    if not character or not backpack then return end
+
+    for _, tool in ipairs(backpack:GetChildren()) do
+        if tool:IsA("Tool") then
+            tool.Parent = character
+            task.wait(0.03)
+        end
+    end
+    
+    refreshCache()
+    if isInvisible then updateGunInvisibility() end
+end
+
+local function unequipAllItems()
+    local character = player.Character
+    local backpack = player:FindFirstChild("Backpack")
+    if not character or not backpack then return end
+
+    isFiring = false
+    for _, tool in ipairs(character:GetChildren()) do
+        if tool:IsA("Tool") then tool.Parent = backpack end
+    end
+    cachedWelds = {}
+end
+
+local function setupAutoEquip()
+    local backpack = player:FindFirstChild("Backpack")
+    if backpack then
+        backpackConn = backpack.ChildAdded:Connect(function(child)
+            if isScriptOnline and child:IsA("Tool") then
+                task.wait(0.03)
+                if player.Character then 
+                    child.Parent = player.Character 
+                    if isInvisible then updateGunInvisibility() end
+                end
+            end
+        end)
+    end
+end
+
+-- ==========================================
+-- MAIN RUNTIME LOOP
+-- ==========================================
+local function startMainLoop()
+    local camera = workspace.CurrentCamera
+    
+    renderConn = RunService.RenderStepped:Connect(function()
+        if not isScriptOnline then return end
+        
+        local playerGui = player:FindFirstChild("PlayerGui")
+        if playerGui then
+            local touchGui = playerGui:FindFirstChild("TouchGui")
+            if touchGui and touchGui.Enabled then
+                touchGui.Enabled = false
+            end
+        end
+
+        local character = player.Character
+        if not character then return end
+        local rootPart = character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Torso")
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        if not rootPart or not humanoid then return end
+
+        -- 1. FLAT XZ MOVEMENT
+        if currentMoveVector.Magnitude > 0.05 then
+            local camCF = camera.CFrame
+            local flatForward = Vector3.new(camCF.LookVector.X, 0, camCF.LookVector.Z).Unit
+            local flatRight = Vector3.new(camCF.RightVector.X, 0, camCF.RightVector.Z).Unit
+            
+            local moveDirection = (flatRight * currentMoveVector.X) + (flatForward * -currentMoveVector.Y)
+            humanoid:Move(moveDirection, false)
+        end
+
+        -- 2. CONTINUOUS JUMP WHILE HELD
+        if isJumpHeld then
+            humanoid.Jump = true
+        end
+
+        if rootPart.Anchored then rootPart.Anchored = false end
+        if humanoid.WalkSpeed ~= defaultWalkSpeed then humanoid.WalkSpeed = defaultWalkSpeed end
+
+        -- 3. THE 9E9 CHARACTER FORCE
+        local bg = rootPart:FindFirstChild("AntiRecoilGyro")
+        if not bg then
+            bg = Instance.new("BodyGyro")
+            bg.Name = "AntiRecoilGyro"
+            bg.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+            bg.P = 100000
+            bg.D = 100
+            bg.Parent = rootPart
+        end
+        local camLook = camera.CFrame.LookVector
+        bg.CFrame = CFrame.lookAt(rootPart.Position, rootPart.Position + Vector3.new(camLook.X, 0, camLook.Z))
+
+        -- 4. THE ANIME ARCH
+        for _, data in ipairs(cachedWelds) do
+            local weld = data.Weld
+            if weld and weld.Parent and weld.Part0 then
+                local progress = (data.Total == 1) and 0.5 or ((data.Index - 1) / (data.Total - 1))
+                local angleDeg = -75 + (progress * 150)
+                local angleRad = math.rad(angleDeg)
+
+                local radius = 4.5
+                local xOffset = math.sin(angleRad) * radius
+                local yOffset = 1.5 + (math.abs(math.sin(angleRad)) * 2)
+                local zOffset = 2
+
+                local targetWorldCFrame = CFrame.new(rootPart.Position) * camera.CFrame.Rotation * CFrame.new(xOffset, yOffset, zOffset)
+                weld.C0 = weld.Part0.CFrame:Inverse() * targetWorldCFrame * weld.C1
+            end
+        end
+    end)
+end
+
+-- Status toggle functions
+local function setOnline()
+    isScriptOnline = true
+    status.Text = "Status: Online"
+    status.TextColor3 = Color3.fromRGB(0, 255, 0)
+    
+    if player.Character then setupWalkSpeedLock(player.Character) end
+    setNativeTouchControlsHidden(true)
+    setupCharacterListeners()
+    equipMultipleItems()
+    setupAutoEquip()
+    
+    if not renderConn then startMainLoop() end
+end
+
+local function setOffline()
+    isScriptOnline = false
+    isFiring = false
+    status.Text = "Status: Offline"
+    status.TextColor3 = Color3.fromRGB(255, 0, 0)
+    
+    setNativeTouchControlsHidden(false)
+    resetJoystick()
+    activeJumpTouch = nil
+    activeFireTouch = nil
+    isJumpHeld = false
+    
+    if renderConn then renderConn:Disconnect(); renderConn = nil end
+    if backpackConn then backpackConn:Disconnect(); backpackConn = nil end
+    if charAddedConn then charAddedConn:Disconnect(); charAddedConn = nil end
+    if charRemovedConn then charRemovedConn:Disconnect(); charRemovedConn = nil end
+    
+    local character = player.Character
+    if character then
+        local rootPart = character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Torso")
+        if rootPart then
+            local bg = rootPart:FindFirstChild("AntiRecoilGyro")
+            if bg then bg:Destroy() end
+        end
+    end
+    
+    if isInvisible then
+        isInvisible = false
+        inviBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        updateGunInvisibility()
+    end
+    
+    unequipAllItems()
+end
+
+-- Connect clicks
+onBtn.MouseButton1Click:Connect(setOnline)
+offBtn.MouseButton1Click:Connect(setOffline)
+
+-- RELOAD BUTTON
+reloadBtn.MouseButton1Click:Connect(function()
+    if isScriptOnline then
+        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.R, false, game)
+        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.R, false, game)
+    end
+end)
+
+-- INVISIBILITY TOGGLE BUTTON
+inviBtn.MouseButton1Click:Connect(function()
+    isInvisible = not isInvisible
+    if isInvisible then
+        inviBtn.TextColor3 = Color3.fromRGB(0, 255, 0)
+        updateGunNamesCache()
+    else
+        inviBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    end
+    updateGunInvisibility()
+end)
+
+destroyBtn.MouseButton1Click:Connect(function()
+    if speedConn then speedConn:Disconnect() end
+    if touchGuiListener then touchGuiListener:Disconnect() end
+    if wsDescendantConn then wsDescendantConn:Disconnect() end
+    if camDescendantConn then camDescendantConn:Disconnect() end
+    setOffline()
+    controlsGui:Destroy()
+    screenGui:Destroy()
+end)
