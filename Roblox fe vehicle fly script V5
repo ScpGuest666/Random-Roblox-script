@@ -126,11 +126,11 @@ local currentVelocityVector = Vector3.new(0, 0, 0)
 
 -- Helicopter
 local isHelicopterOn = false
-local heliMaxPitchDeg = 12
-local heliMaxRollDeg = 8
+local heliMaxPitchDeg = 14
+local heliMaxRollDeg = 10
 local heliPitchSmoothing = 0.12
 local heliTargetY = nil
-local HELI_P_GAIN = 20
+local HELI_P_GAIN = 18
 
 -- Movement State
 local controllerEnabled = false
@@ -150,7 +150,6 @@ local originalButtonPositions = {}
 -- GUI INITIALIZATION
 -- ============================================================================
 local function initializeGUI()
-    -- MainFrame (Reduced by 50%)
     MainFrame.Parent = ScreenGui
     MainFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
     MainFrame.Position = UDim2.new(0.3, 0, 0.5, -57)
@@ -258,7 +257,7 @@ local function initializeGUI()
         ColorSequenceKeypoint.new(1, Color3.fromRGB(75, 75, 75))
     }
 
-    -- Controller Frame (Full Scale)
+    -- Controller Frame
     ControllerFrame.Parent = ControllerGui
     ControllerFrame.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
     ControllerFrame.Position = UDim2.new(0.78, -75, 0.5, -75)
@@ -340,7 +339,7 @@ local function initializeGUI()
     PitchButton.TextScaled = true
     originalButtonPositions[PitchButton] = PitchButton.Position
 
-    -- Left Side GUI (Full Scale)
+    -- Left Side GUI
     LeftSideFrame.Parent = LeftSideGui
     LeftSideFrame.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
     LeftSideFrame.Position = UDim2.new(0.1, 20, 0.5, -75)
@@ -422,7 +421,6 @@ local function getFlightPart(humanoid)
     if humanoid and humanoid.SeatPart then
         return humanoid.SeatPart
     elseif FlyEnabled and VelocityHandler and VelocityHandler.Parent then
-        -- Returns the vehicle part when hopped off
         return VelocityHandler.Parent
     elseif flightWithoutFlyEnabled and humanoid and humanoid.RootPart then
         return humanoid.RootPart
@@ -507,7 +505,6 @@ local function handleInput(dt)
         local targetVelocity = Vector3.new()
         local movementCFrame
         
-        -- Derive CFrame based on AntiLock/Pitch settings
         if isAntiLockOn then
             movementCFrame = gyro.CFrame 
         elseif isPitchOn then
@@ -521,7 +518,7 @@ local function handleInput(dt)
             movementCFrame = flightPart.CFrame
         end
         
-        -- === VELOCITY CALCULATION (Works both SEATED and UNSEATED / REMOTE) ===
+        -- === VELOCITY CALCULATION ===
         if isHelicopterOn then
             local moveVecHorizontal = Vector3.new()
             local verticalCorrection = 0
@@ -538,7 +535,6 @@ local function handleInput(dt)
                 end
             end
             
-            -- Seated thumbstick support
             if humanoid.SeatPart then
                 local thumbstickDirection = Vector2.new(0, 0)
                 pcall(function()
@@ -568,9 +564,15 @@ local function handleInput(dt)
                 elseif isMovingDown then
                     verticalCorrection = -downVelocity
                 end
-                heliTargetY = flightPart.Position.Y + verticalCorrection * dt
+                
+                -- Dynamic altitude follower
+                if isSmoothModeOn then
+                    heliTargetY = flightPart.Position.Y + (currentVelocityVector.Y * dt)
+                else
+                    heliTargetY = flightPart.Position.Y + verticalCorrection * dt
+                end
             else
-                if math.abs(currentVelocityVector.Y) > 1 then
+                if math.abs(currentVelocityVector.Y) > 2 then
                     heliTargetY = flightPart.Position.Y
                 end
                 local currentY = flightPart.Position.Y
@@ -580,7 +582,6 @@ local function handleInput(dt)
             targetVelocity = Vector3.new(moveVecHorizontal.X, verticalCorrection, moveVecHorizontal.Z)
             
         else
-            -- Standard 6-Directional Remote Control
             for _, direction in ipairs(movementDirection) do
                 if direction == "forward" then
                     targetVelocity += movementCFrame.LookVector * forwardVelocity
@@ -600,6 +601,7 @@ local function handleInput(dt)
         
         targetVelocity *= speed
         
+        -- Smooth Velocity Interpolation
         if isSmoothModeOn then
             currentVelocityVector = currentVelocityVector:Lerp(targetVelocity, smoothingFactor)
             VelocityHandler.Velocity = currentVelocityVector
@@ -608,7 +610,7 @@ local function handleInput(dt)
             currentVelocityVector = targetVelocity 
         end
         
-        -- Rotation Input
+        -- Rotation Controls
         for _, direction in ipairs(movementDirection) do
             if direction == "rotateLeft" and gyro then
                 gyro.CFrame = gyro.CFrame * CFrame.Angles(0, math.rad(-rotationSpeed), 0)
@@ -617,7 +619,9 @@ local function handleInput(dt)
             end
         end
 
-        -- Gyro Attitude Update
+        -- ====================================================================
+        -- GYRO & REALISTIC HELI ATTITUDE DYNAMICS
+        -- ====================================================================
         if gyro then
             if isAntiLockOn then
                 if isYawLocked and humanoid.SeatPart then
@@ -649,13 +653,43 @@ local function handleInput(dt)
                     forwardInput = math.clamp(forwardInput, -1, 1)
                     rightInput = math.clamp(rightInput, -1, 1)
                     
-                    local desiredPitch = math.rad(-heliMaxPitchDeg * forwardInput)
-                    local desiredRoll = math.rad(-heliMaxRollDeg * rightInput)
+                    local desiredPitch = 0
+                    local desiredRoll = 0
+                    local dynamicSmoothing = heliPitchSmoothing
+
+                    -- === REALISTIC SYNERGY: SMOOTH + HELI ===
+                    if isSmoothModeOn then
+                        -- Calculate relative horizontal velocities along vehicle's local axes
+                        local flatLook = (gyro.CFrame.LookVector * Vector3.new(1, 0, 1)).Unit
+                        local flatRight = (gyro.CFrame.RightVector * Vector3.new(1, 0, 1)).Unit
+                        local maxSpd = math.max(1, forwardVelocity * speed)
+                        
+                        local forwardRelVel = math.clamp(currentVelocityVector:Dot(flatLook) / maxSpd, -1, 1)
+                        local rightRelVel = math.clamp(currentVelocityVector:Dot(flatRight) / maxSpd, -1, 1)
+
+                        -- Blend stick input (cyclic command) with translational aerodynamic velocity
+                        local effectiveForward = (forwardInput * 0.55) + (forwardRelVel * 0.45)
+                        local effectiveRight = (rightInput * 0.55) + (rightRelVel * 0.45)
+
+                        -- Coordinated turn banking: turning yaw while moving forward tilts the body into the turn
+                        local yawTurn = 0
+                        if table.find(movementDirection, "rotateLeft") then yawTurn = yawTurn - 1 end
+                        if table.find(movementDirection, "rotateRight") then yawTurn = yawTurn + 1 end
+                        local turnBank = math.rad(-heliMaxRollDeg * 0.35 * yawTurn * math.clamp(forwardRelVel, 0, 1))
+
+                        desiredPitch = math.rad(-heliMaxPitchDeg * effectiveForward)
+                        desiredRoll = math.rad(-heliMaxRollDeg * effectiveRight) + turnBank
+                        dynamicSmoothing = 0.09 -- Softer rotor disc response
+                    else
+                        desiredPitch = math.rad(-heliMaxPitchDeg * forwardInput)
+                        desiredRoll = math.rad(-heliMaxRollDeg * rightInput)
+                        dynamicSmoothing = heliPitchSmoothing
+                    end
                     
                     local currentYaw = CFrame.new(flightPart.Position, flightPart.Position + gyro.CFrame.LookVector * Vector3.new(1, 0, 1).Unit)
                     local targetCFrame = currentYaw * CFrame.Angles(desiredPitch, 0, desiredRoll)
                     
-                    gyro.CFrame = gyro.CFrame:Lerp(targetCFrame, heliPitchSmoothing)
+                    gyro.CFrame = gyro.CFrame:Lerp(targetCFrame, dynamicSmoothing)
                 else
                     local flatLookVector = gyro.CFrame.LookVector * Vector3.new(1, 0, 1)
                     local targetCFrame = CFrame.new(flightPart.Position, flightPart.Position + flatLookVector)
@@ -763,7 +797,6 @@ local function setupEventListeners()
         SpeedTextBox.Text = tostring(math.max(1, currentSpeed - 1))
     end))
     
-    -- Controller Movement Listeners
     local function registerMovementButton(btn, dir)
         registerCleanup(btn.MouseButton1Down:Connect(function()
             table.insert(movementDirection, dir)
@@ -851,7 +884,6 @@ local function setupEventListeners()
         end
     end))
 
-    -- Fly Toggle
     registerCleanup(FlyButton.MouseButton1Click:Connect(function()
         FlyEnabled = not FlyEnabled
         local character = player.Character
@@ -875,7 +907,7 @@ local function setupEventListeners()
                             heliTargetY = seatPart.Position.Y
                         end
                     elseif FlyEnabled and VelocityHandler and VelocityHandler.Parent then
-                        -- Hovering in vehicle (handlers stay attached)
+                        -- Hovering in vehicle unseated
                     elseif flightWithoutFlyEnabled and rootPart then
                         setupFlyInstances(rootPart)
                     else
@@ -897,7 +929,6 @@ local function setupEventListeners()
         end
     end))
     
-    -- FwF Toggle
     registerCleanup(FwFButton.MouseButton1Click:Connect(function()
         flightWithoutFlyEnabled = not flightWithoutFlyEnabled
         FwFButton.Text = flightWithoutFlyEnabled and "FwF On" or "FwF"
@@ -922,10 +953,8 @@ local function setupEventListeners()
         LeftSideGui.Enabled = controllerEnabled
     end))
     
-    -- Destroy Button
     registerCleanup(DestroyButton.MouseButton1Click:Connect(cleanup))
 
-    -- Minimize Button
     registerCleanup(MinimizeButton.MouseButton1Click:Connect(function()
         isGuiMinimized = not isGuiMinimized
         local currentPos = MainFrame.Position
