@@ -58,7 +58,7 @@ local SpeedTextBox = Instance.new("TextBox")
 local DecreaseButton = Instance.new("TextButton")
 local IncreaseButton = Instance.new("TextButton")
 local FlyButton = Instance.new("TextButton")
-local FwFButton = Instance.new("TextButton")
+local OrbitButton = Instance.new("TextButton")
 local DestroyButton = Instance.new("TextButton")
 local ControllerButton = Instance.new("TextButton")
 local UIGradient = Instance.new("UIGradient")
@@ -109,6 +109,9 @@ local HelicopterButton = Instance.new("TextButton")
 -- ============================================================================
 local velocityHandlerName = "VehicleFlyVelocity32"
 local gyroHandlerName = "VehicleFlyGyro64"
+local orbitBodyPosName = "VehicleFlyOrbitPos"
+local orbitBodyGyroName = "VehicleFlyOrbitGyro"
+
 local VelocityHandler = nil
 local GyroHandler = nil
 
@@ -116,7 +119,6 @@ local isAntiLockOn = false
 local FlyEnabled = false
 local seatConnection = nil
 local unseatConnection = nil
-local flightWithoutFlyEnabled = false
 local isPitchOn = false
 local isYawLocked = false
 local isSmoothModeOn = false
@@ -131,6 +133,12 @@ local heliMaxRollDeg = 10
 local heliPitchSmoothing = 0.12
 local heliTargetY = nil
 local HELI_P_GAIN = 18
+
+-- Orbit Feature (Slow Speed & Vehicle Registry)
+local isOrbitOn = false
+local orbitSpeed = 0.75 -- Adjusted to a calm, slow orbit
+local trackedOrbitParts = {}
+local knownVehicleParts = {} -- Tracks ONLY blocks that originated from your vehicle
 
 -- Movement State
 local controllerEnabled = false
@@ -218,15 +226,15 @@ local function initializeGUI()
     FlyButton.TextScaled = true
     originalButtonPositions[FlyButton] = FlyButton.Position
 
-    FwFButton.Parent = InnerFrame
-    FwFButton.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
-    FwFButton.Size = UDim2.new(0.4, 0, 0, 13)
-    FwFButton.Position = UDim2.new(0.5, 0, 0.33, 0)
-    FwFButton.Font = Enum.Font.GothamBold
-    FwFButton.Text = "FwF"
-    FwFButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    FwFButton.TextScaled = true
-    originalButtonPositions[FwFButton] = FwFButton.Position
+    OrbitButton.Parent = InnerFrame
+    OrbitButton.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+    OrbitButton.Size = UDim2.new(0.4, 0, 0, 13)
+    OrbitButton.Position = UDim2.new(0.5, 0, 0.33, 0)
+    OrbitButton.Font = Enum.Font.GothamBold
+    OrbitButton.Text = "Orbit"
+    OrbitButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    OrbitButton.TextScaled = true
+    originalButtonPositions[OrbitButton] = OrbitButton.Position
 
     DestroyButton.Parent = InnerFrame
     DestroyButton.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
@@ -415,15 +423,13 @@ local function initializeGUI()
 end
 
 -- ============================================================================
--- FLIGHT CONTROL FUNCTIONS
+-- FLIGHT & ORBIT HELPER FUNCTIONS
 -- ============================================================================
 local function getFlightPart(humanoid)
     if humanoid and humanoid.SeatPart then
         return humanoid.SeatPart
     elseif FlyEnabled and VelocityHandler and VelocityHandler.Parent then
         return VelocityHandler.Parent
-    elseif flightWithoutFlyEnabled and humanoid and humanoid.RootPart then
-        return humanoid.RootPart
     end
     return nil
 end
@@ -452,6 +458,18 @@ local function setupFlyInstances(partToAttachTo)
     GyroHandler.CFrame = partToAttachTo.CFrame
 end
 
+local function clearOrbitInstances()
+    for part, _ in pairs(trackedOrbitParts) do
+        if part and part.Parent then
+            local bp = part:FindFirstChild(orbitBodyPosName)
+            if bp then bp:Destroy() end
+            local bg = part:FindFirstChild(orbitBodyGyroName)
+            if bg then bg:Destroy() end
+        end
+    end
+    trackedOrbitParts = {}
+end
+
 local function DisableFlight()
     if VelocityHandler then
         VelocityHandler:Destroy()
@@ -468,6 +486,9 @@ local function DisableFlight()
     isHelicopterOn = false
     HelicopterButton.Text = "Heli"
     heliTargetY = nil
+    
+    clearOrbitInstances()
+    knownVehicleParts = {}
 end
 
 local function handleSeatLock(humanoid)
@@ -480,6 +501,147 @@ local function handleSeatLock(humanoid)
         end)
     else
         isYawLocked = false
+    end
+end
+
+-- ============================================================================
+-- NETWORK SIMULATION BOOST
+-- ============================================================================
+local function boostNetworkOwnership()
+    pcall(function()
+        if sethiddenproperty then
+            sethiddenproperty(player, "SimulationRadius", 1500)
+            sethiddenproperty(player, "MaxSimulationRadius", 1500)
+            sethiddenproperty(player, "MaximumSimulationRadius", 1500)
+        end
+        settings().Physics.PhysicsEnvironmentalThrottle = Enum.EnviromentalPhysicsThrottle.Disabled
+        settings().Physics.AllowSleep = false
+    end)
+end
+
+-- ============================================================================
+-- ORBIT CALCULATION ENGINE (STRICT VEHICLE DETACHED PARTS ONLY)
+-- ============================================================================
+local function updateOrbitingBlocks(centerPart)
+    if not isOrbitOn or not centerPart or not centerPart.Parent then
+        if next(trackedOrbitParts) ~= nil then
+            clearOrbitInstances()
+        end
+        return
+    end
+
+    boostNetworkOwnership()
+
+    -- 1. Identify active welded vehicle parts and continuously register vehicle blocks
+    local mainVehicleSet = {}
+    local maxExtentRadius = 0
+    local centerPos = centerPart.Position
+
+    local connected = centerPart:GetConnectedParts(true)
+    for _, p in ipairs(connected) do
+        if p:IsA("BasePart") then
+            mainVehicleSet[p] = true
+            knownVehicleParts[p] = true -- Register as part of our vehicle
+
+            local offset = (p.Position - centerPos)
+            local cornerDist = offset.Magnitude + (p.Size.Magnitude * 0.5)
+            if cornerDist > maxExtentRadius then
+                maxExtentRadius = cornerDist
+            end
+        end
+    end
+    mainVehicleSet[centerPart] = true
+    knownVehicleParts[centerPart] = true
+
+    -- Also check for player's named boat model (BABFT specific compatibility)
+    pcall(function()
+        for _, model in ipairs(workspace:GetChildren()) do
+            if model:IsA("Model") and string.find(string.lower(model.Name), string.lower(player.Name)) then
+                for _, p in ipairs(model:GetDescendants()) do
+                    if p:IsA("BasePart") then
+                        knownVehicleParts[p] = true
+                    end
+                end
+            end
+        end
+    end)
+
+    -- Safe base radius calculated around vehicle dimensions
+    local baseOrbitRadius = math.max(12, maxExtentRadius + 8)
+
+    -- 2. Filter strictly for blocks that belong to our vehicle registry but are now detached
+    local detachedBlocks = {}
+    local character = player.Character
+
+    for block, _ in pairs(knownVehicleParts) do
+        if block and block.Parent and block:IsA("BasePart") and not block.Anchored then
+            -- Only pick it up if it is detached from our welded body and not our character
+            if not mainVehicleSet[block] and (not character or not block:IsDescendantOf(character)) then
+                table.insert(detachedBlocks, block)
+            end
+        elseif not block or not block.Parent then
+            knownVehicleParts[block] = nil
+        end
+    end
+
+    -- Cleanup parts that re-welded or were destroyed
+    local currentSet = {}
+    for _, p in ipairs(detachedBlocks) do currentSet[p] = true end
+    for p, _ in pairs(trackedOrbitParts) do
+        if not currentSet[p] then
+            if p and p.Parent then
+                local bp = p:FindFirstChild(orbitBodyPosName)
+                if bp then bp:Destroy() end
+                local bg = p:FindFirstChild(orbitBodyGyroName)
+                if bg then bg:Destroy() end
+            end
+            trackedOrbitParts[p] = nil
+        end
+    end
+
+    local numBlocks = #detachedBlocks
+    if numBlocks == 0 then return end
+
+    local timeNow = tick() * orbitSpeed
+
+    -- 3. Position and rotate each detached block along the calculated orbit ring
+    for index, block in ipairs(detachedBlocks) do
+        trackedOrbitParts[block] = true
+
+        local bp = block:FindFirstChild(orbitBodyPosName)
+        if not bp then
+            bp = Instance.new("BodyPosition")
+            bp.Name = orbitBodyPosName
+            bp.MaxForce = Vector3.new(1e6, 1e6, 1e6)
+            bp.P = 15000
+            bp.D = 800
+            bp.Parent = block
+        end
+
+        local bg = block:FindFirstChild(orbitBodyGyroName)
+        if not bg then
+            bg = Instance.new("BodyGyro")
+            bg.Name = orbitBodyGyroName
+            bg.MaxTorque = Vector3.new(1e5, 1e5, 1e5)
+            bg.P = 3000
+            bg.D = 150
+            bg.Parent = block
+        end
+
+        local angle = timeNow + (index * (2 * math.pi / numBlocks))
+        local partExtraRadius = (block.Size.Magnitude * 0.5)
+        local totalRadius = baseOrbitRadius + partExtraRadius
+        
+        local heightWave = math.sin(timeNow * 1.2 + index) * 1.5
+
+        local targetPos = centerPos + Vector3.new(
+            math.cos(angle) * totalRadius,
+            heightWave,
+            math.sin(angle) * totalRadius
+        )
+
+        bp.Position = targetPos
+        bg.CFrame = CFrame.new(targetPos, centerPos) * CFrame.Angles(0, math.rad(90), 0)
     end
 end
 
@@ -565,7 +727,6 @@ local function handleInput(dt)
                     verticalCorrection = -downVelocity
                 end
                 
-                -- Dynamic altitude follower
                 if isSmoothModeOn then
                     heliTargetY = flightPart.Position.Y + (currentVelocityVector.Y * dt)
                 else
@@ -601,7 +762,6 @@ local function handleInput(dt)
         
         targetVelocity *= speed
         
-        -- Smooth Velocity Interpolation
         if isSmoothModeOn then
             currentVelocityVector = currentVelocityVector:Lerp(targetVelocity, smoothingFactor)
             VelocityHandler.Velocity = currentVelocityVector
@@ -610,7 +770,6 @@ local function handleInput(dt)
             currentVelocityVector = targetVelocity 
         end
         
-        -- Rotation Controls
         for _, direction in ipairs(movementDirection) do
             if direction == "rotateLeft" and gyro then
                 gyro.CFrame = gyro.CFrame * CFrame.Angles(0, math.rad(-rotationSpeed), 0)
@@ -619,9 +778,7 @@ local function handleInput(dt)
             end
         end
 
-        -- ====================================================================
-        -- GYRO & REALISTIC HELI ATTITUDE DYNAMICS
-        -- ====================================================================
+        -- Gyro / Pitch / Heli dynamics
         if gyro then
             if isAntiLockOn then
                 if isYawLocked and humanoid.SeatPart then
@@ -657,9 +814,7 @@ local function handleInput(dt)
                     local desiredRoll = 0
                     local dynamicSmoothing = heliPitchSmoothing
 
-                    -- === REALISTIC SYNERGY: SMOOTH + HELI ===
                     if isSmoothModeOn then
-                        -- Calculate relative horizontal velocities along vehicle's local axes
                         local flatLook = (gyro.CFrame.LookVector * Vector3.new(1, 0, 1)).Unit
                         local flatRight = (gyro.CFrame.RightVector * Vector3.new(1, 0, 1)).Unit
                         local maxSpd = math.max(1, forwardVelocity * speed)
@@ -667,11 +822,9 @@ local function handleInput(dt)
                         local forwardRelVel = math.clamp(currentVelocityVector:Dot(flatLook) / maxSpd, -1, 1)
                         local rightRelVel = math.clamp(currentVelocityVector:Dot(flatRight) / maxSpd, -1, 1)
 
-                        -- Blend stick input (cyclic command) with translational aerodynamic velocity
                         local effectiveForward = (forwardInput * 0.55) + (forwardRelVel * 0.45)
                         local effectiveRight = (rightInput * 0.55) + (rightRelVel * 0.45)
 
-                        -- Coordinated turn banking: turning yaw while moving forward tilts the body into the turn
                         local yawTurn = 0
                         if table.find(movementDirection, "rotateLeft") then yawTurn = yawTurn - 1 end
                         if table.find(movementDirection, "rotateRight") then yawTurn = yawTurn + 1 end
@@ -679,7 +832,7 @@ local function handleInput(dt)
 
                         desiredPitch = math.rad(-heliMaxPitchDeg * effectiveForward)
                         desiredRoll = math.rad(-heliMaxRollDeg * effectiveRight) + turnBank
-                        dynamicSmoothing = 0.09 -- Softer rotor disc response
+                        dynamicSmoothing = 0.09
                     else
                         desiredPitch = math.rad(-heliMaxPitchDeg * forwardInput)
                         desiredRoll = math.rad(-heliMaxRollDeg * rightInput)
@@ -724,12 +877,16 @@ local function handleInput(dt)
                 end
             end
         end
+
+        -- Update Detached Orbiting Blocks
+        updateOrbitingBlocks(flightPart)
     else
         if VelocityHandler then
             VelocityHandler.Velocity = Vector3.new()
         end
         currentVelocityVector = Vector3.new(0, 0, 0)
         heliTargetY = nil 
+        clearOrbitInstances()
     end
 end
 
@@ -884,6 +1041,7 @@ local function setupEventListeners()
         end
     end))
 
+    -- Fly Toggle
     registerCleanup(FlyButton.MouseButton1Click:Connect(function()
         FlyEnabled = not FlyEnabled
         local character = player.Character
@@ -898,7 +1056,6 @@ local function setupEventListeners()
                 
                 local function onSeatChange()
                     local seatPart = humanoid.SeatPart
-                    local rootPart = humanoid.RootPart
                     
                     if seatPart then
                         setupFlyInstances(seatPart)
@@ -908,8 +1065,6 @@ local function setupEventListeners()
                         end
                     elseif FlyEnabled and VelocityHandler and VelocityHandler.Parent then
                         -- Hovering in vehicle unseated
-                    elseif flightWithoutFlyEnabled and rootPart then
-                        setupFlyInstances(rootPart)
                     else
                         DisableFlight()
                     end
@@ -929,21 +1084,12 @@ local function setupEventListeners()
         end
     end))
     
-    registerCleanup(FwFButton.MouseButton1Click:Connect(function()
-        flightWithoutFlyEnabled = not flightWithoutFlyEnabled
-        FwFButton.Text = flightWithoutFlyEnabled and "FwF On" or "FwF"
-        
-        if FlyEnabled then
-            local char = player.Character
-            local humanoid = char and char:FindFirstChild("Humanoid")
-            if humanoid then
-                local part = getFlightPart(humanoid)
-                if part then
-                    setupFlyInstances(part)
-                else
-                    DisableFlight()
-                end
-            end
+    -- Orbit Toggle
+    registerCleanup(OrbitButton.MouseButton1Click:Connect(function()
+        isOrbitOn = not isOrbitOn
+        OrbitButton.Text = isOrbitOn and "Orbit On" or "Orbit"
+        if not isOrbitOn then
+            clearOrbitInstances()
         end
     end))
     
