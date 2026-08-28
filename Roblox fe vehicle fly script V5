@@ -111,6 +111,7 @@ local velocityHandlerName = "VehicleFlyVelocity32"
 local gyroHandlerName = "VehicleFlyGyro64"
 local orbitBodyPosName = "VehicleFlyOrbitPos"
 local orbitBodyGyroName = "VehicleFlyOrbitGyro"
+local hingeBavName = "VehicleFlyHingeBAV"
 
 local VelocityHandler = nil
 local GyroHandler = nil
@@ -134,11 +135,19 @@ local heliPitchSmoothing = 0.12
 local heliTargetY = nil
 local HELI_P_GAIN = 18
 
--- Orbit Feature (Slow Speed & Vehicle Registry)
+-- Orbit & Hinge Feature
 local isOrbitOn = false
-local orbitSpeed = 0.75 -- Adjusted to a calm, slow orbit
+local orbitSpeed = 0.75
 local trackedOrbitParts = {}
-local knownVehicleParts = {} -- Tracks ONLY blocks that originated from your vehicle
+local trackedHingedParts = {}
+local knownVehicleParts = {}
+
+-- Caches for optimized zero-lag scanning
+local cachedHingedAssemblies = {}
+local cachedDetachedBlocks = {}
+local cachedBaseOrbitRadius = 16
+local lastHierarchyScanTime = 0
+local lastOwnershipBoostTime = 0
 
 -- Movement State
 local controllerEnabled = false
@@ -468,6 +477,17 @@ local function clearOrbitInstances()
         end
     end
     trackedOrbitParts = {}
+
+    for part, _ in pairs(trackedHingedParts) do
+        if part and part.Parent then
+            local bav = part:FindFirstChild(hingeBavName)
+            if bav then bav:Destroy() end
+        end
+    end
+    trackedHingedParts = {}
+    
+    cachedHingedAssemblies = {}
+    cachedDetachedBlocks = {}
 end
 
 local function DisableFlight()
@@ -505,9 +525,13 @@ local function handleSeatLock(humanoid)
 end
 
 -- ============================================================================
--- NETWORK SIMULATION BOOST
+-- OPTIMIZED NETWORK SIMULATION (THROTTLED)
 -- ============================================================================
 local function boostNetworkOwnership()
+    local now = tick()
+    if now - lastOwnershipBoostTime < 2.5 then return end
+    lastOwnershipBoostTime = now
+
     pcall(function()
         if sethiddenproperty then
             sethiddenproperty(player, "SimulationRadius", 1500)
@@ -520,92 +544,224 @@ local function boostNetworkOwnership()
 end
 
 -- ============================================================================
--- ORBIT CALCULATION ENGINE (STRICT VEHICLE DETACHED PARTS ONLY)
+-- HELPER: STRICT FILTER FOR PROTECTED MECHANISMS (MOTORS, WINGS, PROPELLERS)
+-- ============================================================================
+local function isProtectedMechanism(part)
+    if not part or not part.Parent then return true end
+    local name = string.lower(part.Name)
+    local pName = part.Parent and string.lower(part.Parent.Name) or ""
+    if string.find(name, "prop") or string.find(name, "wing") or string.find(name, "rotor") or 
+       string.find(name, "motor") or string.find(name, "engine") or string.find(name, "wheel") or string.find(name, "servo") or
+       string.find(pName, "prop") or string.find(pName, "wing") or string.find(pName, "rotor") or string.find(pName, "motor") then
+        return true
+    end
+
+    for _, item in ipairs(part:GetChildren()) do
+        if item:IsA("Constraint") then
+            if item:IsA("SpringConstraint") or item:IsA("CylindricalConstraint") or 
+               item:IsA("PrismaticConstraint") or item:IsA("VectorForce") or item:IsA("LineForce") then
+                return true
+            end
+            if item:IsA("HingeConstraint") and item.ActuatorType ~= Enum.ActuatorType.None then
+                return true
+            end
+        end
+    end
+
+    return false
+end
+
+-- ============================================================================
+-- OPTIMIZED ZERO-LAG ORBIT & HINGE CALCULATION ENGINE
 -- ============================================================================
 local function updateOrbitingBlocks(centerPart)
     if not isOrbitOn or not centerPart or not centerPart.Parent then
-        if next(trackedOrbitParts) ~= nil then
+        if next(trackedOrbitParts) ~= nil or next(trackedHingedParts) ~= nil then
             clearOrbitInstances()
         end
         return
     end
 
     boostNetworkOwnership()
+    local timeNow = tick()
 
-    -- 1. Identify active welded vehicle parts and continuously register vehicle blocks
-    local mainVehicleSet = {}
-    local maxExtentRadius = 0
-    local centerPos = centerPart.Position
+    -- === HEAVY HIERARCHY SCAN (RUNS ONLY EVERY 0.4 SECONDS FOR ZERO FPS DROP) ===
+    if timeNow - lastHierarchyScanTime > 0.4 then
+        lastHierarchyScanTime = timeNow
 
-    local connected = centerPart:GetConnectedParts(true)
-    for _, p in ipairs(connected) do
-        if p:IsA("BasePart") then
-            mainVehicleSet[p] = true
-            knownVehicleParts[p] = true -- Register as part of our vehicle
+        local mainVehicleSet = {}
+        local maxExtentRadius = 0
+        local centerPos = centerPart.Position
 
-            local offset = (p.Position - centerPos)
-            local cornerDist = offset.Magnitude + (p.Size.Magnitude * 0.5)
-            if cornerDist > maxExtentRadius then
-                maxExtentRadius = cornerDist
+        local connected = centerPart:GetConnectedParts(true)
+        for _, p in ipairs(connected) do
+            if p:IsA("BasePart") then
+                mainVehicleSet[p] = true
+                knownVehicleParts[p] = true
+
+                local offset = (p.Position - centerPos)
+                local cornerDist = offset.Magnitude + (p.Size.Magnitude * 0.5)
+                if cornerDist > maxExtentRadius then
+                    maxExtentRadius = cornerDist
+                end
             end
         end
-    end
-    mainVehicleSet[centerPart] = true
-    knownVehicleParts[centerPart] = true
+        mainVehicleSet[centerPart] = true
+        knownVehicleParts[centerPart] = true
 
-    -- Also check for player's named boat model (BABFT specific compatibility)
-    pcall(function()
-        for _, model in ipairs(workspace:GetChildren()) do
-            if model:IsA("Model") and string.find(string.lower(model.Name), string.lower(player.Name)) then
-                for _, p in ipairs(model:GetDescendants()) do
+        -- Targeted scan only for the player's specific boat model (no global workspace scan)
+        pcall(function()
+            local boatName = player.Name .. "sBoat"
+            local boatModel = workspace:FindFirstChild(boatName)
+            if boatModel then
+                for _, p in ipairs(boatModel:GetDescendants()) do
                     if p:IsA("BasePart") then
                         knownVehicleParts[p] = true
                     end
                 end
             end
-        end
-    end)
+        end)
 
-    -- Safe base radius calculated around vehicle dimensions
-    local baseOrbitRadius = math.max(12, maxExtentRadius + 8)
+        cachedBaseOrbitRadius = math.max(12, maxExtentRadius + 8)
 
-    -- 2. Filter strictly for blocks that belong to our vehicle registry but are now detached
-    local detachedBlocks = {}
-    local character = player.Character
+        local newHingedAssemblies = {}
+        local allHingedPartsSet = {}
 
-    for block, _ in pairs(knownVehicleParts) do
-        if block and block.Parent and block:IsA("BasePart") and not block.Anchored then
-            -- Only pick it up if it is detached from our welded body and not our character
-            if not mainVehicleSet[block] and (not character or not block:IsDescendantOf(character)) then
-                table.insert(detachedBlocks, block)
+        local function registerHingeConnection(p0, p1, axisVector)
+            if not (p0 and p1 and p0:IsA("BasePart") and p1:IsA("BasePart")) then return end
+            local swingPart = nil
+
+            if mainVehicleSet[p0] and not mainVehicleSet[p1] then
+                swingPart = p1
+            elseif mainVehicleSet[p1] and not mainVehicleSet[p0] then
+                swingPart = p0
             end
-        elseif not block or not block.Parent then
-            knownVehicleParts[block] = nil
+
+            if swingPart and not isProtectedMechanism(swingPart) then
+                local axis = axisVector or swingPart.CFrame.LookVector
+                if axis.Magnitude < 0.1 then axis = Vector3.new(0, 1, 0) end
+
+                local subParts = swingPart:GetConnectedParts(true)
+                allHingedPartsSet[swingPart] = true
+
+                for _, sp in ipairs(subParts) do
+                    if sp:IsA("BasePart") and not mainVehicleSet[sp] then
+                        allHingedPartsSet[sp] = true
+                        local bp = sp:FindFirstChild(orbitBodyPosName)
+                        if bp then bp:Destroy() end
+                        local bg = sp:FindFirstChild(orbitBodyGyroName)
+                        if bg then bg:Destroy() end
+                    end
+                end
+
+                newHingedAssemblies[swingPart] = {
+                    Axis = axis.Unit
+                }
+            elseif swingPart then
+                allHingedPartsSet[swingPart] = true
+                for _, sp in ipairs(swingPart:GetConnectedParts(true)) do
+                    allHingedPartsSet[sp] = true
+                end
+            end
+        end
+
+        -- Fast scan only inside registered vehicle blocks
+        for part, _ in pairs(knownVehicleParts) do
+            if part and part.Parent and part:IsA("BasePart") then
+                for _, child in ipairs(part:GetChildren()) do
+                    if child:IsA("HingeConstraint") and child.Enabled and child.ActuatorType == Enum.ActuatorType.None then
+                        local att0 = child.Attachment0
+                        local att1 = child.Attachment1
+                        if att0 and att1 then
+                            local axis = att0.WorldAxis or att1.WorldAxis
+                            registerHingeConnection(att0.Parent, att1.Parent, axis)
+                        end
+                    end
+                end
+
+                if not mainVehicleSet[part] then
+                    local nameLower = string.lower(part.Name)
+                    if string.find(nameLower, "hinge") and not isProtectedMechanism(part) and not newHingedAssemblies[part] then
+                        registerHingeConnection(centerPart, part, part.CFrame.LookVector)
+                    end
+                end
+            end
+        end
+
+        cachedHingedAssemblies = newHingedAssemblies
+
+        -- Filter detached blocks
+        local newDetached = {}
+        local character = player.Character
+
+        for block, _ in pairs(knownVehicleParts) do
+            if block and block.Parent and block:IsA("BasePart") and not block.Anchored then
+                if not mainVehicleSet[block] and not allHingedPartsSet[block] and (not character or not block:IsDescendantOf(character)) then
+                    table.insert(newDetached, block)
+                end
+            elseif not block or not block.Parent then
+                knownVehicleParts[block] = nil
+            end
+        end
+
+        cachedDetachedBlocks = newDetached
+
+        -- Cleanup parts that stopped orbiting
+        local currentOrbitSet = {}
+        for _, p in ipairs(cachedDetachedBlocks) do currentOrbitSet[p] = true end
+        for p, _ in pairs(trackedOrbitParts) do
+            if not currentOrbitSet[p] then
+                if p and p.Parent then
+                    local bp = p:FindFirstChild(orbitBodyPosName)
+                    if bp then bp:Destroy() end
+                    local bg = p:FindFirstChild(orbitBodyGyroName)
+                    if bg then bg:Destroy() end
+                end
+                trackedOrbitParts[p] = nil
+            end
+        end
+
+        -- Cleanup parts that stopped hinging
+        for p, _ in pairs(trackedHingedParts) do
+            if not cachedHingedAssemblies[p] then
+                if p and p.Parent then
+                    local bav = p:FindFirstChild(hingeBavName)
+                    if bav then bav:Destroy() end
+                end
+                trackedHingedParts[p] = nil
+            end
         end
     end
 
-    -- Cleanup parts that re-welded or were destroyed
-    local currentSet = {}
-    for _, p in ipairs(detachedBlocks) do currentSet[p] = true end
-    for p, _ in pairs(trackedOrbitParts) do
-        if not currentSet[p] then
-            if p and p.Parent then
-                local bp = p:FindFirstChild(orbitBodyPosName)
-                if bp then bp:Destroy() end
-                local bg = p:FindFirstChild(orbitBodyGyroName)
-                if bg then bg:Destroy() end
+    -- === 60 FPS SMOOTH PER-FRAME PHYSICAL DRIVE (MINIMAL CPU LOAD) ===
+    local centerPos = centerPart.Position
+
+    -- 1. DRIVE HINGED ASSEMBLIES (Full 360° Multi-Turn Smooth Spin)
+    for rootPart, data in pairs(cachedHingedAssemblies) do
+        if rootPart and rootPart.Parent then
+            trackedHingedParts[rootPart] = true
+
+            local bav = rootPart:FindFirstChild(hingeBavName)
+            if not bav then
+                bav = Instance.new("BodyAngularVelocity")
+                bav.Name = hingeBavName
+                bav.P = 5000
+                bav.Parent = rootPart
             end
-            trackedOrbitParts[p] = nil
+
+            local spinSpeed = math.sin(timeNow * 0.7) * 15
+            bav.MaxTorque = Vector3.new(1e8, 1e8, 1e8)
+            bav.AngularVelocity = data.Axis * spinSpeed
         end
     end
 
-    local numBlocks = #detachedBlocks
+    -- 2. DRIVE DETACHED BLOCKS (Orbital Ring)
+    local numBlocks = #cachedDetachedBlocks
     if numBlocks == 0 then return end
 
-    local timeNow = tick() * orbitSpeed
+    local orbitTime = timeNow * orbitSpeed
 
-    -- 3. Position and rotate each detached block along the calculated orbit ring
-    for index, block in ipairs(detachedBlocks) do
+    for index, block in ipairs(cachedDetachedBlocks) do
         trackedOrbitParts[block] = true
 
         local bp = block:FindFirstChild(orbitBodyPosName)
@@ -628,11 +784,10 @@ local function updateOrbitingBlocks(centerPart)
             bg.Parent = block
         end
 
-        local angle = timeNow + (index * (2 * math.pi / numBlocks))
+        local angle = orbitTime + (index * (2 * math.pi / numBlocks))
         local partExtraRadius = (block.Size.Magnitude * 0.5)
-        local totalRadius = baseOrbitRadius + partExtraRadius
-        
-        local heightWave = math.sin(timeNow * 1.2 + index) * 1.5
+        local totalRadius = cachedBaseOrbitRadius + partExtraRadius
+        local heightWave = math.sin(orbitTime * 1.2 + index) * 1.5
 
         local targetPos = centerPos + Vector3.new(
             math.cos(angle) * totalRadius,
@@ -680,7 +835,7 @@ local function handleInput(dt)
             movementCFrame = flightPart.CFrame
         end
         
-        -- === VELOCITY CALCULATION ===
+        -- Velocity Calculation
         if isHelicopterOn then
             local moveVecHorizontal = Vector3.new()
             local verticalCorrection = 0
@@ -778,7 +933,7 @@ local function handleInput(dt)
             end
         end
 
-        -- Gyro / Pitch / Heli dynamics
+        -- Gyro / Attitude Handling
         if gyro then
             if isAntiLockOn then
                 if isYawLocked and humanoid.SeatPart then
@@ -878,7 +1033,7 @@ local function handleInput(dt)
             end
         end
 
-        -- Update Detached Orbiting Blocks
+        -- Update Detached Orbiting & Free-Hinged Sub-Assemblies
         updateOrbitingBlocks(flightPart)
     else
         if VelocityHandler then
