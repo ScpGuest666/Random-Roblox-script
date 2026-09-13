@@ -1,0 +1,2210 @@
+-- ============================================================================
+-- PREVIOUS SCRIPT INSTANCE KILL SWITCH
+-- ============================================================================
+local getgenv = getgenv or function() return _G end
+local genv = getgenv()
+
+if genv.MyScript_Cleanup and type(genv.MyScript_Cleanup) == "function" then
+    pcall(genv.MyScript_Cleanup)
+    genv.MyScript_Cleanup = nil
+end
+
+local cleanupTasks = {}
+local isAlive = true
+
+local function registerCleanup(item)
+    table.insert(cleanupTasks, item)
+    return item
+end
+
+-- ============================================================================
+-- ORIGINAL ROBLOX JOYSTICK SETTINGS CAPTURE & RESTORATION
+-- ============================================================================
+local originalTouchMovementMode = nil
+local originalDevTouchMovementMode = nil
+
+pcall(function()
+    local UserGameSettings = UserSettings():GetService("UserGameSettings")
+    originalTouchMovementMode = UserGameSettings.TouchMovementMode
+end)
+
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer or Players.PlayerAdded:Wait()
+
+pcall(function()
+    if player then
+        originalDevTouchMovementMode = player.DevTouchMovementMode
+    end
+end)
+
+local function restoreOriginalRobloxControls()
+    pcall(function()
+        local pGui = player:FindFirstChild("PlayerGui")
+        if pGui then
+            local tg = pGui:FindFirstChild("TouchGui")
+            if tg then
+                tg.Enabled = true
+            end
+        end
+    end)
+
+    pcall(function()
+        local UserGameSettings = UserSettings():GetService("UserGameSettings")
+        if originalTouchMovementMode then
+            UserGameSettings.TouchMovementMode = originalTouchMovementMode
+        else
+            UserGameSettings.TouchMovementMode = Enum.TouchMovementMode.Default
+        end
+    end)
+
+    pcall(function()
+        if player then
+            if originalDevTouchMovementMode then
+                player.DevTouchMovementMode = originalDevTouchMovementMode
+            else
+                player.DevTouchMovementMode = Enum.DevTouchMovementMode.UserChoice
+            end
+        end
+    end)
+
+    pcall(function()
+        local char = player.Character
+        if char then
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if hum then
+                hum:Move(Vector3.zero, false)
+            end
+        end
+    end)
+
+    pcall(function()
+        local PlayerScripts = player:FindFirstChild("PlayerScripts")
+        if PlayerScripts then
+            local PlayerModule = PlayerScripts:FindFirstChild("PlayerModule")
+            if PlayerModule then
+                local controls = require(PlayerModule)
+                if controls and controls.GetControls then
+                    local activeControls = controls:GetControls()
+                    if activeControls and activeControls.Enable then
+                        activeControls:Enable()
+                    end
+                end
+            end
+        end
+    end)
+end
+
+local function cleanup()
+    isAlive = false
+    restoreOriginalRobloxControls()
+
+    for _, item in ipairs(cleanupTasks) do
+        pcall(function()
+            if typeof(item) == "RBXScriptConnection" then
+                item:Disconnect()
+            elseif typeof(item) == "Instance" then
+                item:Destroy()
+            elseif type(item) == "thread" then
+                task.cancel(item)
+            elseif type(item) == "function" then
+                item()
+            end
+        end)
+    end
+    table.clear(cleanupTasks)
+    if genv.MyScript_Cleanup == cleanup then
+        genv.MyScript_Cleanup = nil
+    end
+end
+
+genv.MyScript_Cleanup = cleanup
+
+-- ============================================================================
+-- MOVEMENT MODE ENFORCER (WHILE SCRIPT IS ACTIVE)
+-- ============================================================================
+local function enforceClassicThumbstick()
+    pcall(function()
+        local UserGameSettings = UserSettings():GetService("UserGameSettings")
+        UserGameSettings.TouchMovementMode = Enum.TouchMovementMode.ClassicThumbstick
+
+        local conn = UserGameSettings:GetPropertyChangedSignal("TouchMovementMode"):Connect(function()
+            if isAlive and UserGameSettings.TouchMovementMode ~= Enum.TouchMovementMode.ClassicThumbstick then
+                pcall(function()
+                    UserGameSettings.TouchMovementMode = Enum.TouchMovementMode.ClassicThumbstick
+                end)
+            end
+        end)
+        registerCleanup(conn)
+    end)
+
+    pcall(function()
+        if player and player.DevTouchMovementMode then
+            player.DevTouchMovementMode = Enum.DevTouchMovementMode.ClassicThumbstick
+        end
+    end)
+end
+
+enforceClassicThumbstick()
+
+-- ============================================================================
+-- HYPER 3D TWEEN ACCELERATOR (WARP SPEED BLOCK TRAVEL)
+-- ============================================================================
+pcall(function()
+    local TweenService = game:GetService("TweenService")
+    if typeof(hookfunction) == "function" then
+        local oldCreate = TweenService.Create
+        hookfunction(TweenService.Create, function(self, inst, info, props)
+            if inst and typeof(inst) == "Instance" and inst:IsA("BasePart") and string.find(inst.Name, "Block") then
+                local fastTime = math.clamp(info.Time * 0.04, 0.008, 0.025)
+                local fastInfo = TweenInfo.new(fastTime, info.EasingStyle, info.EasingDirection, info.RepeatCount, info.Reverses, info.DelayTime)
+                return oldCreate(self, inst, fastInfo, props)
+            end
+            return oldCreate(self, inst, info, props)
+        end)
+    end
+end)
+
+-- ============================================================================
+-- SERVICES & CORE INSTANCES
+-- ============================================================================
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+
+local guiParent
+if type(gethui) == "function" then
+    guiParent = gethui()
+else
+    local success = pcall(function() return game:GetService("CoreGui").Name end)
+    guiParent = success and game:GetService("CoreGui") or player:WaitForChild("PlayerGui")
+end
+
+-- ============================================================================
+-- CUSTOM MOBILE CONTROLS (JOYSTICK & JUMP BUTTON REPLACEMENT)
+-- ============================================================================
+local controlsGui = Instance.new("ScreenGui")
+controlsGui.Name = "CustomMobileControls_" .. math.random(10000, 99999)
+controlsGui.ResetOnSpawn = false
+controlsGui.DisplayOrder = 2147483640
+controlsGui.IgnoreGuiInset = true
+controlsGui.Enabled = true
+controlsGui.Parent = guiParent
+registerCleanup(controlsGui)
+
+local joyBase = Instance.new("ImageButton")
+joyBase.Name = "JoystickBase"
+joyBase.Parent = controlsGui
+joyBase.AnchorPoint = Vector2.new(0, 1)
+joyBase.Position = UDim2.new(0, 40, 1, -20)
+joyBase.Size = UDim2.new(0, 110, 0, 110)
+joyBase.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+joyBase.BackgroundTransparency = 0.65
+joyBase.AutoButtonColor = false
+joyBase.Active = true
+
+local baseCorner = Instance.new("UICorner")
+baseCorner.CornerRadius = UDim.new(1, 0)
+baseCorner.Parent = joyBase
+
+local baseStroke = Instance.new("UIStroke")
+baseStroke.Color = Color3.fromRGB(255, 255, 255)
+baseStroke.Transparency = 0.6
+baseStroke.Thickness = 2
+baseStroke.Parent = joyBase
+
+local joyKnob = Instance.new("Frame")
+joyKnob.Name = "JoystickKnob"
+joyKnob.Parent = joyBase
+joyKnob.AnchorPoint = Vector2.new(0.5, 0.5)
+joyKnob.Position = UDim2.new(0.5, 0, 0.5, 0)
+joyKnob.Size = UDim2.new(0, 50, 0, 50)
+joyKnob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+joyKnob.BackgroundTransparency = 0.35
+joyKnob.Active = false
+
+local knobCorner = Instance.new("UICorner")
+knobCorner.CornerRadius = UDim.new(1, 0)
+knobCorner.Parent = joyKnob
+
+local jumpBtn = Instance.new("ImageButton")
+jumpBtn.Name = "CustomJumpButton"
+jumpBtn.Parent = controlsGui
+jumpBtn.AnchorPoint = Vector2.new(1, 1)
+jumpBtn.Position = UDim2.new(1, -40, 1, -20)
+jumpBtn.Size = UDim2.new(0, 75, 0, 75)
+jumpBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+jumpBtn.BackgroundTransparency = 0.65
+jumpBtn.AutoButtonColor = false
+jumpBtn.Active = false
+
+local jumpCorner = Instance.new("UICorner")
+jumpCorner.CornerRadius = UDim.new(1, 0)
+jumpCorner.Parent = jumpBtn
+
+local jumpStroke = Instance.new("UIStroke")
+jumpStroke.Color = Color3.fromRGB(255, 255, 255)
+jumpStroke.Transparency = 0.6
+jumpStroke.Thickness = 2
+jumpStroke.Parent = jumpBtn
+
+local jumpIcon = Instance.new("TextLabel")
+jumpIcon.Parent = jumpBtn
+jumpIcon.BackgroundTransparency = 1
+jumpIcon.Size = UDim2.new(1, 0, 1, 0)
+jumpIcon.Text = "▲"
+jumpIcon.TextColor3 = Color3.fromRGB(255, 255, 255)
+jumpIcon.TextSize = 28
+jumpIcon.Font = Enum.Font.GothamBold
+
+local currentMoveVector = Vector2.zero
+local activeJoystickTouch = nil
+local activeJumpTouch = nil
+local isJumpHeld = false
+local MAX_RADIUS = 45
+
+local function isInsideGui(pos, gui)
+    if not gui or not gui.Visible then return false end
+    local gPos = gui.AbsolutePosition
+    local gSize = gui.AbsoluteSize
+    return pos.X >= gPos.X and pos.X <= (gPos.X + gSize.X) and pos.Y >= gPos.Y and pos.Y <= (gPos.Y + gSize.Y)
+end
+
+local function resetJoystick()
+    activeJoystickTouch = nil
+    currentMoveVector = Vector2.zero
+    joyKnob.Position = UDim2.new(0.5, 0, 0.5, 0)
+end
+
+registerCleanup(joyBase.InputBegan:Connect(function(input)
+    if (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1) and not activeJoystickTouch then
+        activeJoystickTouch = input
+        local baseCenter = joyBase.AbsolutePosition + (joyBase.AbsoluteSize / 2)
+        local inputPos = Vector2.new(input.Position.X, input.Position.Y)
+        local delta = inputPos - baseCenter
+        local dist = delta.Magnitude
+        local clampedDist = math.min(dist, MAX_RADIUS)
+        local dir = (dist > 0) and (delta / dist) or Vector2.zero
+        local knobOffset = dir * clampedDist
+        
+        joyKnob.Position = UDim2.new(0.5, knobOffset.X, 0.5, knobOffset.Y)
+        currentMoveVector = Vector2.new(knobOffset.X / MAX_RADIUS, knobOffset.Y / MAX_RADIUS)
+    end
+end))
+
+registerCleanup(UserInputService.InputChanged:Connect(function(input)
+    if input == activeJoystickTouch then
+        local baseCenter = joyBase.AbsolutePosition + (joyBase.AbsoluteSize / 2)
+        local inputPos = Vector2.new(input.Position.X, input.Position.Y)
+        local delta = inputPos - baseCenter
+        local dist = delta.Magnitude
+        local clampedDist = math.min(dist, MAX_RADIUS)
+        local dir = (dist > 0) and (delta / dist) or Vector2.zero
+        local knobOffset = dir * clampedDist
+        
+        joyKnob.Position = UDim2.new(0.5, knobOffset.X, 0.5, knobOffset.Y)
+        currentMoveVector = Vector2.new(knobOffset.X / MAX_RADIUS, knobOffset.Y / MAX_RADIUS)
+    end
+end))
+
+registerCleanup(UserInputService.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+        if input.UserInputState == Enum.UserInputState.Begin then
+            local touchPos = Vector2.new(input.Position.X, input.Position.Y)
+            if controlsGui.Enabled and isInsideGui(touchPos, jumpBtn) and not activeJumpTouch then
+                activeJumpTouch = input
+                isJumpHeld = true
+                jumpBtn.BackgroundTransparency = 0.4
+                local char = player.Character
+                if char then
+                    local hum = char:FindFirstChildOfClass("Humanoid")
+                    if hum then hum.Jump = true end
+                end
+            end
+        end
+    end
+end))
+
+registerCleanup(UserInputService.InputEnded:Connect(function(input)
+    if input == activeJoystickTouch then
+        resetJoystick()
+    end
+    if input == activeJumpTouch then
+        activeJumpTouch = nil
+        isJumpHeld = false
+        jumpBtn.BackgroundTransparency = 0.65
+    end
+end))
+
+local function hideNativeTouchGui()
+    local pGui = player:FindFirstChild("PlayerGui")
+    if pGui then
+        local tg = pGui:FindFirstChild("TouchGui")
+        if tg then
+            tg.Enabled = false
+            local conn = tg:GetPropertyChangedSignal("Enabled"):Connect(function()
+                if isAlive and tg.Enabled then tg.Enabled = false end
+            end)
+            registerCleanup(conn)
+        end
+    end
+end
+
+hideNativeTouchGui()
+local pGuiConn = player:WaitForChild("PlayerGui", 5)
+if pGuiConn then
+    registerCleanup(pGuiConn.ChildAdded:Connect(function(child)
+        if isAlive and child.Name == "TouchGui" then
+            child.Enabled = false
+            registerCleanup(child:GetPropertyChangedSignal("Enabled"):Connect(function()
+                if isAlive and child.Enabled then child.Enabled = false end
+            end))
+        end
+    end))
+end
+
+registerCleanup(RunService.RenderStepped:Connect(function()
+    if not isAlive then return end
+    local char = player.Character
+    if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
+
+    if currentMoveVector.Magnitude > 0.05 then
+        local cam = workspace.CurrentCamera
+        if cam then
+            local camCF = cam.CFrame
+            local flatForward = Vector3.new(camCF.LookVector.X, 0, camCF.LookVector.Z).Unit
+            local flatRight = Vector3.new(camCF.RightVector.X, 0, camCF.RightVector.Z).Unit
+            local moveDir = (flatRight * currentMoveVector.X) + (flatForward * -currentMoveVector.Y)
+            hum:Move(moveDir, false)
+        end
+    end
+
+    if isJumpHeld then
+        hum.Jump = true
+    end
+end))
+
+-- ============================================================================
+-- MAIN GUI SETUP
+-- ============================================================================
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "ColorStackGui_" .. math.random(10000, 99999)
+screenGui.ResetOnSpawn = false
+screenGui.DisplayOrder = 2147483647
+screenGui.IgnoreGuiInset = true
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+screenGui.Parent = guiParent
+registerCleanup(screenGui)
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Parent = screenGui
+mainFrame.BackgroundColor3 = Color3.fromRGB(28, 28, 34)
+mainFrame.Size = UDim2.new(0, 232, 0, 58)
+mainFrame.Position = UDim2.new(0.5, -116, 0.2, 0)
+mainFrame.Draggable = true
+mainFrame.Active = true
+mainFrame.BorderSizePixel = 0
+mainFrame.ClipsDescendants = true
+
+local mainCorner = Instance.new("UICorner")
+mainCorner.CornerRadius = UDim.new(0, 8)
+mainCorner.Parent = mainFrame
+
+local status = Instance.new("TextLabel")
+status.Parent = mainFrame
+status.BackgroundColor3 = Color3.fromRGB(40, 40, 48)
+status.Size = UDim2.new(1, 0, 0, 20)
+status.Position = UDim2.new(0, 0, 0, 0)
+status.Text = "Status: Offline"
+status.TextColor3 = Color3.fromRGB(255, 75, 75)
+status.TextSize = 11
+status.Font = Enum.Font.GothamBold
+status.BorderSizePixel = 0
+
+local function createButton(name, text, x, y, width, height, bgColor)
+    local btn = Instance.new("TextButton")
+    btn.Name = name
+    btn.Parent = mainFrame
+    btn.Text = text
+    btn.Size = UDim2.new(0, width, 0, height)
+    btn.Position = UDim2.new(0, x, 0, y)
+    btn.BackgroundColor3 = bgColor or Color3.fromRGB(60, 60, 70)
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.TextSize = 10
+    btn.Font = Enum.Font.GothamBold
+    btn.AutoButtonColor = true
+    btn.BorderSizePixel = 0
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 6)
+    corner.Parent = btn
+    return btn
+end
+
+local onBtn = createButton("OnBtn", "On", 8, 26, 64, 26, Color3.fromRGB(40, 140, 60))
+local offBtn = createButton("OffBtn", "Off", 78, 26, 64, 26, Color3.fromRGB(150, 45, 45))
+local destroyBtn = createButton("DestroyBtn", "X", 148, 26, 76, 26, Color3.fromRGB(80, 80, 90))
+
+-- ============================================================================
+-- COLOR STACK CONTAINER & CONTROLS
+-- ============================================================================
+local gameContainer = Instance.new("Frame")
+gameContainer.Name = "GameContainer"
+gameContainer.Parent = mainFrame
+gameContainer.BackgroundTransparency = 1
+gameContainer.Position = UDim2.new(0, 0, 0, 58)
+gameContainer.Size = UDim2.new(1, 0, 0, 254)
+gameContainer.Visible = false
+
+local statsLabel = Instance.new("TextLabel")
+statsLabel.Parent = gameContainer
+statsLabel.BackgroundTransparency = 1
+statsLabel.Size = UDim2.new(1, -16, 0, 18)
+statsLabel.Position = UDim2.new(0, 8, 0, 2)
+statsLabel.Text = "Moves: 0 | Time: 0.0s | Pts: --"
+statsLabel.TextColor3 = Color3.fromRGB(220, 220, 230)
+statsLabel.TextSize = 10
+statsLabel.Font = Enum.Font.GothamMedium
+
+local cylinderStage = Instance.new("Frame")
+cylinderStage.Parent = gameContainer
+cylinderStage.BackgroundTransparency = 1
+cylinderStage.Size = UDim2.new(1, -16, 0, 168)
+cylinderStage.Position = UDim2.new(0, 8, 0, 22)
+
+local transitBlock = Instance.new("Frame")
+transitBlock.Name = "TransitBlock"
+transitBlock.Parent = cylinderStage
+transitBlock.Size = UDim2.new(0, 36, 0, 16)
+transitBlock.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+transitBlock.Visible = false
+transitBlock.ZIndex = 10
+
+local transitCorner = Instance.new("UICorner")
+transitCorner.CornerRadius = UDim.new(0, 4)
+transitCorner.Parent = transitBlock
+
+local randomizeBtn = createButton("RandomizeBtn", "Randomize", 8, 194, 104, 24, Color3.fromRGB(170, 50, 50))
+randomizeBtn.Parent = gameContainer
+
+local startBtn = createButton("StartBtn", "Start (Solve)", 120, 194, 104, 24, Color3.fromRGB(180, 115, 30))
+startBtn.Parent = gameContainer
+
+local changeBtn = createButton("ChangeBtn", "Mode (4)", 8, 222, 104, 24, Color3.fromRGB(100, 70, 160))
+changeBtn.Parent = gameContainer
+
+local copyBtn = createButton("CopyBtn", "Copy: OFF", 120, 222, 104, 24, Color3.fromRGB(65, 75, 95))
+copyBtn.Parent = gameContainer
+
+-- ============================================================================
+-- PALETTE & COLOR MAPPING
+-- ============================================================================
+local COLOR_PALETTE = {
+    [1] = Color3.fromRGB(235, 60, 60),    -- Red
+    [2] = Color3.fromRGB(50, 140, 245),   -- Blue
+    [3] = Color3.fromRGB(45, 205, 110),   -- Green
+    [4] = Color3.fromRGB(250, 215, 35),   -- Yellow
+    [5] = Color3.fromRGB(255, 130, 20),   -- Orange
+    [6] = Color3.fromRGB(165, 75, 240),   -- Purple
+    [7] = Color3.fromRGB(250, 95, 150),   -- Pink
+    [8] = Color3.fromRGB(40, 215, 230),   -- Cyan
+    [9] = Color3.fromRGB(160, 95, 45),    -- Brown
+}
+
+local COLOR_NAMES = {
+    [1] = "Red", [2] = "Blue", [3] = "Green",
+    [4] = "Yellow", [5] = "Orange", [6] = "Purple",
+    [7] = "Pink", [8] = "Cyan", [9] = "Brown"
+}
+
+local COLOR_NAME_MAP = {
+    red = 1,
+    blue = 2, darkblue = 2,
+    green = 3, lime = 3,
+    yellow = 4,
+    orange = 5, amber = 5,
+    purple = 6, violet = 6,
+    pink = 7, magenta = 7,
+    cyan = 8, lightblue = 8, aqua = 8, teal = 8,
+    brown = 9,
+}
+
+local KEY_CODES = {
+    [1] = Enum.KeyCode.One,
+    [2] = Enum.KeyCode.Two,
+    [3] = Enum.KeyCode.Three,
+    [4] = Enum.KeyCode.Four,
+    [5] = Enum.KeyCode.Five,
+    [6] = Enum.KeyCode.Six,
+    [7] = Enum.KeyCode.Seven,
+    [8] = Enum.KeyCode.Eight,
+}
+
+local currentMode = 4
+local tubes = {}
+local previousTubesCounts = {}
+local tubeButtons = {}
+local tubeSlots = {}
+local tubeCustomColors = {}
+local selectedTube = nil
+local currentHoverTube = nil
+local isSolving = false
+local isGameActive = false
+local isCopying = false
+local isSolving3D = false
+local isRoundResetting = false
+local moveCount = 0
+local startTime = 0
+local elapsedTime = 0
+local timerThread = nil
+local copyLoopConn = nil
+local currentTrackedBoard = nil
+local confirmedCylinderBlocks = {}
+local pendingLandings = {}
+local mismatchDetected = false
+local activeTubeConnections = {}
+
+local COPY_SCAN_INTERVAL = 0.05
+local lastCopyScan = 0
+
+local LAYOUT_CONFIG = {
+    [4] = {
+        rows = 1, cols = 4,
+        tubeWidth = 42, tubeHeight = 125,
+        gapX = 16, startX = 0,
+        rowY = {20},
+        blockH = 22, blockStep = 26, hoverY = -12
+    },
+    [5] = {
+        rows = 1, cols = 5,
+        tubeWidth = 36, tubeHeight = 125,
+        gapX = 6, startX = 6,
+        rowY = {20},
+        blockH = 17, blockStep = 20, hoverY = -12
+    },
+    [6] = {
+        rows = 2, cols = 3,
+        tubeWidth = 48, tubeHeight = 78,
+        gapX = 36, startX = 0,
+        rowY = {4, 86},
+        blockH = 9, blockStep = 11, hoverY = -8
+    },
+    [8] = {
+        rows = 2, cols = 4,
+        tubeWidth = 42, tubeHeight = 78,
+        gapX = 16, startX = 0,
+        rowY = {4, 86},
+        blockH = 7, blockStep = 8.5, hoverY = -7
+    }
+}
+
+local onTubeClicked
+
+-- ============================================================================
+-- FAST INPUT CONTROLLER
+-- ============================================================================
+local function simulateKeyPress(tubeIndex)
+    local kc = KEY_CODES[tubeIndex]
+    if not kc then return end
+    pcall(function()
+        VirtualInputManager:SendKeyEvent(true, kc, false, game)
+    end)
+    task.defer(function()
+        pcall(function()
+            VirtualInputManager:SendKeyEvent(false, kc, false, game)
+        end)
+    end)
+end
+
+local function getHoveringTube()
+    return currentHoverTube
+end
+
+local function isCylinderAwaitingArrival(cylIdx)
+    for _, item in ipairs(pendingLandings) do
+        if item.to == cylIdx then
+            return true
+        end
+    end
+    return false
+end
+
+-- ============================================================================
+-- CYLINDER REBUILDING & VISUAL RENDER
+-- ============================================================================
+local function rebuildCylinders()
+    for _, conn in ipairs(activeTubeConnections) do
+        conn:Disconnect()
+    end
+    table.clear(activeTubeConnections)
+    
+    for _, child in ipairs(cylinderStage:GetChildren()) do
+        if child ~= transitBlock then
+            child:Destroy()
+        end
+    end
+
+    tubeButtons = {}
+    tubeSlots = {}
+    tubeCustomColors = {}
+    selectedTube = nil
+
+    local cfg = LAYOUT_CONFIG[currentMode] or LAYOUT_CONFIG[4]
+    transitBlock.Size = UDim2.new(0, cfg.tubeWidth - 6, 0, cfg.blockH)
+
+    for i = 1, currentMode do
+        local r = (cfg.rows == 1) and 1 or (i <= cfg.cols and 1 or 2)
+        local c = (cfg.rows == 1) and (i - 1) or ((i - 1) % cfg.cols)
+        local xPos = cfg.startX + (c * (cfg.tubeWidth + cfg.gapX))
+        local yPos = cfg.rowY[r]
+
+        local tubeFrame = Instance.new("TextButton")
+        tubeFrame.Name = "Tube_" .. i
+        tubeFrame.Parent = cylinderStage
+        tubeFrame.BackgroundColor3 = Color3.fromRGB(22, 22, 26)
+        tubeFrame.BorderSizePixel = 1
+        tubeFrame.BorderColor3 = Color3.fromRGB(70, 70, 85)
+        tubeFrame.Size = UDim2.new(0, cfg.tubeWidth, 0, cfg.tubeHeight)
+        tubeFrame.Position = UDim2.new(0, xPos, 0, yPos)
+        tubeFrame.Text = ""
+        tubeFrame.AutoButtonColor = false
+
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0, 8)
+        corner.Parent = tubeFrame
+
+        tubeButtons[i] = tubeFrame
+        tubeSlots[i] = {}
+        tubeCustomColors[i] = {}
+
+        for slot = 1, currentMode do
+            local block = Instance.new("Frame")
+            block.Name = "Block_" .. slot
+            block.Parent = tubeFrame
+            block.Size = UDim2.new(0, cfg.tubeWidth - 6, 0, cfg.blockH)
+            local yOffset = cfg.tubeHeight - (slot * cfg.blockStep) - 2
+            block.Position = UDim2.new(0, 3, 0, yOffset)
+            block.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+            block.Visible = false
+
+            local bCorner = Instance.new("UICorner")
+            bCorner.CornerRadius = UDim.new(0, 4)
+            bCorner.Parent = block
+
+            tubeSlots[i][slot] = block
+        end
+
+        local conn = tubeFrame.MouseButton1Click:Connect(function()
+            onTubeClicked(i)
+        end)
+        table.insert(activeTubeConnections, conn)
+    end
+end
+
+local function updateVisuals()
+    local cfg = LAYOUT_CONFIG[currentMode] or LAYOUT_CONFIG[4]
+    for i = 1, currentMode do
+        local isSelected = (selectedTube == i)
+        if tubeButtons[i] then
+            tubeButtons[i].BorderColor3 = isSelected and Color3.fromRGB(255, 215, 0) or Color3.fromRGB(70, 70, 85)
+            for slot = 1, currentMode do
+                local block = tubeSlots[i] and tubeSlots[i][slot]
+                local val = tubes[i] and tubes[i][slot]
+                if block then
+                    if val then
+                        local col = tubeCustomColors[i] and tubeCustomColors[i][slot] or (COLOR_PALETTE[val] or Color3.fromRGB(150, 150, 150))
+                        block.BackgroundColor3 = col
+                        block.Visible = true
+                        if isSelected and slot == #tubes[i] then
+                            block.Position = UDim2.new(0, 3, 0, cfg.hoverY)
+                        else
+                            local yOffset = cfg.tubeHeight - (slot * cfg.blockStep) - 2
+                            block.Position = UDim2.new(0, 3, 0, yOffset)
+                        end
+                    else
+                        block.Visible = false
+                    end
+                end
+            end
+        end
+    end
+end
+
+local function isTubeCompleted(tube, cap)
+    if not tube or #tube ~= cap then return false end
+    local base = tube[1]
+    for s = 2, cap do
+        if tube[s] ~= base then return false end
+    end
+    return true
+end
+
+local function isGameWon(checkTubes)
+    local st = checkTubes or tubes
+    local numColors = currentMode - 1
+    local completed = 0
+    local seenColors = {}
+
+    for i = 1, currentMode do
+        local t = st[i]
+        if t and #t == currentMode then
+            local base = t[1]
+            local match = true
+            for s = 2, currentMode do
+                if t[s] ~= base then
+                    match = false
+                    break
+                end
+            end
+            if match and not seenColors[base] then
+                seenColors[base] = true
+                completed = completed + 1
+            else
+                return false
+            end
+        elseif not t or #t ~= 0 then
+            return false
+        end
+    end
+    return completed == numColors
+end
+
+local function getScore(moves, timeTaken)
+    local base = currentMode * 3200
+    return math.max(100, math.floor(base - (moves * 25) - (timeTaken * 15)))
+end
+
+local function updateStatsDisplay()
+    if isCopying then return end
+    local curTime = isGameActive and (os.clock() - startTime) or elapsedTime
+    local pts = getScore(moveCount, curTime)
+    statsLabel.Text = string.format("Moves: %d | Time: %.1fs | Pts: %d", moveCount, curTime, pts)
+end
+
+local function stopTimer()
+    if timerThread then
+        task.cancel(timerThread)
+        timerThread = nil
+    end
+    if isGameActive then
+        elapsedTime = os.clock() - startTime
+        isGameActive = false
+    end
+end
+
+local function startTimer()
+    if isGameActive or isCopying then return end
+    isGameActive = true
+    startTime = os.clock() - elapsedTime
+    
+    if timerThread then task.cancel(timerThread) end
+    timerThread = task.spawn(function()
+        while isAlive and isGameActive do
+            updateStatsDisplay()
+            task.wait(0.1)
+        end
+    end)
+    registerCleanup(timerThread)
+end
+
+-- ============================================================================
+-- INDEPENDENT ADVERSARIAL RANDOMIZER
+-- ============================================================================
+local function randomizeGame()
+    if isCopying then return end
+    isSolving = false
+    stopTimer()
+
+    selectedTube = nil
+    moveCount = 0
+    elapsedTime = 0
+    isGameActive = false
+
+    local numColors = currentMode - 1
+    local totalBlocks = numColors * currentMode
+
+    local heights = {}
+    for i = 1, currentMode do heights[i] = 1 end
+
+    local remaining = totalBlocks - currentMode
+    while remaining > 0 do
+        local candidates = {}
+        for i = 1, currentMode do
+            if heights[i] < currentMode then
+                table.insert(candidates, i)
+            end
+        end
+        if #candidates == 0 then break end
+        local chosen = candidates[math.random(1, #candidates)]
+        heights[chosen] = heights[chosen] + 1
+        remaining = remaining - 1
+    end
+
+    for i = currentMode, 2, -1 do
+        local j = math.random(1, i)
+        heights[i], heights[j] = heights[j], heights[i]
+    end
+
+    local pool = {}
+    for c = 1, numColors do
+        for _ = 1, currentMode do
+            table.insert(pool, c)
+        end
+    end
+
+    for i = #pool, 2, -1 do
+        local j = math.random(1, i)
+        pool[i], pool[j] = pool[j], pool[i]
+    end
+
+    tubes = {}
+    tubeCustomColors = {}
+    for i = 1, currentMode do
+        tubes[i] = {}
+        tubeCustomColors[i] = {}
+    end
+
+    local sortedIndices = {}
+    for i = 1, currentMode do table.insert(sortedIndices, i) end
+    table.sort(sortedIndices, function(a, b) return heights[a] > heights[b] end)
+    local tA, tB = sortedIndices[1], sortedIndices[2]
+
+    local c1, c2 = 1, 2
+    local function removeColor(c)
+        for idx, val in ipairs(pool) do
+            if val == c then
+                table.remove(pool, idx)
+                return c
+            end
+        end
+        return c
+    end
+
+    removeColor(c1); removeColor(c2);
+    removeColor(c2); removeColor(c1);
+
+    table.insert(tubes[tA], c1)
+    table.insert(tubes[tA], c2)
+    table.insert(tubes[tB], c2)
+    table.insert(tubes[tB], c1)
+
+    for i = 1, currentMode do
+        local targetH = heights[i]
+        while #tubes[i] < targetH and #pool > 0 do
+            local lastVal = tubes[i][#tubes[i]]
+            local placed = false
+            for pIdx = 1, #pool do
+                if pool[pIdx] ~= lastVal then
+                    table.insert(tubes[i], table.remove(pool, pIdx))
+                    placed = true
+                    break
+                end
+            end
+            if not placed then
+                table.insert(tubes[i], table.remove(pool, 1))
+            end
+        end
+    end
+
+    while #pool > 0 do
+        for i = 1, currentMode do
+            if #tubes[i] < currentMode and #pool > 0 then
+                table.insert(tubes[i], table.remove(pool, 1))
+            end
+        end
+    end
+
+    local perm = {}
+    for c = 1, numColors do table.insert(perm, c) end
+    for i = numColors, 2, -1 do
+        local j = math.random(1, i)
+        perm[i], perm[j] = perm[j], perm[i]
+    end
+    for i = 1, currentMode do
+        for k = 1, #tubes[i] do
+            tubes[i][k] = perm[tubes[i][k]]
+        end
+    end
+
+    transitBlock.Visible = false
+    updateVisuals()
+    statsLabel.Text = "Randomized! Ready to solve."
+end
+
+onTubeClicked = function(index)
+    if isSolving or isCopying or isGameWon() then return end
+
+    if not selectedTube then
+        if #tubes[index] > 0 then
+            selectedTube = index
+            updateVisuals()
+        end
+    else
+        if selectedTube == index then
+            selectedTube = nil
+            updateVisuals()
+        else
+            if #tubes[index] < currentMode then
+                if not isGameActive then
+                    startTimer()
+                end
+
+                local block = table.remove(tubes[selectedTube])
+                local col = tubeCustomColors[selectedTube] and table.remove(tubeCustomColors[selectedTube])
+                table.insert(tubes[index], block)
+                if col then
+                    table.insert(tubeCustomColors[index], col)
+                end
+                
+                moveCount = moveCount + 1
+                selectedTube = nil
+                updateVisuals()
+                updateStatsDisplay()
+
+                if isGameWon() then
+                    stopTimer()
+                    local finalScore = getScore(moveCount, elapsedTime)
+                    statsLabel.Text = string.format("Solved! Moves: %d | Time: %.1fs | Pts: %d", moveCount, elapsedTime, finalScore)
+                end
+            else
+                if #tubes[index] > 0 then
+                    selectedTube = index
+                    updateVisuals()
+                end
+            end
+        end
+    end
+end
+
+local function switchMode()
+    if isSolving or isCopying then return end
+    stopTimer()
+
+    if currentMode == 4 then
+        currentMode = 5
+    elseif currentMode == 5 then
+        currentMode = 6
+    elseif currentMode == 6 then
+        currentMode = 8
+    else
+        currentMode = 4
+    end
+
+    changeBtn.Text = string.format("Mode (%d)", currentMode)
+    rebuildCylinders()
+    randomizeGame()
+end
+
+-- ============================================================================
+-- COMMON SOLVER HELPERS
+-- ============================================================================
+local function serializeState(st)
+    local parts = {}
+    for i = 1, currentMode do
+        parts[i] = table.concat(st[i], "-")
+    end
+    table.sort(parts)
+    return table.concat(parts, "|")
+end
+
+local function cloneTubes(st)
+    local n = {}
+    for i = 1, currentMode do
+        n[i] = {}
+        for j = 1, #st[i] do
+            n[i][j] = st[i][j]
+        end
+    end
+    return n
+end
+
+local function calculateStandardHeuristic(st)
+    local cost = 0
+    for i = 1, currentMode do
+        local t = st[i]
+        local len = #t
+        if len > 0 then
+            local base = t[1]
+            for idx = 1, len do
+                if t[idx] ~= base then
+                    cost = cost + (currentMode + 1 - idx) * 2
+                end
+            end
+        end
+    end
+    return cost
+end
+
+-- A* Solver for Small Modes (4, 5, 6)
+local function solveStandardAStar(initialTubes)
+    if isGameWon(initialTubes) then return {} end
+
+    local heap = {}
+    local function pushHeap(item)
+        table.insert(heap, item)
+        local idx = #heap
+        while idx > 1 do
+            local parent = math.floor(idx / 2)
+            if heap[idx].f < heap[parent].f then
+                heap[idx], heap[parent] = heap[parent], heap[idx]
+                idx = parent
+            else
+                break
+            end
+        end
+    end
+
+    local function popHeap()
+        if #heap == 0 then return nil end
+        local top = heap[1]
+        local last = table.remove(heap)
+        if #heap > 0 then
+            heap[1] = last
+            local idx = 1
+            local n = #heap
+            while true do
+                local left = 2 * idx
+                local right = 2 * idx + 1
+                local smallest = idx
+                if left <= n and heap[left].f < heap[smallest].f then smallest = left end
+                if right <= n and heap[right].f < heap[smallest].f then smallest = right end
+                if smallest ~= idx then
+                    heap[idx], heap[smallest] = heap[smallest], heap[idx]
+                    idx = smallest
+                else
+                    break
+                end
+            end
+        end
+        return top
+    end
+
+    local startKey = serializeState(initialTubes)
+    local visited = {[startKey] = 0}
+
+    pushHeap({
+        state = cloneTubes(initialTubes),
+        g = 0,
+        f = calculateStandardHeuristic(initialTubes) * 3,
+        parent = nil,
+        move = nil
+    })
+
+    local iterations = 0
+    local maxLimit = 12000
+
+    while #heap > 0 do
+        iterations = iterations + 1
+        if not isAlive or (not isSolving and not isSolving3D) then return nil end
+
+        local current = popHeap()
+        local st = current.state
+
+        if isGameWon(st) then
+            local path = {}
+            local curr = current
+            while curr and curr.move do
+                table.insert(path, 1, curr.move)
+                curr = curr.parent
+            end
+            return path
+        end
+
+        if iterations > maxLimit then break end
+
+        local seenEmptyTarget = false
+        for i = 1, currentMode do
+            local lenI = #st[i]
+            if lenI > 0 then
+                local isComplete = false
+                if lenI == currentMode then
+                    isComplete = true
+                    local b = st[i][1]
+                    for s = 2, currentMode do
+                        if st[i][s] ~= b then
+                            isComplete = false
+                            break
+                        end
+                    end
+                end
+
+                if not isComplete then
+                    local movingVal = st[i][lenI]
+
+                    for j = 1, currentMode do
+                        local lenJ = #st[j]
+                        if i ~= j and lenJ < currentMode then
+                            local skipDuplicateEmpty = false
+                            if lenJ == 0 then
+                                if seenEmptyTarget then
+                                    skipDuplicateEmpty = true
+                                else
+                                    seenEmptyTarget = true
+                                end
+                            end
+
+                            if not skipDuplicateEmpty then
+                                local nextSt = cloneTubes(st)
+                                table.remove(nextSt[i])
+                                table.insert(nextSt[j], movingVal)
+
+                                local nextKey = serializeState(nextSt)
+                                local newG = current.g + 1
+
+                                if not visited[nextKey] or newG < visited[nextKey] then
+                                    visited[nextKey] = newG
+                                    pushHeap({
+                                        state = nextSt,
+                                        g = newG,
+                                        f = newG + calculateStandardHeuristic(nextSt) * 3,
+                                        parent = current,
+                                        move = {from = i, to = j}
+                                    })
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    return nil
+end
+
+-- ============================================================================
+-- DYNAMIC GREEDY SOLVER (HUMAN DIRECT PIPELINE: NO DEADLOCK / ZERO FREEZE)
+-- ============================================================================
+local function getMode8NextMove(curTubes, locked)
+    local cap = currentMode
+
+    for i = 1, cap do
+        if isTubeCompleted(curTubes[i], cap) then
+            locked[i] = true
+        end
+    end
+
+    if isGameWon(curTubes) then return nil end
+
+    -- Find the best tube to build next
+    local bestTargetTube = nil
+    local bestTargetColor = nil
+    local bestScore = -math.huge
+
+    for i = 1, cap do
+        if not locked[i] and #curTubes[i] > 0 then
+            local col = curTubes[i][1]
+            local pureCount = 0
+            local hasContam = false
+            for k = 1, #curTubes[i] do
+                if curTubes[i][k] == col and not hasContam then
+                    pureCount = pureCount + 1
+                else
+                    hasContam = true
+                end
+            end
+            local score = (pureCount * 12) - ((#curTubes[i] - pureCount) * 2)
+            if score > bestScore then
+                bestScore = score
+                bestTargetTube = i
+                bestTargetColor = col
+            end
+        end
+    end
+
+    if not bestTargetTube then
+        for i = 1, cap do
+            if not locked[i] and #curTubes[i] < cap then
+                bestTargetTube = i
+                break
+            end
+        end
+        for i = 1, cap do
+            if not locked[i] and #curTubes[i] > 0 then
+                bestTargetColor = curTubes[i][#curTubes[i]]
+                break
+            end
+        end
+    end
+
+    if not bestTargetTube or not bestTargetColor then return nil end
+
+    local targetTube = bestTargetTube
+    local targetColor = bestTargetColor
+
+    -- Helper to find a destination tube with free space
+    local function findSpaceTube(excludeSrc, excludeDst, preferColor)
+        -- Priority A: An unlocked tube whose top block already matches preferColor
+        if preferColor then
+            for i = 1, cap do
+                if not locked[i] and i ~= excludeSrc and i ~= excludeDst and #curTubes[i] > 0 and #curTubes[i] < cap then
+                    if curTubes[i][#curTubes[i]] == preferColor then
+                        return i
+                    end
+                end
+            end
+        end
+
+        -- Priority B: An unlocked non-target tube that already has blocks and has room
+        for i = 1, cap do
+            if not locked[i] and i ~= excludeSrc and i ~= excludeDst and #curTubes[i] > 0 and #curTubes[i] < cap then
+                return i
+            end
+        end
+
+        -- Priority C: An empty unlocked tube
+        for i = 1, cap do
+            if not locked[i] and i ~= excludeSrc and i ~= excludeDst and #curTubes[i] < cap then
+                return i
+            end
+        end
+
+        -- Priority D: Any unlocked tube with room
+        for i = 1, cap do
+            if not locked[i] and i ~= excludeSrc and #curTubes[i] < cap then
+                return i
+            end
+        end
+
+        return nil
+    end
+
+    -- ACTION 1: Clear foreign blocks from top of targetTube
+    if #curTubes[targetTube] > 0 then
+        local topIdx = #curTubes[targetTube]
+        local topVal = curTubes[targetTube][topIdx]
+        
+        local hasForeign = false
+        for k = 1, topIdx do
+            if curTubes[targetTube][k] ~= targetColor then
+                hasForeign = true
+                break
+            end
+        end
+
+        if hasForeign then
+            local dest = findSpaceTube(targetTube, targetTube, topVal)
+            if dest then
+                return {from = targetTube, to = dest}
+            end
+        end
+    end
+
+    -- ACTION 2: Move an exposed targetColor block directly into targetTube
+    if #curTubes[targetTube] < cap then
+        for i = 1, cap do
+            if i ~= targetTube and not locked[i] and #curTubes[i] > 0 then
+                if curTubes[i][#curTubes[i]] == targetColor then
+                    return {from = i, to = targetTube}
+                end
+            end
+        end
+    end
+
+    -- ACTION 3: Unbury a targetColor block from another cylinder
+    if #curTubes[targetTube] < cap then
+        local bestSrc = nil
+        local shallowestDepth = math.huge
+
+        for i = 1, cap do
+            if i ~= targetTube and not locked[i] and #curTubes[i] > 0 then
+                for idx = #curTubes[i] - 1, 1, -1 do
+                    if curTubes[i][idx] == targetColor then
+                        local depth = #curTubes[i] - idx
+                        if depth < shallowestDepth then
+                            shallowestDepth = depth
+                            bestSrc = i
+                        end
+                        break
+                    end
+                end
+            end
+        end
+
+        if bestSrc then
+            local topBlock = curTubes[bestSrc][#curTubes[bestSrc]]
+            local dest = findSpaceTube(bestSrc, targetTube, topBlock)
+            if dest then
+                return {from = bestSrc, to = dest}
+            end
+        end
+    end
+
+    -- ACTION 4: Anti-Deadlock (Consolidate matching top colors)
+    for i = 1, cap do
+        if not locked[i] and #curTubes[i] > 0 and i ~= targetTube then
+            local topA = curTubes[i][#curTubes[i]]
+            for j = 1, cap do
+                if not locked[j] and i ~= j and #curTubes[j] > 0 and #curTubes[j] < cap and j ~= targetTube then
+                    local topB = curTubes[j][#curTubes[j]]
+                    if topA == topB then
+                        return {from = i, to = j}
+                    end
+                end
+            end
+        end
+    end
+
+    -- ACTION 5: Evacuate the tube with the fewest blocks to restore a clean buffer
+    local minLen = math.huge
+    local minTube = nil
+    for i = 1, cap do
+        if not locked[i] and i ~= targetTube and #curTubes[i] > 0 then
+            if #curTubes[i] < minLen then
+                minLen = #curTubes[i]
+                minTube = i
+            end
+        end
+    end
+
+    if minTube then
+        local topVal = curTubes[minTube][#curTubes[minTube]]
+        local dest = findSpaceTube(minTube, minTube, topVal)
+        if dest then
+            return {from = minTube, to = dest}
+        end
+    end
+
+    return nil
+end
+
+-- ============================================================================
+-- HYPER-VELOCITY DISAPPEAR-ONLY MOVE DISPATCHER
+-- ============================================================================
+local function executeFastMove(fromIdx, toIdx, initialFromCount)
+    local hover = getHoveringTube()
+
+    if hover ~= nil then
+        if hover == fromIdx then
+            simulateKeyPress(toIdx)
+        else
+            simulateKeyPress(hover)
+            task.wait()
+            simulateKeyPress(fromIdx)
+            task.wait()
+            simulateKeyPress(toIdx)
+        end
+    else
+        simulateKeyPress(fromIdx)
+        task.wait()
+        simulateKeyPress(toIdx)
+    end
+
+    local disappearWait = os.clock()
+    local disappeared = false
+
+    while os.clock() - disappearWait < 0.22 do
+        if (#tubes[fromIdx] or 0) < initialFromCount and getHoveringTube() ~= fromIdx then
+            disappeared = true
+            break
+        end
+        task.wait()
+    end
+
+    return disappeared
+end
+
+-- ============================================================================
+-- 3D SOLVER CONTINUOUS EXECUTION PIPELINE
+-- ============================================================================
+local function toggle3DSolver()
+    if not isCopying then return end
+
+    if isSolving3D then
+        isSolving3D = false
+        table.clear(pendingLandings)
+        mismatchDetected = false
+        statsLabel.Text = "3D Solver Stopped."
+        return
+    end
+
+    if isRoundResetting then
+        statsLabel.Text = "Cannot start: Round ending / resetting."
+        return
+    end
+
+    if isGameWon(tubes) then
+        statsLabel.Text = "Board is already solved!"
+        return
+    end
+
+    isSolving3D = true
+    table.clear(pendingLandings)
+    mismatchDetected = false
+
+    task.spawn(function()
+        if currentMode == 8 then
+            local lockedTubes = {}
+            local consecutiveNoMoves = 0
+
+            while isSolving3D and not isGameWon(tubes) do
+                if not isAlive or not isCopying or isRoundResetting then break end
+
+                local nextMove = getMode8NextMove(tubes, lockedTubes)
+
+                if not nextMove then
+                    consecutiveNoMoves = consecutiveNoMoves + 1
+                    if consecutiveNoMoves > 8 then
+                        statsLabel.Text = "3D Solver: Waiting on board sync..."
+                        task.wait(0.2)
+                    else
+                        task.wait(0.04)
+                    end
+                else
+                    consecutiveNoMoves = 0
+                    local fromIdx = nextMove.from
+                    local toIdx = nextMove.to
+
+                    statsLabel.Text = string.format("3D Active: Tube %d -> Tube %d", fromIdx, toIdx)
+
+                    if isCylinderAwaitingArrival(fromIdx) then
+                        local waitArrival = os.clock()
+                        while isCylinderAwaitingArrival(fromIdx) and (os.clock() - waitArrival < 1.4) do
+                            if isRoundResetting then break end
+                            task.wait()
+                        end
+                    end
+
+                    if isRoundResetting then break end
+
+                    local initialFromCount = #tubes[fromIdx] or 0
+                    local movingColor = tubes[fromIdx] and tubes[fromIdx][initialFromCount]
+                    local disappeared = executeFastMove(fromIdx, toIdx, initialFromCount)
+
+                    if disappeared then
+                        table.insert(pendingLandings, {
+                            from = fromIdx,
+                            to = toIdx,
+                            color = movingColor,
+                            timestamp = os.clock()
+                        })
+                    else
+                        task.wait(0.02)
+                    end
+
+                    if mismatchDetected and not isRoundResetting then
+                        mismatchDetected = false
+                        statsLabel.Text = "Syncing with live board..."
+                        local settleWait = os.clock()
+                        while os.clock() - settleWait < 0.3 do
+                            if getHoveringTube() == nil or isRoundResetting then break end
+                            task.wait()
+                        end
+                        table.clear(pendingLandings)
+                    end
+                end
+
+                task.wait()
+            end
+        else
+            -- Small modes (4, 5, 6) using standard A*
+            statsLabel.Text = "Calculating 3D moves..."
+            local solutionPath = solveStandardAStar(tubes)
+
+            if not solutionPath or #solutionPath == 0 then
+                statsLabel.Text = "3D Solver: Unsolvable or no moves found."
+                isSolving3D = false
+                return
+            end
+
+            local pIdx = 1
+            while pIdx <= #solutionPath do
+                if not isAlive or not isCopying or not isSolving3D or isRoundResetting then break end
+
+                local move = solutionPath[pIdx]
+                local fromIdx = move.from
+                local toIdx = move.to
+
+                statsLabel.Text = string.format("3D: %d/%d (Tube %d -> %d)", pIdx, #solutionPath, fromIdx, toIdx)
+
+                if isCylinderAwaitingArrival(fromIdx) then
+                    local waitArrival = os.clock()
+                    while isCylinderAwaitingArrival(fromIdx) and (os.clock() - waitArrival < 1.4) do
+                        if isRoundResetting then break end
+                        task.wait()
+                    end
+                end
+
+                if isRoundResetting then break end
+
+                local initialFromCount = #tubes[fromIdx] or 0
+                local movingColor = tubes[fromIdx] and tubes[fromIdx][initialFromCount]
+                local disappeared = executeFastMove(fromIdx, toIdx, initialFromCount)
+
+                if disappeared then
+                    table.insert(pendingLandings, {
+                        from = fromIdx,
+                        to = toIdx,
+                        color = movingColor,
+                        timestamp = os.clock()
+                    })
+                    pIdx = pIdx + 1
+                else
+                    task.wait(0.02)
+                end
+
+                if mismatchDetected and not isRoundResetting then
+                    mismatchDetected = false
+                    statsLabel.Text = "Backtracking misplacement..."
+                    local settleWait = os.clock()
+                    while os.clock() - settleWait < 0.35 do
+                        if getHoveringTube() == nil or isRoundResetting then break end
+                        task.wait()
+                    end
+                    table.clear(pendingLandings)
+
+                    if not isRoundResetting then
+                        solutionPath = solveStandardAStar(tubes)
+                        pIdx = 1
+                    end
+                end
+
+                task.wait()
+            end
+        end
+
+        local finalWait = os.clock()
+        while #pendingLandings > 0 and (os.clock() - finalWait < 1.5) and not isRoundResetting do
+            task.wait()
+        end
+
+        table.clear(pendingLandings)
+        isSolving3D = false
+
+        if isRoundResetting then
+            statsLabel.Text = "Round Over / Resetting."
+        elseif isGameWon(tubes) then
+            statsLabel.Text = "3D Board Solved!"
+        else
+            statsLabel.Text = "3D Moves Complete."
+        end
+    end)
+end
+
+-- ============================================================================
+-- 2D MINI-GAME SOLVER
+-- ============================================================================
+local function startSolving2D()
+    if isSolving or isGameWon() then return end
+    isSolving = true
+    selectedTube = nil
+    updateVisuals()
+
+    statsLabel.Text = "Analyzing configuration..."
+    task.wait(0.05)
+
+    if currentMode == 8 then
+        startTimer()
+        task.spawn(function()
+            local lockedTubes = {}
+            local safetyLimit = 150
+            local steps = 0
+
+            while isSolving and not isGameWon(tubes) and steps < safetyLimit do
+                if not isAlive or isCopying then break end
+                steps = steps + 1
+
+                local move = getMode8NextMove(tubes, lockedTubes)
+                if not move then break end
+
+                selectedTube = move.from
+                updateVisuals()
+                task.wait(0.08)
+
+                local val = table.remove(tubes[move.from])
+                local col = tubeCustomColors[move.from] and table.remove(tubeCustomColors[move.from])
+                table.insert(tubes[move.to], val)
+                if col then
+                    table.insert(tubeCustomColors[move.to], col)
+                end
+
+                moveCount = moveCount + 1
+                selectedTube = nil
+                updateVisuals()
+                updateStatsDisplay()
+
+                task.wait(0.12)
+            end
+
+            isSolving = false
+            if isGameWon() then
+                stopTimer()
+                local finalScore = getScore(moveCount, elapsedTime)
+                statsLabel.Text = string.format("Completed! Moves: %d | Time: %.1fs | Pts: %d", moveCount, elapsedTime, finalScore)
+            end
+        end)
+    else
+        local solutionPath = solveStandardAStar(tubes)
+
+        if not isAlive or isCopying then return end
+
+        if solutionPath and #solutionPath > 0 then
+            startTimer()
+
+            local totalMoves = #solutionPath
+            local stepDelay = math.clamp(4.5 / totalMoves, 0.03, 0.16)
+            local hoverDelay = stepDelay * 0.55
+
+            task.spawn(function()
+                for _, move in ipairs(solutionPath) do
+                    if not isAlive or not isSolving or isCopying then break end
+
+                    selectedTube = move.from
+                    updateVisuals()
+                    task.wait(hoverDelay)
+
+                    local val = table.remove(tubes[move.from])
+                    local col = tubeCustomColors[move.from] and table.remove(tubeCustomColors[move.from])
+                    table.insert(tubes[move.to], val)
+                    if col then
+                        table.insert(tubeCustomColors[move.to], col)
+                    end
+                    
+                    moveCount = moveCount + 1
+                    selectedTube = nil
+                    updateVisuals()
+                    updateStatsDisplay()
+
+                    task.wait(stepDelay)
+                end
+
+                isSolving = false
+                if isGameWon() then
+                    stopTimer()
+                    local finalScore = getScore(moveCount, elapsedTime)
+                    statsLabel.Text = string.format("Completed! Moves: %d | Time: %.1fs | Pts: %d", moveCount, elapsedTime, finalScore)
+                end
+            end)
+        else
+            isSolving = false
+            if isGameWon() then
+                stopTimer()
+                statsLabel.Text = "Already solved!"
+            else
+                statsLabel.Text = "Impossible to solve! (Deadlock detected)"
+            end
+        end
+    end
+end
+
+local function onStartClicked()
+    if isCopying then
+        toggle3DSolver()
+    else
+        startSolving2D()
+    end
+end
+
+-- ============================================================================
+-- CAMERA CROSSHAIR & TABLE-ISOLATED BOARD TARGETING
+-- ============================================================================
+local function updateButtonLockVisuals()
+    if isCopying then
+        randomizeBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+        randomizeBtn.TextColor3 = Color3.fromRGB(120, 120, 130)
+        changeBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+        changeBtn.TextColor3 = Color3.fromRGB(120, 120, 130)
+
+        copyBtn.BackgroundColor3 = Color3.fromRGB(40, 160, 100)
+        copyBtn.Text = "Copy: ON"
+    else
+        startBtn.BackgroundColor3 = Color3.fromRGB(180, 115, 30)
+        startBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        startBtn.Text = "Start (Solve)"
+
+        randomizeBtn.BackgroundColor3 = Color3.fromRGB(170, 50, 50)
+        randomizeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        changeBtn.BackgroundColor3 = Color3.fromRGB(100, 70, 160)
+        changeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+
+        copyBtn.BackgroundColor3 = Color3.fromRGB(65, 75, 95)
+        copyBtn.Text = "Copy: OFF"
+        transitBlock.Visible = false
+    end
+end
+
+local function getBoardCenter(obj)
+    if obj:IsA("Model") then
+        local success, cf = pcall(function() return obj:GetBoundingBox() end)
+        if success and cf then return cf.Position end
+        return obj:GetPivot().Position
+    elseif obj:IsA("BasePart") then
+        return obj.Position
+    end
+    return nil
+end
+
+local function findTargetBoard()
+    local char = player.Character
+    local root = char and (char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso"))
+    if not root then return nil end
+
+    local rootPos = root.Position
+    local cam = workspace.CurrentCamera
+    local camPos = cam and cam.CFrame.Position or rootPos
+    local camLook = cam and cam.CFrame.LookVector or root.CFrame.LookVector
+
+    local allBoards = {}
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if (obj.Name == "StackBoard1" or obj.Name == "StackBoard2") and (obj:IsA("Model") or obj:IsA("BasePart")) then
+            if not (obj.Parent and (obj.Parent.Name == "StackBoard1" or obj.Parent.Name == "StackBoard2")) then
+                table.insert(allBoards, obj)
+            end
+        end
+    end
+
+    if #allBoards == 0 then return nil end
+
+    local nearbyBoards = {}
+    for _, board in ipairs(allBoards) do
+        local pos = getBoardCenter(board)
+        if pos then
+            local dist = (pos - rootPos).Magnitude
+            if dist < 32 then
+                table.insert(nearbyBoards, board)
+            end
+        end
+    end
+
+    local candidateList = (#nearbyBoards > 0) and nearbyBoards or allBoards
+    local bestBoard = nil
+    local bestScore = -math.huge
+
+    for _, board in ipairs(candidateList) do
+        local pos = getBoardCenter(board)
+        if pos then
+            local toBoardCam = pos - camPos
+            local camDir = toBoardCam.Unit
+            local camDot = camLook:Dot(camDir)
+            local forwardProj = math.max(0, toBoardCam:Dot(camLook))
+            local rayPoint = camPos + (camLook * forwardProj)
+            local perpDist = (pos - rayPoint).Magnitude
+            local charDist = (pos - rootPos).Magnitude
+
+            local score = (camDot * 100) - (perpDist * 5.0) - (charDist * 1.5)
+            if score > bestScore then
+                bestScore = score
+                bestBoard = board
+            end
+        end
+    end
+
+    return bestBoard
+end
+
+local function parseBlockInfo(part)
+    if not part:IsA("BasePart") then return nil end
+    if part.Transparency >= 0.9 or (part.LocalTransparencyModifier and part.LocalTransparencyModifier >= 0.9) then
+        return nil
+    end
+
+    local name = part.Name
+    local colorWord = string.match(name, "^Block_%d+_%d+_(%a+)") or string.match(name, "^Block_.*_(%a+)$")
+    if not colorWord then return nil end
+
+    local id = COLOR_NAME_MAP[string.lower(colorWord)] or 1
+    return {
+        part = part,
+        colorId = id,
+        actualColor = part.Color or COLOR_PALETTE[id]
+    }
+end
+
+local function stepCopyMirror()
+    if not isCopying or not isAlive then return end
+
+    local t = (math.sin(os.clock() * 3.8) + 1) * 0.5
+    local redColor = Color3.fromRGB(235, 60, 60)
+    local blueColor = Color3.fromRGB(50, 140, 245)
+    startBtn.BackgroundColor3 = redColor:Lerp(blueColor, t)
+    startBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    startBtn.Text = isSolving3D and "Stop (3D)" or "Start (3D)"
+
+    local now = os.clock()
+    if now - lastCopyScan < COPY_SCAN_INTERVAL then
+        return
+    end
+    lastCopyScan = now
+
+    local board = findTargetBoard()
+    if not board then
+        if not isSolving3D then
+            statsLabel.Text = "Copying: Searching facing board..."
+        end
+        return
+    end
+
+    if currentTrackedBoard ~= board then
+        currentTrackedBoard = board
+        table.clear(confirmedCylinderBlocks)
+        table.clear(pendingLandings)
+        mismatchDetected = false
+        rebuildCylinders()
+    end
+
+    local boardPos = getBoardCenter(board) or Vector3.zero
+
+    local otherBoard = nil
+    if board.Parent then
+        local otherName = (board.Name == "StackBoard1") and "StackBoard2" or "StackBoard1"
+        for _, sibling in ipairs(board.Parent:GetChildren()) do
+            if sibling ~= board and (sibling.Name == otherName or string.find(sibling.Name, "StackBoard")) then
+                otherBoard = sibling
+                break
+            end
+        end
+    end
+    local otherBoardPos = otherBoard and getBoardCenter(otherBoard)
+
+    local cylinders = {}
+    local ghostCylinders = {}
+
+    for _, obj in ipairs(board:GetDescendants()) do
+        if obj:IsA("BasePart") then
+            local cNum = string.match(obj.Name, "^Cylinder(%d+)$")
+            if cNum then cylinders[tonumber(cNum)] = obj end
+            local gNum = string.match(obj.Name, "^GhostCylinder(%d+)$")
+            if gNum then ghostCylinders[tonumber(gNum)] = obj end
+        end
+    end
+
+    if #cylinders == 0 and board.Parent then
+        for _, obj in ipairs(board.Parent:GetDescendants()) do
+            if obj:IsA("BasePart") then
+                local isUnderOther = otherBoard and obj:IsDescendantOf(otherBoard)
+                if not isUnderOther then
+                    local objPos = obj.Position
+                    local distToThis = (objPos - boardPos).Magnitude
+                    local distToOther = otherBoardPos and (objPos - otherBoardPos).Magnitude or math.huge
+
+                    if distToThis <= distToOther then
+                        local cNum = string.match(obj.Name, "^Cylinder(%d+)$")
+                        if cNum then cylinders[tonumber(cNum)] = obj end
+                        local gNum = string.match(obj.Name, "^GhostCylinder(%d+)$")
+                        if gNum then ghostCylinders[tonumber(gNum)] = obj end
+                    end
+                end
+            end
+        end
+    end
+
+    local maxCyl = 0
+    for i = 8, 1, -1 do
+        if cylinders[i] then
+            maxCyl = math.max(maxCyl, i)
+        end
+    end
+
+    local detectedCount = maxCyl
+    if detectedCount ~= 4 and detectedCount ~= 5 and detectedCount ~= 6 and detectedCount ~= 8 then
+        if detectedCount >= 8 then
+            detectedCount = 8
+        elseif detectedCount >= 6 then
+            detectedCount = 6
+        elseif detectedCount >= 5 then
+            detectedCount = 5
+        else
+            detectedCount = 4
+        end
+    end
+
+    if detectedCount ~= currentMode then
+        currentMode = detectedCount
+        changeBtn.Text = string.format("Mode (%d)", currentMode)
+        table.clear(confirmedCylinderBlocks)
+        table.clear(pendingLandings)
+        mismatchDetected = false
+        rebuildCylinders()
+    end
+
+    local allBlocks = {}
+
+    for partKey in pairs(confirmedCylinderBlocks) do
+        if not partKey:IsDescendantOf(workspace) then
+            confirmedCylinderBlocks[partKey] = nil
+        end
+    end
+
+    local searchScope = board.Parent or board
+
+    for _, obj in ipairs(searchScope:GetDescendants()) do
+        local isUnderOther = otherBoard and obj:IsDescendantOf(otherBoard)
+        if not isUnderOther then
+            local info = parseBlockInfo(obj)
+            if info then
+                local part = info.part
+                local pPos = part.Position
+                local distToThis = (pPos - boardPos).Magnitude
+                local distToOther = otherBoardPos and (pPos - otherBoardPos).Magnitude or math.huge
+
+                if distToThis <= distToOther + 1.0 then
+                    local insideCylinder = false
+                    for i = 1, currentMode do
+                        local cyl = cylinders[i]
+                        if cyl then
+                            local distXZ = (Vector2.new(pPos.X, pPos.Z) - Vector2.new(cyl.Position.X, cyl.Position.Z)).Magnitude
+                            local cylRadius = math.max(cyl.Size.X, cyl.Size.Z) * 0.85
+                            local cylTopY = cyl.Position.Y + (cyl.Size.Y * 0.5)
+                            local cylBaseY = cyl.Position.Y - (cyl.Size.Y * 0.5)
+
+                            if distXZ <= cylRadius and pPos.Y <= (cylTopY + 0.1) and pPos.Y >= (cylBaseY - 0.5) then
+                                insideCylinder = true
+                                break
+                            end
+                        end
+                    end
+
+                    if insideCylinder then
+                        confirmedCylinderBlocks[part] = true
+                    end
+
+                    if confirmedCylinderBlocks[part] then
+                        table.insert(allBlocks, info)
+                    end
+                end
+            end
+        end
+    end
+
+    local newTubes = {}
+    local newColors = {}
+    local tubeBlockLists = {}
+    for i = 1, currentMode do
+        newTubes[i] = {}
+        newColors[i] = {}
+        tubeBlockLists[i] = {}
+    end
+
+    local hoveringTube = nil
+    local movingBlockInfo = nil
+    local cfg = LAYOUT_CONFIG[currentMode] or LAYOUT_CONFIG[4]
+
+    local cylindersWithElevatedBlocks = {}
+    local totalElevatedBlocks = 0
+
+    for _, bInfo in ipairs(allBlocks) do
+        local pPos = bInfo.part.Position
+        local bestTubeIdx = nil
+        local bestDistXZ = math.huge
+        local secondTubeIdx = nil
+        local secondDistXZ = math.huge
+
+        for i = 1, currentMode do
+            local cyl = cylinders[i]
+            if cyl then
+                local dXZ = (Vector2.new(pPos.X, pPos.Z) - Vector2.new(cyl.Position.X, cyl.Position.Z)).Magnitude
+                if dXZ < bestDistXZ then
+                    secondTubeIdx = bestTubeIdx
+                    secondDistXZ = bestDistXZ
+                    bestDistXZ = dXZ
+                    bestTubeIdx = i
+                elseif dXZ < secondDistXZ then
+                    secondDistXZ = dXZ
+                    secondTubeIdx = i
+                end
+            end
+        end
+
+        local cylRef = bestTubeIdx and cylinders[bestTubeIdx]
+        local cylRadius = cylRef and (math.max(cylRef.Size.X, cylRef.Size.Z) * 0.85) or 3
+
+        if bestTubeIdx and cylRef then
+            local topY = cylRef.Position.Y + (cylRef.Size.Y * 0.5)
+
+            if bestDistXZ <= cylRadius then
+                if pPos.Y > (topY + 0.05) then
+                    hoveringTube = bestTubeIdx
+                    bInfo.isHover = true
+                    totalElevatedBlocks = totalElevatedBlocks + 1
+                    cylindersWithElevatedBlocks[bestTubeIdx] = true
+                else
+                    bInfo.isHover = false
+                end
+                table.insert(tubeBlockLists[bestTubeIdx], bInfo)
+            else
+                movingBlockInfo = {
+                    info = bInfo,
+                    fromIdx = bestTubeIdx,
+                    toIdx = secondTubeIdx,
+                    d1 = bestDistXZ,
+                    d2 = secondDistXZ
+                }
+            end
+        end
+    end
+
+    local numElevatedCylinders = 0
+    for _ in pairs(cylindersWithElevatedBlocks) do
+        numElevatedCylinders = numElevatedCylinders + 1
+    end
+
+    if numElevatedCylinders >= 2 and totalElevatedBlocks >= 2 then
+        if isSolving3D then
+            isSolving3D = false
+            table.clear(pendingLandings)
+            mismatchDetected = false
+            statsLabel.Text = "Round Over / Resetting."
+        end
+        isRoundResetting = true
+    elseif numElevatedCylinders == 0 and #allBlocks >= currentMode then
+        if isRoundResetting then
+            isRoundResetting = false
+            table.clear(confirmedCylinderBlocks)
+            rebuildCylinders()
+        end
+    end
+
+    for i = 1, currentMode do
+        local list = tubeBlockLists[i]
+        table.sort(list, function(a, b)
+            return a.part.Position.Y < b.part.Position.Y
+        end)
+
+        for slotIdx = 1, math.min(#list, currentMode) do
+            local b = list[slotIdx]
+            table.insert(newTubes[i], b.colorId)
+            table.insert(newColors[i], b.actualColor)
+        end
+    end
+
+    if #pendingLandings > 0 and not isRoundResetting then
+        for i = 1, currentMode do
+            local prevCount = previousTubesCounts[i] or 0
+            local newCount = #newTubes[i]
+
+            if newCount > prevCount then
+                local matchedIdx = nil
+                for pIdx, pending in ipairs(pendingLandings) do
+                    if pending.to == i then
+                        matchedIdx = pIdx
+                        break
+                    end
+                end
+
+                if matchedIdx then
+                    table.remove(pendingLandings, matchedIdx)
+                else
+                    mismatchDetected = true
+                end
+            end
+        end
+
+        local curTime = os.clock()
+        for _, pending in ipairs(pendingLandings) do
+            if curTime - pending.timestamp > 1.8 then
+                mismatchDetected = true
+                break
+            end
+        end
+    end
+
+    for i = 1, currentMode do
+        previousTubesCounts[i] = #newTubes[i]
+    end
+
+    tubes = newTubes
+    tubeCustomColors = newColors
+    currentHoverTube = hoveringTube
+    selectedTube = hoveringTube
+
+    if movingBlockInfo and tubeButtons[movingBlockInfo.fromIdx] and tubeButtons[movingBlockInfo.toIdx] then
+        local btnA = tubeButtons[movingBlockInfo.fromIdx]
+        local btnB = tubeButtons[movingBlockInfo.toIdx]
+        local totalD = movingBlockInfo.d1 + movingBlockInfo.d2
+        local alpha = (totalD > 0) and math.clamp(movingBlockInfo.d1 / totalD, 0, 1) or 0.5
+
+        local xA = btnA.Position.X.Offset
+        local xB = btnB.Position.X.Offset
+        local yA = btnA.Position.Y.Offset
+        local yB = btnB.Position.Y.Offset
+
+        local currentX = xA + ((xB - xA) * alpha) + 3
+        local currentY = yA + ((yB - yA) * alpha) + cfg.hoverY
+
+        transitBlock.BackgroundColor3 = movingBlockInfo.info.actualColor
+        transitBlock.Position = UDim2.new(0, currentX, 0, currentY)
+        transitBlock.Visible = true
+    else
+        transitBlock.Visible = false
+    end
+
+    updateVisuals()
+    if not isSolving3D and not isRoundResetting then
+        local tableName = board.Parent and board.Parent.Name or "Table"
+        statsLabel.Text = string.format("Copying: %s (%s) | %d Cyl", board.Name, tableName, currentMode)
+    end
+end
+
+local function toggleCopy()
+    isCopying = not isCopying
+    stopTimer()
+    isSolving = false
+    isSolving3D = false
+    isRoundResetting = false
+    selectedTube = nil
+    currentHoverTube = nil
+    currentTrackedBoard = nil
+    table.clear(pendingLandings)
+    mismatchDetected = false
+    updateButtonLockVisuals()
+
+    if isCopying then
+        table.clear(confirmedCylinderBlocks)
+        table.clear(previousTubesCounts)
+        if copyLoopConn then copyLoopConn:Disconnect() end
+        copyLoopConn = RunService.Heartbeat:Connect(stepCopyMirror)
+        registerCleanup(copyLoopConn)
+        statsLabel.Text = "Copying: Scanning Workspace..."
+    else
+        if copyLoopConn then
+            copyLoopConn:Disconnect()
+            copyLoopConn = nil
+        end
+        table.clear(confirmedCylinderBlocks)
+        table.clear(previousTubesCounts)
+        transitBlock.Visible = false
+        statsLabel.Text = "Copy: OFF | Ready"
+        updateVisuals()
+    end
+end
+
+-- ============================================================================
+-- ON / OFF TOGGLE CONTROLS
+-- ============================================================================
+local function setOnline()
+    status.Text = "Status: Online"
+    status.TextColor3 = Color3.fromRGB(50, 230, 80)
+    
+    mainFrame:TweenSize(UDim2.new(0, 232, 0, 312), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.25, true)
+    task.delay(0.15, function()
+        if isAlive then
+            gameContainer.Visible = true
+            rebuildCylinders()
+            randomizeGame()
+        end
+    end)
+end
+
+local function setOffline()
+    status.Text = "Status: Offline"
+    status.TextColor3 = Color3.fromRGB(255, 75, 75)
+    
+    if isCopying then
+        toggleCopy()
+    end
+    isSolving = false
+    isSolving3D = false
+    isRoundResetting = false
+    stopTimer()
+    gameContainer.Visible = false
+    mainFrame:TweenSize(UDim2.new(0, 232, 0, 58), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.25, true)
+end
+
+registerCleanup(onBtn.MouseButton1Click:Connect(setOnline))
+registerCleanup(offBtn.MouseButton1Click:Connect(setOffline))
+registerCleanup(destroyBtn.MouseButton1Click:Connect(cleanup))
+registerCleanup(randomizeBtn.MouseButton1Click:Connect(randomizeGame))
+registerCleanup(startBtn.MouseButton1Click:Connect(onStartClicked))
+registerCleanup(changeBtn.MouseButton1Click:Connect(switchMode))
+registerCleanup(copyBtn.MouseButton1Click:Connect(toggleCopy))
