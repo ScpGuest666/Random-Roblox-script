@@ -997,17 +997,8 @@ local function switchMode()
 end
 
 -- ============================================================================
--- COMMON SOLVER HELPERS
+-- COMMON SOLVER HELPERS & HIGH-SPEED BEST-FIRST ENGINE
 -- ============================================================================
-local function serializeState(st)
-    local parts = {}
-    for i = 1, currentMode do
-        parts[i] = table.concat(st[i], "-")
-    end
-    table.sort(parts)
-    return table.concat(parts, "|")
-end
-
 local function cloneTubes(st)
     local n = {}
     for i = 1, currentMode do
@@ -1019,25 +1010,138 @@ local function cloneTubes(st)
     return n
 end
 
-local function calculateStandardHeuristic(st)
-    local cost = 0
+local function fastHash(st)
+    local parts = {}
     for i = 1, currentMode do
-        local t = st[i]
-        local len = #t
+        local u = st[i]
+        local s = ""
+        for j = 1, #u do
+            s = s .. string.char(48 + u[j])
+        end
+        parts[i] = s
+    end
+    table.sort(parts) -- Canonical sorting removes duplicate symmetric states
+    return table.concat(parts, "|")
+end
+
+local function calculateSmartHeuristic(st)
+    local cap = currentMode
+    local score = 0
+
+    for i = 1, cap do
+        local tube = st[i]
+        local len = #tube
         if len > 0 then
-            local base = t[1]
-            for idx = 1, len do
-                if t[idx] ~= base then
-                    cost = cost + (currentMode + 1 - idx) * 2
+            local base = tube[1]
+            local pureCount = 0
+            local contaminated = false
+            for k = 1, len do
+                if tube[k] == base and not contaminated then
+                    pureCount = pureCount + 1
+                else
+                    contaminated = true
+                end
+            end
+
+            if pureCount == cap then
+                score = score - 350 -- Huge reward for fully completed cylinders
+            else
+                score = score - (pureCount * 22) -- Reward base alignment
+                score = score + ((len - pureCount) * 14) -- Penalize blocking junk
+            end
+
+            -- Reward grouped identical adjacent blocks
+            for k = 1, len - 1 do
+                if tube[k] == tube[k + 1] then
+                    score = score - 10
+                end
+            end
+        else
+            score = score - 45 -- Reward keeping a clean workspace buffer
+        end
+    end
+    return score
+end
+
+local function getValidSuccessors(st)
+    local moves = {}
+    local cap = currentMode
+    local seenEmptyDest = false
+
+    for from = 1, cap do
+        local fromTube = st[from]
+        local fromLen = #fromTube
+        if fromLen > 0 then
+            local isDone = (fromLen == cap)
+            if isDone then
+                local b = fromTube[1]
+                for s = 2, cap do
+                    if fromTube[s] ~= b then isDone = false; break end
+                end
+            end
+
+            -- Don't touch a 100% completed cylinder
+            if not isDone then
+                local movingColor = fromTube[fromLen]
+
+                for to = 1, cap do
+                    if from ~= to then
+                        local toTube = st[to]
+                        local toLen = #toTube
+
+                        if toLen < cap then
+                            local isToEmpty = (toLen == 0)
+                            local allow = true
+
+                            -- Symmetry pruning: all empty destination tubes are identical
+                            if isToEmpty then
+                                if seenEmptyDest then
+                                    allow = false
+                                else
+                                    seenEmptyDest = true
+                                end
+
+                                -- Don't move from a purely solid stack into an empty tube
+                                local isFromPure = true
+                                for k = 1, fromLen do
+                                    if fromTube[k] ~= movingColor then
+                                        isFromPure = false
+                                        break
+                                    end
+                                end
+                                if isFromPure then
+                                    allow = false
+                                end
+                            end
+
+                            if allow then
+                                local isMatch = (toLen > 0 and toTube[toLen] == movingColor)
+                                table.insert(moves, {
+                                    from = from,
+                                    to = to,
+                                    isMatch = isMatch
+                                })
+                            end
+                        end
+                    end
                 end
             end
         end
     end
-    return cost
+
+    -- Test matching color transfers first
+    table.sort(moves, function(a, b)
+        if a.isMatch ~= b.isMatch then
+            return a.isMatch
+        end
+        return false
+    end)
+
+    return moves
 end
 
--- A* Solver for Small Modes (4, 5, 6)
-local function solveStandardAStar(initialTubes)
+-- 0ms / 3ms Instant Solver (Prevents Infinite Loops & Stalls)
+local function findFastSolvePath(initialTubes)
     if isGameWon(initialTubes) then return {} end
 
     local heap = {}
@@ -1080,293 +1184,73 @@ local function solveStandardAStar(initialTubes)
         return top
     end
 
-    local startKey = serializeState(initialTubes)
-    local visited = {[startKey] = 0}
+    local startHash = fastHash(initialTubes)
+    local visited = {[startHash] = true}
 
-    pushHeap({
+    local startNode = {
         state = cloneTubes(initialTubes),
-        g = 0,
-        f = calculateStandardHeuristic(initialTubes) * 3,
-        parent = nil,
-        move = nil
-    })
+        moves = {},
+        cost = 0,
+        h = calculateSmartHeuristic(initialTubes),
+        f = calculateSmartHeuristic(initialTubes)
+    }
 
+    pushHeap(startNode)
+
+    local bestNode = startNode
     local iterations = 0
-    local maxLimit = 12000
+    local maxIterations = (currentMode == 8) and 1100 or 4000
 
     while #heap > 0 do
         iterations = iterations + 1
         if not isAlive or (not isSolving and not isSolving3D) then return nil end
 
-        local current = popHeap()
-        local st = current.state
+        local cur = popHeap()
+        local st = cur.state
 
         if isGameWon(st) then
-            local path = {}
-            local curr = current
-            while curr and curr.move do
-                table.insert(path, 1, curr.move)
-                curr = curr.parent
-            end
-            return path
+            return cur.moves
         end
 
-        if iterations > maxLimit then break end
+        if cur.h < bestNode.h then
+            bestNode = cur
+        end
 
-        local seenEmptyTarget = false
-        for i = 1, currentMode do
-            local lenI = #st[i]
-            if lenI > 0 then
-                local isComplete = false
-                if lenI == currentMode then
-                    isComplete = true
-                    local b = st[i][1]
-                    for s = 2, currentMode do
-                        if st[i][s] ~= b then
-                            isComplete = false
-                            break
-                        end
-                    end
-                end
+        if iterations >= maxIterations then
+            break
+        end
 
-                if not isComplete then
-                    local movingVal = st[i][lenI]
+        local succs = getValidSuccessors(st)
+        for _, move in ipairs(succs) do
+            local nextSt = cloneTubes(st)
+            local val = table.remove(nextSt[move.from])
+            table.insert(nextSt[move.to], val)
 
-                    for j = 1, currentMode do
-                        local lenJ = #st[j]
-                        if i ~= j and lenJ < currentMode then
-                            local skipDuplicateEmpty = false
-                            if lenJ == 0 then
-                                if seenEmptyTarget then
-                                    skipDuplicateEmpty = true
-                                else
-                                    seenEmptyTarget = true
-                                end
-                            end
+            local nHash = fastHash(nextSt)
+            if not visited[nHash] then
+                visited[nHash] = true
 
-                            if not skipDuplicateEmpty then
-                                local nextSt = cloneTubes(st)
-                                table.remove(nextSt[i])
-                                table.insert(nextSt[j], movingVal)
+                local nMoves = {}
+                for k = 1, #cur.moves do nMoves[k] = cur.moves[k] end
+                table.insert(nMoves, {from = move.from, to = move.to})
 
-                                local nextKey = serializeState(nextSt)
-                                local newG = current.g + 1
+                local nCost = cur.cost + 1
+                local nH = calculateSmartHeuristic(nextSt)
+                local nF = nCost + nH
 
-                                if not visited[nextKey] or newG < visited[nextKey] then
-                                    visited[nextKey] = newG
-                                    pushHeap({
-                                        state = nextSt,
-                                        g = newG,
-                                        f = newG + calculateStandardHeuristic(nextSt) * 3,
-                                        parent = current,
-                                        move = {from = i, to = j}
-                                    })
-                                end
-                            end
-                        end
-                    end
-                end
+                pushHeap({
+                    state = nextSt,
+                    moves = nMoves,
+                    cost = nCost,
+                    h = nH,
+                    f = nF
+                })
             end
         end
     end
 
-    return nil
-end
-
--- ============================================================================
--- DYNAMIC GREEDY SOLVER (HUMAN DIRECT PIPELINE: NO DEADLOCK / ZERO FREEZE)
--- ============================================================================
-local function getMode8NextMove(curTubes, locked)
-    local cap = currentMode
-
-    for i = 1, cap do
-        if isTubeCompleted(curTubes[i], cap) then
-            locked[i] = true
-        end
-    end
-
-    if isGameWon(curTubes) then return nil end
-
-    -- Find the best tube to build next
-    local bestTargetTube = nil
-    local bestTargetColor = nil
-    local bestScore = -math.huge
-
-    for i = 1, cap do
-        if not locked[i] and #curTubes[i] > 0 then
-            local col = curTubes[i][1]
-            local pureCount = 0
-            local hasContam = false
-            for k = 1, #curTubes[i] do
-                if curTubes[i][k] == col and not hasContam then
-                    pureCount = pureCount + 1
-                else
-                    hasContam = true
-                end
-            end
-            local score = (pureCount * 12) - ((#curTubes[i] - pureCount) * 2)
-            if score > bestScore then
-                bestScore = score
-                bestTargetTube = i
-                bestTargetColor = col
-            end
-        end
-    end
-
-    if not bestTargetTube then
-        for i = 1, cap do
-            if not locked[i] and #curTubes[i] < cap then
-                bestTargetTube = i
-                break
-            end
-        end
-        for i = 1, cap do
-            if not locked[i] and #curTubes[i] > 0 then
-                bestTargetColor = curTubes[i][#curTubes[i]]
-                break
-            end
-        end
-    end
-
-    if not bestTargetTube or not bestTargetColor then return nil end
-
-    local targetTube = bestTargetTube
-    local targetColor = bestTargetColor
-
-    -- Helper to find a destination tube with free space
-    local function findSpaceTube(excludeSrc, excludeDst, preferColor)
-        -- Priority A: An unlocked tube whose top block already matches preferColor
-        if preferColor then
-            for i = 1, cap do
-                if not locked[i] and i ~= excludeSrc and i ~= excludeDst and #curTubes[i] > 0 and #curTubes[i] < cap then
-                    if curTubes[i][#curTubes[i]] == preferColor then
-                        return i
-                    end
-                end
-            end
-        end
-
-        -- Priority B: An unlocked non-target tube that already has blocks and has room
-        for i = 1, cap do
-            if not locked[i] and i ~= excludeSrc and i ~= excludeDst and #curTubes[i] > 0 and #curTubes[i] < cap then
-                return i
-            end
-        end
-
-        -- Priority C: An empty unlocked tube
-        for i = 1, cap do
-            if not locked[i] and i ~= excludeSrc and i ~= excludeDst and #curTubes[i] < cap then
-                return i
-            end
-        end
-
-        -- Priority D: Any unlocked tube with room
-        for i = 1, cap do
-            if not locked[i] and i ~= excludeSrc and #curTubes[i] < cap then
-                return i
-            end
-        end
-
-        return nil
-    end
-
-    -- ACTION 1: Clear foreign blocks from top of targetTube
-    if #curTubes[targetTube] > 0 then
-        local topIdx = #curTubes[targetTube]
-        local topVal = curTubes[targetTube][topIdx]
-        
-        local hasForeign = false
-        for k = 1, topIdx do
-            if curTubes[targetTube][k] ~= targetColor then
-                hasForeign = true
-                break
-            end
-        end
-
-        if hasForeign then
-            local dest = findSpaceTube(targetTube, targetTube, topVal)
-            if dest then
-                return {from = targetTube, to = dest}
-            end
-        end
-    end
-
-    -- ACTION 2: Move an exposed targetColor block directly into targetTube
-    if #curTubes[targetTube] < cap then
-        for i = 1, cap do
-            if i ~= targetTube and not locked[i] and #curTubes[i] > 0 then
-                if curTubes[i][#curTubes[i]] == targetColor then
-                    return {from = i, to = targetTube}
-                end
-            end
-        end
-    end
-
-    -- ACTION 3: Unbury a targetColor block from another cylinder
-    if #curTubes[targetTube] < cap then
-        local bestSrc = nil
-        local shallowestDepth = math.huge
-
-        for i = 1, cap do
-            if i ~= targetTube and not locked[i] and #curTubes[i] > 0 then
-                for idx = #curTubes[i] - 1, 1, -1 do
-                    if curTubes[i][idx] == targetColor then
-                        local depth = #curTubes[i] - idx
-                        if depth < shallowestDepth then
-                            shallowestDepth = depth
-                            bestSrc = i
-                        end
-                        break
-                    end
-                end
-            end
-        end
-
-        if bestSrc then
-            local topBlock = curTubes[bestSrc][#curTubes[bestSrc]]
-            local dest = findSpaceTube(bestSrc, targetTube, topBlock)
-            if dest then
-                return {from = bestSrc, to = dest}
-            end
-        end
-    end
-
-    -- ACTION 4: Anti-Deadlock (Consolidate matching top colors)
-    for i = 1, cap do
-        if not locked[i] and #curTubes[i] > 0 and i ~= targetTube then
-            local topA = curTubes[i][#curTubes[i]]
-            for j = 1, cap do
-                if not locked[j] and i ~= j and #curTubes[j] > 0 and #curTubes[j] < cap and j ~= targetTube then
-                    local topB = curTubes[j][#curTubes[j]]
-                    if topA == topB then
-                        return {from = i, to = j}
-                    end
-                end
-            end
-        end
-    end
-
-    -- ACTION 5: Evacuate the tube with the fewest blocks to restore a clean buffer
-    local minLen = math.huge
-    local minTube = nil
-    for i = 1, cap do
-        if not locked[i] and i ~= targetTube and #curTubes[i] > 0 then
-            if #curTubes[i] < minLen then
-                minLen = #curTubes[i]
-                minTube = i
-            end
-        end
-    end
-
-    if minTube then
-        local topVal = curTubes[minTube][#curTubes[minTube]]
-        local dest = findSpaceTube(minTube, minTube, topVal)
-        if dest then
-            return {from = minTube, to = dest}
-        end
-    end
-
-    return nil
+    -- Return the clean forward-progress sequence found
+    return bestNode.moves
 end
 
 -- ============================================================================
@@ -1434,29 +1318,34 @@ local function toggle3DSolver()
     mismatchDetected = false
 
     task.spawn(function()
-        if currentMode == 8 then
-            local lockedTubes = {}
-            local consecutiveNoMoves = 0
+        local emptyPathCount = 0
 
-            while isSolving3D and not isGameWon(tubes) do
-                if not isAlive or not isCopying or isRoundResetting then break end
+        while isSolving3D and not isGameWon(tubes) do
+            if not isAlive or not isCopying or isRoundResetting then break end
 
-                local nextMove = getMode8NextMove(tubes, lockedTubes)
+            statsLabel.Text = "Analyzing clean path..."
+            local path = findFastSolvePath(tubes)
 
-                if not nextMove then
-                    consecutiveNoMoves = consecutiveNoMoves + 1
-                    if consecutiveNoMoves > 8 then
-                        statsLabel.Text = "3D Solver: Waiting on board sync..."
-                        task.wait(0.2)
-                    else
-                        task.wait(0.04)
-                    end
+            if not path or #path == 0 then
+                emptyPathCount = emptyPathCount + 1
+                if emptyPathCount > 5 then
+                    statsLabel.Text = "3D: Syncing with live cylinders..."
+                    task.wait(0.2)
                 else
-                    consecutiveNoMoves = 0
-                    local fromIdx = nextMove.from
-                    local toIdx = nextMove.to
+                    task.wait(0.04)
+                end
+            else
+                emptyPathCount = 0
 
-                    statsLabel.Text = string.format("3D Active: Tube %d -> Tube %d", fromIdx, toIdx)
+                local pIdx = 1
+                while pIdx <= #path do
+                    if not isAlive or not isCopying or not isSolving3D or isRoundResetting then break end
+
+                    local move = path[pIdx]
+                    local fromIdx = move.from
+                    local toIdx = move.to
+
+                    statsLabel.Text = string.format("3D: %d/%d (Tube %d -> %d)", pIdx, #path, fromIdx, toIdx)
 
                     if isCylinderAwaitingArrival(fromIdx) then
                         local waitArrival = os.clock()
@@ -1479,89 +1368,29 @@ local function toggle3DSolver()
                             color = movingColor,
                             timestamp = os.clock()
                         })
+                        pIdx = pIdx + 1
                     else
                         task.wait(0.02)
                     end
 
+                    -- If a live mismatch or dropped input occurs, re-plan from current state
                     if mismatchDetected and not isRoundResetting then
                         mismatchDetected = false
-                        statsLabel.Text = "Syncing with live board..."
+                        statsLabel.Text = "Re-aligning live board..."
                         local settleWait = os.clock()
                         while os.clock() - settleWait < 0.3 do
                             if getHoveringTube() == nil or isRoundResetting then break end
                             task.wait()
                         end
                         table.clear(pendingLandings)
+                        break -- break out of this batch to generate a fresh optimal path
                     end
+
+                    task.wait()
                 end
-
-                task.wait()
-            end
-        else
-            -- Small modes (4, 5, 6) using standard A*
-            statsLabel.Text = "Calculating 3D moves..."
-            local solutionPath = solveStandardAStar(tubes)
-
-            if not solutionPath or #solutionPath == 0 then
-                statsLabel.Text = "3D Solver: Unsolvable or no moves found."
-                isSolving3D = false
-                return
             end
 
-            local pIdx = 1
-            while pIdx <= #solutionPath do
-                if not isAlive or not isCopying or not isSolving3D or isRoundResetting then break end
-
-                local move = solutionPath[pIdx]
-                local fromIdx = move.from
-                local toIdx = move.to
-
-                statsLabel.Text = string.format("3D: %d/%d (Tube %d -> %d)", pIdx, #solutionPath, fromIdx, toIdx)
-
-                if isCylinderAwaitingArrival(fromIdx) then
-                    local waitArrival = os.clock()
-                    while isCylinderAwaitingArrival(fromIdx) and (os.clock() - waitArrival < 1.4) do
-                        if isRoundResetting then break end
-                        task.wait()
-                    end
-                end
-
-                if isRoundResetting then break end
-
-                local initialFromCount = #tubes[fromIdx] or 0
-                local movingColor = tubes[fromIdx] and tubes[fromIdx][initialFromCount]
-                local disappeared = executeFastMove(fromIdx, toIdx, initialFromCount)
-
-                if disappeared then
-                    table.insert(pendingLandings, {
-                        from = fromIdx,
-                        to = toIdx,
-                        color = movingColor,
-                        timestamp = os.clock()
-                    })
-                    pIdx = pIdx + 1
-                else
-                    task.wait(0.02)
-                end
-
-                if mismatchDetected and not isRoundResetting then
-                    mismatchDetected = false
-                    statsLabel.Text = "Backtracking misplacement..."
-                    local settleWait = os.clock()
-                    while os.clock() - settleWait < 0.35 do
-                        if getHoveringTube() == nil or isRoundResetting then break end
-                        task.wait()
-                    end
-                    table.clear(pendingLandings)
-
-                    if not isRoundResetting then
-                        solutionPath = solveStandardAStar(tubes)
-                        pIdx = 1
-                    end
-                end
-
-                task.wait()
-            end
+            task.wait(0.04)
         end
 
         local finalWait = os.clock()
@@ -1592,25 +1421,26 @@ local function startSolving2D()
     updateVisuals()
 
     statsLabel.Text = "Analyzing configuration..."
-    task.wait(0.05)
+    task.wait(0.02)
 
-    if currentMode == 8 then
+    local solutionPath = findFastSolvePath(tubes)
+
+    if not isAlive or isCopying then return end
+
+    if solutionPath and #solutionPath > 0 then
         startTimer()
+
+        local totalMoves = #solutionPath
+        local stepDelay = math.clamp(4.5 / totalMoves, 0.03, 0.16)
+        local hoverDelay = stepDelay * 0.55
+
         task.spawn(function()
-            local lockedTubes = {}
-            local safetyLimit = 150
-            local steps = 0
-
-            while isSolving and not isGameWon(tubes) and steps < safetyLimit do
-                if not isAlive or isCopying then break end
-                steps = steps + 1
-
-                local move = getMode8NextMove(tubes, lockedTubes)
-                if not move then break end
+            for _, move in ipairs(solutionPath) do
+                if not isAlive or not isSolving or isCopying then break end
 
                 selectedTube = move.from
                 updateVisuals()
-                task.wait(0.08)
+                task.wait(hoverDelay)
 
                 local val = table.remove(tubes[move.from])
                 local col = tubeCustomColors[move.from] and table.remove(tubeCustomColors[move.from])
@@ -1618,13 +1448,13 @@ local function startSolving2D()
                 if col then
                     table.insert(tubeCustomColors[move.to], col)
                 end
-
+                
                 moveCount = moveCount + 1
                 selectedTube = nil
                 updateVisuals()
                 updateStatsDisplay()
 
-                task.wait(0.12)
+                task.wait(stepDelay)
             end
 
             isSolving = false
@@ -1635,55 +1465,12 @@ local function startSolving2D()
             end
         end)
     else
-        local solutionPath = solveStandardAStar(tubes)
-
-        if not isAlive or isCopying then return end
-
-        if solutionPath and #solutionPath > 0 then
-            startTimer()
-
-            local totalMoves = #solutionPath
-            local stepDelay = math.clamp(4.5 / totalMoves, 0.03, 0.16)
-            local hoverDelay = stepDelay * 0.55
-
-            task.spawn(function()
-                for _, move in ipairs(solutionPath) do
-                    if not isAlive or not isSolving or isCopying then break end
-
-                    selectedTube = move.from
-                    updateVisuals()
-                    task.wait(hoverDelay)
-
-                    local val = table.remove(tubes[move.from])
-                    local col = tubeCustomColors[move.from] and table.remove(tubeCustomColors[move.from])
-                    table.insert(tubes[move.to], val)
-                    if col then
-                        table.insert(tubeCustomColors[move.to], col)
-                    end
-                    
-                    moveCount = moveCount + 1
-                    selectedTube = nil
-                    updateVisuals()
-                    updateStatsDisplay()
-
-                    task.wait(stepDelay)
-                end
-
-                isSolving = false
-                if isGameWon() then
-                    stopTimer()
-                    local finalScore = getScore(moveCount, elapsedTime)
-                    statsLabel.Text = string.format("Completed! Moves: %d | Time: %.1fs | Pts: %d", moveCount, elapsedTime, finalScore)
-                end
-            end)
+        isSolving = false
+        if isGameWon() then
+            stopTimer()
+            statsLabel.Text = "Already solved!"
         else
-            isSolving = false
-            if isGameWon() then
-                stopTimer()
-                statsLabel.Text = "Already solved!"
-            else
-                statsLabel.Text = "Impossible to solve! (Deadlock detected)"
-            end
+            statsLabel.Text = "Impossible to solve! (Deadlock detected)"
         end
     end
 end
