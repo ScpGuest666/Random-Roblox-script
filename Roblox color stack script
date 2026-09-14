@@ -447,7 +447,7 @@ local offBtn = createButton("OffBtn", "Off", 58, 19, 48, 20, Color3.fromRGB(150,
 local destroyBtn = createButton("DestroyBtn", "X", 110, 19, 58, 20, Color3.fromRGB(80, 80, 90))
 
 -- ============================================================================
--- COLOR STACK CONTAINER & COMPACT CONTROLS (25% SHRUNK)
+-- COLOR STACK CONTAINER & COMPACT CONTROLS
 -- ============================================================================
 local gameContainer = Instance.new("Frame")
 gameContainer.Name = "GameContainer"
@@ -485,14 +485,19 @@ local transitCorner = Instance.new("UICorner")
 transitCorner.CornerRadius = UDim.new(0, 3)
 transitCorner.Parent = transitBlock
 
-local randomizeBtn = createButton("RandomizeBtn", "Randomize", 6, 146, 78, 18, Color3.fromRGB(170, 50, 50))
+-- Row 1: Randomize (50w), Mode (50w), Speed Button (54w)
+local randomizeBtn = createButton("RandomizeBtn", "Randomize", 6, 146, 50, 18, Color3.fromRGB(170, 50, 50))
 randomizeBtn.Parent = gameContainer
 
-local startBtn = createButton("StartBtn", "Start (Solve)", 90, 146, 78, 18, Color3.fromRGB(180, 115, 30))
-startBtn.Parent = gameContainer
-
-local changeBtn = createButton("ChangeBtn", "Mode (4)", 6, 168, 78, 18, Color3.fromRGB(100, 70, 160))
+local changeBtn = createButton("ChangeBtn", "Mode (4)", 60, 146, 50, 18, Color3.fromRGB(100, 70, 160))
 changeBtn.Parent = gameContainer
+
+local speedBtn = createButton("SpeedBtn", "Spd: Fast", 114, 146, 54, 18, Color3.fromRGB(180, 50, 50))
+speedBtn.Parent = gameContainer
+
+-- Row 2: Start Solve (78w), Copy ON/OFF (78w)
+local startBtn = createButton("StartBtn", "Start (Solve)", 6, 168, 78, 18, Color3.fromRGB(180, 115, 30))
+startBtn.Parent = gameContainer
 
 local copyBtn = createButton("CopyBtn", "Copy: OFF", 90, 168, 78, 18, Color3.fromRGB(65, 75, 95))
 copyBtn.Parent = gameContainer
@@ -536,6 +541,7 @@ local KEY_CODES = {
 }
 
 local currentMode = 4
+local currentSpeedMode = "Fast" -- "Fast", "Normal", "Medium"
 local tubes = {}
 local previousTubesCounts = {}
 local tubeButtons = {}
@@ -554,7 +560,11 @@ local elapsedTime = 0
 local timerThread = nil
 local copyLoopConn = nil
 local currentTrackedBoard = nil
+local currentOtherBoard = nil
 local cachedCylinders = {}
+local cachedOpponentCylinders = {}
+local opponentSolvedCount = 0
+local lastOpponentScan = 0
 local pendingLandings = {}
 local mismatchDetected = false
 local activeTubeConnections = {}
@@ -596,6 +606,155 @@ local LAYOUT_CONFIG = {
 }
 
 local onTubeClicked
+
+-- ============================================================================
+-- SPEED MODE CONTROLLER & OPPONENT SCANNER
+-- ============================================================================
+local function updateSpeedButtonVisuals()
+    if currentSpeedMode == "Fast" then
+        speedBtn.Text = "Spd: Fast"
+        speedBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+    elseif currentSpeedMode == "Normal" then
+        speedBtn.Text = "Spd: Norm"
+        speedBtn.BackgroundColor3 = Color3.fromRGB(50, 140, 60)
+    elseif currentSpeedMode == "Medium" then
+        speedBtn.Text = "Spd: Med"
+        speedBtn.BackgroundColor3 = Color3.fromRGB(50, 110, 180)
+    end
+end
+
+local function cycleSpeedMode()
+    if currentSpeedMode == "Fast" then
+        currentSpeedMode = "Normal"
+    elseif currentSpeedMode == "Normal" then
+        currentSpeedMode = "Medium"
+    else
+        currentSpeedMode = "Fast"
+    end
+    updateSpeedButtonVisuals()
+end
+
+local function parseBlockInfo(part)
+    if not part:IsA("BasePart") then return nil end
+    if part.Transparency >= 0.9 or (part.LocalTransparencyModifier and part.LocalTransparencyModifier >= 0.9) then
+        return nil
+    end
+
+    local name = part.Name
+    local colorWord = string.match(name, "^Block_%d+_%d+_(%a+)") or string.match(name, "^Block_.*_(%a+)$")
+    if not colorWord then return nil end
+
+    local id = COLOR_NAME_MAP[string.lower(colorWord)] or 1
+    return {
+        part = part,
+        colorId = id,
+        actualColor = part.Color or COLOR_PALETTE[id]
+    }
+end
+
+local function updateOpponentProgress()
+    if not currentOtherBoard or not currentOtherBoard.Parent then
+        opponentSolvedCount = 0
+        return
+    end
+
+    if #cachedOpponentCylinders == 0 then
+        for _, obj in ipairs(currentOtherBoard:GetDescendants()) do
+            if obj:IsA("BasePart") then
+                local cNum = string.match(obj.Name, "^Cylinder(%d+)$")
+                if cNum then cachedOpponentCylinders[tonumber(cNum)] = obj end
+            end
+        end
+    end
+
+    local oppCyls = cachedOpponentCylinders
+    if #oppCyls == 0 then return end
+
+    local oppCylBlocks = {}
+    for i = 1, currentMode do oppCylBlocks[i] = {} end
+
+    for _, obj in ipairs(currentOtherBoard:GetDescendants()) do
+        local info = parseBlockInfo(obj)
+        if info then
+            local pPos = info.part.Position
+            for i = 1, currentMode do
+                local cyl = oppCyls[i]
+                if cyl then
+                    local dXZ = (Vector2.new(pPos.X, pPos.Z) - Vector2.new(cyl.Position.X, cyl.Position.Z)).Magnitude
+                    local cylRadius = math.max(cyl.Size.X, cyl.Size.Z) * 0.85
+                    if dXZ <= cylRadius then
+                        table.insert(oppCylBlocks[i], info.colorId)
+                        break
+                    end
+                end
+            end
+        end
+    end
+
+    local solved = 0
+    for i = 1, currentMode do
+        local blist = oppCylBlocks[i]
+        if #blist == currentMode then
+            local base = blist[1]
+            local match = true
+            for s = 2, currentMode do
+                if blist[s] ~= base then match = false; break end
+            end
+            if match then solved = solved + 1 end
+        end
+    end
+
+    opponentSolvedCount = solved
+end
+
+local function isTubeCompleted(tube, cap)
+    if not tube or #tube ~= cap then return false end
+    local base = tube[1]
+    for s = 2, cap do
+        if tube[s] ~= base then return false end
+    end
+    return true
+end
+
+local function getMySolvedCount()
+    local count = 0
+    for i = 1, currentMode do
+        local t = tubes[i]
+        if t and #t == currentMode and isTubeCompleted(t, currentMode) then
+            count = count + 1
+        end
+    end
+    return count
+end
+
+local function getSpeedDelay()
+    if currentSpeedMode == "Fast" then
+        return 0
+    elseif currentSpeedMode == "Normal" then
+        return math.random(35, 52) / 100 -- 0.35s - 0.52s per move
+    elseif currentSpeedMode == "Medium" then
+        local mySolved = getMySolvedCount()
+        local oppSolved = opponentSolvedCount or 0
+        local targetGoal = currentMode - 1 -- e.g. 7 in Mode 8
+
+        -- CLUTCH SPRINT: If opponent is 1-2 cylinders from winning, full warp speed
+        if oppSolved >= (targetGoal - 1) then
+            return 0
+        end
+
+        -- If opponent is tied or ahead, speed up to overtake
+        if oppSolved >= mySolved then
+            return 0.08 + (math.random(0, 4) / 100)
+        -- If we are 1 cylinder ahead, maintain steady lead
+        elseif mySolved == oppSolved + 1 then
+            return 0.22 + (math.random(0, 8) / 100)
+        -- If we are comfortably ahead by 2+ cylinders, pace calmly
+        else
+            return 0.40 + (math.random(0, 10) / 100)
+        end
+    end
+    return 0
+end
 
 -- ============================================================================
 -- FAST INPUT CONTROLLER
@@ -1121,7 +1280,7 @@ local function getValidSuccessors(st)
     return moves
 end
 
--- 0ms / 3ms Instant Solver using Linked Parent Pointers (Zero Memory Bloat)
+-- 0ms / 3ms Instant Solver using Linked Parent Pointers
 local function findFastSolvePath(initialTubes)
     if isGameWon(initialTubes) then return {} end
 
@@ -1280,7 +1439,7 @@ local function executeFastMove(fromIdx, toIdx, initialFromCount)
 end
 
 -- ============================================================================
--- 3D SOLVER CONTINUOUS EXECUTION PIPELINE (WITH ANTI-LAG THROTTLE)
+-- 3D SOLVER CONTINUOUS EXECUTION PIPELINE (WITH SPEED CONTROLLER)
 -- ============================================================================
 local function toggle3DSolver()
     if not isCopying then return end
@@ -1313,7 +1472,7 @@ local function toggle3DSolver()
         while isSolving3D and not (isGameWon(tubes) and getHoveringTube() == nil) do
             if not isAlive or not isCopying or isRoundResetting then break end
 
-            -- Failsafe throttle: wait for pending blocks to settle physically before triggering another search
+            -- Failsafe throttle: wait for pending blocks to settle physically before searching
             if #pendingLandings > 0 then
                 local settleStart = os.clock()
                 while #pendingLandings > 0 and (os.clock() - settleStart < 0.45) and not isRoundResetting do
@@ -1321,7 +1480,6 @@ local function toggle3DSolver()
                 end
             end
 
-            -- Failsafe: if a block was left hovering, immediately drop it
             local floatingTube = getHoveringTube()
             if floatingTube then
                 simulateKeyPress(floatingTube)
@@ -1357,7 +1515,7 @@ local function toggle3DSolver()
                     local fromIdx = move.from
                     local toIdx = move.to
 
-                    statsLabel.Text = string.format("3D: %d/%d (Tube %d -> %d)", pIdx, #path, fromIdx, toIdx)
+                    statsLabel.Text = string.format("3D: %d/%d (%d -> %d)", pIdx, #path, fromIdx, toIdx)
 
                     if isCylinderAwaitingArrival(fromIdx) then
                         local waitArrival = os.clock()
@@ -1381,6 +1539,12 @@ local function toggle3DSolver()
                             timestamp = os.clock()
                         })
                         pIdx = pIdx + 1
+
+                        -- SPEED CONTROLLER DELAY INJECTION
+                        local spdDelay = getSpeedDelay()
+                        if spdDelay > 0 then
+                            task.wait(spdDelay)
+                        end
                     else
                         task.wait(0.03)
                     end
@@ -1404,7 +1568,6 @@ local function toggle3DSolver()
             task.wait(0.03)
         end
 
-        -- Final verification & settle down
         local finalWait = os.clock()
         while #pendingLandings > 0 and (os.clock() - finalWait < 1.0) and not isRoundResetting do
             task.wait()
@@ -1585,24 +1748,6 @@ local function findTargetBoard()
     return bestBoard
 end
 
-local function parseBlockInfo(part)
-    if not part:IsA("BasePart") then return nil end
-    if part.Transparency >= 0.9 or (part.LocalTransparencyModifier and part.LocalTransparencyModifier >= 0.9) then
-        return nil
-    end
-
-    local name = part.Name
-    local colorWord = string.match(name, "^Block_%d+_%d+_(%a+)") or string.match(name, "^Block_.*_(%a+)$")
-    if not colorWord then return nil end
-
-    local id = COLOR_NAME_MAP[string.lower(colorWord)] or 1
-    return {
-        part = part,
-        colorId = id,
-        actualColor = part.Color or COLOR_PALETTE[id]
-    }
-end
-
 local function stepCopyMirror()
     if not isCopying or not isAlive then return end
 
@@ -1622,6 +1767,8 @@ local function stepCopyMirror()
     if not currentTrackedBoard or not currentTrackedBoard.Parent then
         currentTrackedBoard = findTargetBoard()
         table.clear(cachedCylinders)
+        currentOtherBoard = nil
+        table.clear(cachedOpponentCylinders)
         if not currentTrackedBoard then
             if not isSolving3D then
                 statsLabel.Text = "Copying: Searching facing board..."
@@ -1632,6 +1779,20 @@ local function stepCopyMirror()
 
     local board = currentTrackedBoard
     local boardPos = getBoardCenter(board) or Vector3.zero
+
+    -- Locate opponent's board for adaptive Medium speed tracking
+    if not currentOtherBoard or not currentOtherBoard.Parent then
+        if board.Parent then
+            local otherName = (board.Name == "StackBoard1") and "StackBoard2" or "StackBoard1"
+            for _, sibling in ipairs(board.Parent:GetChildren()) do
+                if sibling ~= board and (sibling.Name == otherName or string.find(sibling.Name, "StackBoard")) then
+                    currentOtherBoard = sibling
+                    table.clear(cachedOpponentCylinders)
+                    break
+                end
+            end
+        end
+    end
 
     if #cachedCylinders == 0 then
         for _, obj in ipairs(board:GetDescendants()) do
@@ -1671,6 +1832,12 @@ local function stepCopyMirror()
         rebuildCylinders()
     end
 
+    -- Throttled opponent progress update (every 0.25s)
+    if now - lastOpponentScan > 0.25 then
+        lastOpponentScan = now
+        updateOpponentProgress()
+    end
+
     local searchScope = board.Parent or board
     local allBlocks = {}
 
@@ -1687,7 +1854,6 @@ local function stepCopyMirror()
         end
     end
 
-    -- Clean up stale tracked block positions
     for p in pairs(prevBlockPositions) do
         if not p:IsDescendantOf(workspace) then
             prevBlockPositions[p] = nil
@@ -1738,7 +1904,6 @@ local function stepCopyMirror()
         if bestTubeIdx and cylRef then
             local topY = cylRef.Position.Y + (cylRef.Size.Y * 0.5)
 
-            -- Track movement velocity & position delta to filter out stationary spawn props
             local vel = 0
             if partRef:IsA("BasePart") then
                 vel = partRef.AssemblyLinearVelocity.Magnitude
@@ -1759,7 +1924,7 @@ local function stepCopyMirror()
                     table.insert(tubeBlockLists[bestTubeIdx], bInfo)
                 end
             else
-                -- IGNORE STATIONARY SPAWN BLOCKS: only active blocks in transit show on 2D mirror
+                -- Ignore stationary spawn/decor blocks outside cylinders
                 if not isStationary then
                     movingBlockInfo = {
                         info = bInfo,
@@ -1878,7 +2043,9 @@ local function toggleCopy()
     selectedTube = nil
     currentHoverTube = nil
     currentTrackedBoard = nil
+    currentOtherBoard = nil
     table.clear(cachedCylinders)
+    table.clear(cachedOpponentCylinders)
     table.clear(pendingLandings)
     table.clear(prevBlockPositions)
     mismatchDetected = false
@@ -1941,3 +2108,4 @@ registerCleanup(randomizeBtn.MouseButton1Click:Connect(randomizeGame))
 registerCleanup(startBtn.MouseButton1Click:Connect(onStartClicked))
 registerCleanup(changeBtn.MouseButton1Click:Connect(switchMode))
 registerCleanup(copyBtn.MouseButton1Click:Connect(toggleCopy))
+registerCleanup(speedBtn.MouseButton1Click:Connect(cycleSpeedMode))
