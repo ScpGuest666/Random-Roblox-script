@@ -1,0 +1,1114 @@
+-- ============================================================================
+-- PREVIOUS SCRIPT INSTANCE KILL SWITCH
+-- ============================================================================
+local getgenv = getgenv or function() return _G end
+local genv = getgenv()
+
+if genv.MyScript_Cleanup and type(genv.MyScript_Cleanup) == "function" then
+    pcall(genv.MyScript_Cleanup)
+    genv.MyScript_Cleanup = nil
+end
+
+local cleanupTasks = {}
+local isAlive = true
+
+local function registerCleanup(item)
+    table.insert(cleanupTasks, item)
+    return item
+end
+
+-- ============================================================================
+-- SERVICES & GLOBAL VARIABLES
+-- ============================================================================
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer or Players.PlayerAdded:Wait()
+
+local isOnline = false
+local currentTargetTable = nil
+local activeTableConn = nil
+local myTeam = nil
+local isMyTurn = false
+
+local engineBusy = false
+local engineGeneration = 0
+
+local lastWallCount = -1
+local boardDirty = true
+
+local activeWallHighlights = {}
+
+-- Visual indicators
+local activePredictionPart = nil
+local activePredictionBillboard = nil
+local activeBillboardText = nil
+local currentTargetEdge = nil
+
+-- UI Reference Labels
+local teamLabel = nil
+local scoreLabel = nil
+local modeLabel = nil
+local hintLabel = nil
+
+-- ============================================================================
+-- CLEANUP LOGIC
+-- ============================================================================
+local function clearActiveHighlights()
+    if activeTableConn then
+        activeTableConn:Disconnect()
+        activeTableConn = nil
+    end
+
+    if activePredictionPart then
+        pcall(function() activePredictionPart:Destroy() end)
+        activePredictionPart = nil
+        activePredictionBillboard = nil
+        activeBillboardText = nil
+        currentTargetEdge = nil
+    end
+
+    for part, hl in pairs(activeWallHighlights) do
+        pcall(function()
+            if typeof(hl) == "Instance" then
+                hl:Destroy()
+            end
+        end)
+    end
+    table.clear(activeWallHighlights)
+end
+
+local function cleanup()
+    isAlive = false
+    isOnline = false
+    clearActiveHighlights()
+
+    for _, item in ipairs(cleanupTasks) do
+        pcall(function()
+            if typeof(item) == "RBXScriptConnection" then
+                item:Disconnect()
+            elseif typeof(item) == "Instance" then
+                item:Destroy()
+            elseif type(item) == "thread" then
+                task.cancel(item)
+            elseif type(item) == "function" then
+                item()
+            end
+        end)
+    end
+    table.clear(cleanupTasks)
+
+    if genv.MyScript_Cleanup == cleanup then
+        genv.MyScript_Cleanup = nil
+    end
+end
+
+genv.MyScript_Cleanup = cleanup
+
+-- ============================================================================
+-- TURN DETECTION
+-- ============================================================================
+local function checkIsMyTurn()
+    local pg = player:FindFirstChild("PlayerGui")
+    if not pg then return false end
+
+    for _, gui in ipairs(pg:GetChildren()) do
+        if gui:IsA("ScreenGui") and gui.Enabled then
+            for _, desc in ipairs(gui:GetDescendants()) do
+                if (desc:IsA("TextLabel") or desc:IsA("TextButton")) and desc.Visible then
+                    local txt = desc.Text:upper()
+                    if txt:find("YOUR TURN") then
+                        return true
+                    end
+                end
+            end
+        end
+    end
+    return false
+end
+
+-- ============================================================================
+-- PART FILTERING & COLOR CLASSIFICATION
+-- ============================================================================
+local function isMatchingCylinder(part)
+    if not (part:IsA("BasePart") and part.Name == "Part") then return false end
+    local isCylinder = false
+    if part:IsA("Part") and part.Shape == Enum.PartType.Cylinder then
+        isCylinder = true
+    else
+        local mesh = part:FindFirstChildOfClass("SpecialMesh")
+        if mesh and mesh.MeshType == Enum.MeshType.Cylinder then isCylinder = true end
+    end
+    if not isCylinder then return false end
+
+    local s = part.Size
+    local isSmall = (s.X <= 3 and s.Y <= 3 and s.Z <= 3)
+    local isAroundOne = ((s.X >= 0.2 and s.X <= 2.2) or (s.Y >= 0.2 and s.Y <= 2.2) or (s.Z >= 0.2 and s.Z <= 2.2))
+    return isSmall and isAroundOne
+end
+
+local function isMatchingWall(part)
+    if not part:IsA("BasePart") then return false end
+    return (part.Name:match("^H:%d+:%d+$") or part.Name:match("^V:%d+:%d+$")) ~= nil
+end
+
+local function getWallColorType(part)
+    local c = part.Color
+    if c.B > c.R and c.B > 0.35 then return "Blue"
+    elseif c.R > c.B and c.R > 0.35 then return "Red" end
+    return "Unknown"
+end
+
+local function highlightWall(part)
+    local wallType = getWallColorType(part)
+    local outlineColor = Color3.fromRGB(255, 255, 255)
+
+    if myTeam then
+        if wallType == myTeam then
+            outlineColor = Color3.fromRGB(0, 255, 120)
+        elseif wallType ~= "Unknown" then
+            outlineColor = Color3.fromRGB(255, 50, 50)
+        end
+    end
+
+    local highlight = activeWallHighlights[part]
+    if not highlight then
+        highlight = Instance.new("Highlight")
+        highlight.Name = "WallHighlight"
+        highlight.Adornee = part
+        highlight.FillTransparency = 0.85
+        highlight.FillColor = outlineColor
+        highlight.OutlineColor = outlineColor
+        highlight.OutlineTransparency = 0
+        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        highlight.Parent = part
+        activeWallHighlights[part] = highlight
+    else
+        highlight.OutlineColor = outlineColor
+        highlight.FillColor = outlineColor
+    end
+end
+
+-- ============================================================================
+-- 2D GEOMETRY COLLISION & ORIENTATION CHECK
+-- ============================================================================
+local function isEdgeOccupied(dotA, dotB, walls)
+    if not (dotA and dotB) then return true, nil end
+    local mid = (dotA.Position + dotB.Position) / 2
+    local edgeLen = (dotA.Position - dotB.Position).Magnitude
+    for _, wall in ipairs(walls) do
+        local dx = wall.Position.X - mid.X
+        local dz = wall.Position.Z - mid.Z
+        local dist2D = math.sqrt(dx * dx + dz * dz)
+        if dist2D < (edgeLen * 0.48) then return true, wall end
+    end
+    return false, nil
+end
+
+local function getOrientation(dotA, dotB)
+    local delta = dotB.Position - dotA.Position
+    if math.abs(delta.Z) > math.abs(delta.X) then
+        return "North-South", "NS"
+    else
+        return "East-West", "EW"
+    end
+end
+
+-- ============================================================================
+-- BOARD STATE & ACCURATE SCORE MODELER
+-- ============================================================================
+local function buildBoardState(tableModel)
+    local dots = {}
+    local walls = {}
+    local otherParts = {}
+
+    for _, child in ipairs(tableModel:GetDescendants()) do
+        if isMatchingCylinder(child) then
+            dots[#dots + 1] = child
+        elseif isMatchingWall(child) and child.Transparency < 0.95 then
+            walls[#walls + 1] = child
+        elseif child:IsA("BasePart") then
+            otherParts[#otherParts + 1] = child
+        end
+    end
+
+    if #dots < 16 then return nil, "Scanning...", 0, 0, 0 end
+
+    local N = math.round(math.sqrt(#dots))
+    if N * N ~= #dots then
+        if #dots >= 36 then N = 6 else return nil, "Scanning...", 0, 0, 0 end
+    end
+
+    local pivot = tableModel:GetPivot()
+    table.sort(dots, function(a, b)
+        local pA = pivot:PointToObjectSpace(a.Position)
+        local pB = pivot:PointToObjectSpace(b.Position)
+        local zA = math.round(pA.Z * 10) / 10
+        local zB = math.round(pB.Z * 10) / 10
+        if math.abs(zA - zB) > 0.6 then return zA < zB end
+        return pA.X < pB.X
+    end)
+
+    local grid = {}
+    for r = 1, N do
+        grid[r] = {}
+        for c = 1, N do grid[r][c] = dots[(r - 1) * N + c] end
+    end
+
+    local B = N - 1
+    local H = {}
+    local V = {}
+    local allEdges = {}
+    local remainingEdges = {}
+    local edgeCounter = 0
+
+    for r = 1, N do
+        H[r] = {}
+        for c = 1, B do
+            edgeCounter += 1
+            local occupied = isEdgeOccupied(grid[r][c], grid[r][c + 1], walls)
+            local longOrient, shortOrient = getOrientation(grid[r][c], grid[r][c + 1])
+            local edge = {
+                index = edgeCounter,
+                occupied = occupied,
+                dotA = grid[r][c],
+                dotB = grid[r][c + 1],
+                r = r, c = c, type = "H",
+                orientation = longOrient,
+                orientCode = shortOrient,
+                id = "H_" .. r .. "_" .. c,
+                adjacentBoxIds = {}
+            }
+            H[r][c] = edge
+            allEdges[edgeCounter] = edge
+            if not occupied then remainingEdges[#remainingEdges + 1] = edge end
+        end
+    end
+
+    for r = 1, B do
+        V[r] = {}
+        for c = 1, N do
+            edgeCounter += 1
+            local occupied = isEdgeOccupied(grid[r][c], grid[r + 1][c], walls)
+            local longOrient, shortOrient = getOrientation(grid[r][c], grid[r + 1][c])
+            local edge = {
+                index = edgeCounter,
+                occupied = occupied,
+                dotA = grid[r][c],
+                dotB = grid[r + 1][c],
+                r = r, c = c, type = "V",
+                orientation = longOrient,
+                orientCode = shortOrient,
+                id = "V_" .. r .. "_" .. c,
+                adjacentBoxIds = {}
+            }
+            V[r][c] = edge
+            allEdges[edgeCounter] = edge
+            if not occupied then remainingEdges[#remainingEdges + 1] = edge end
+        end
+    end
+
+    local boxes = {}
+    local completedBoxesCount = 0
+    local boxCounter = 0
+
+    for r = 1, B do
+        for c = 1, B do
+            boxCounter += 1
+            local edgeIndices = {
+                H[r][c].index,
+                H[r + 1][c].index,
+                V[r][c].index,
+                V[r][c + 1].index
+            }
+
+            local centerPos = (grid[r][c].Position + grid[r + 1][c + 1].Position) / 2
+
+            boxes[boxCounter] = {
+                id = boxCounter,
+                r = r, c = c,
+                center = centerPos,
+                edgeIndices = edgeIndices,
+                owner = nil
+            }
+
+            H[r][c].adjacentBoxIds[#H[r][c].adjacentBoxIds + 1] = boxCounter
+            H[r + 1][c].adjacentBoxIds[#H[r + 1][c].adjacentBoxIds + 1] = boxCounter
+            V[r][c].adjacentBoxIds[#V[r][c].adjacentBoxIds + 1] = boxCounter
+            V[r][c + 1].adjacentBoxIds[#V[r][c + 1].adjacentBoxIds + 1] = boxCounter
+
+            local count = 0
+            for _, e in ipairs(edgeIndices) do
+                if allEdges[e].occupied then count += 1 end
+            end
+            if count == 4 then completedBoxesCount += 1 end
+        end
+    end
+
+    -- Precise score detection: identify parts or decals located strictly at completed box centers
+    local redScore = 0
+    local blueScore = 0
+
+    for b = 1, #boxes do
+        local count = 0
+        for _, eId in ipairs(boxes[b].edgeIndices) do
+            if allEdges[eId].occupied then count += 1 end
+        end
+        if count == 4 then
+            local bCenter = boxes[b].center
+            local assigned = false
+            for _, op in ipairs(otherParts) do
+                local dx = op.Position.X - bCenter.X
+                local dz = op.Position.Z - bCenter.Z
+                if (dx * dx + dz * dz) < 3.0 then
+                    local colorType = getWallColorType(op)
+                    if colorType == "Red" then
+                        redScore += 1
+                        assigned = true
+                        break
+                    elseif colorType == "Blue" then
+                        blueScore += 1
+                        assigned = true
+                        break
+                    end
+                end
+            end
+            if not assigned then
+                -- Fallback check: color of the enclosing walls
+                for _, eId in ipairs(boxes[b].edgeIndices) do
+                    local _, w = isEdgeOccupied(allEdges[eId].dotA, allEdges[eId].dotB, walls)
+                    if w then
+                        local cType = getWallColorType(w)
+                        if cType ~= "Unknown" then
+                            if cType == "Red" then redScore += 1 else blueScore += 1 end
+                            break
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    -- Guarantee scores never exceed actual completed boxes
+    if (redScore + blueScore) > completedBoxesCount then
+        local excess = (redScore + blueScore) - completedBoxesCount
+        if redScore >= excess then redScore -= excess else blueScore -= excess end
+    end
+
+    local initialBoxDegree = {}
+    for b = 1, #boxes do
+        local count = 0
+        for _, eId in ipairs(boxes[b].edgeIndices) do
+            if allEdges[eId].occupied then count += 1 end
+        end
+        initialBoxDegree[b] = count
+    end
+
+    local edgeBoxes = {}
+    for i, edge in ipairs(allEdges) do
+        edgeBoxes[i] = edge.adjacentBoxIds
+    end
+
+    return {
+        N = N,
+        B = B,
+        allEdges = allEdges,
+        remainingEdges = remainingEdges,
+        boxes = boxes,
+        edgeBoxes = edgeBoxes,
+        initialBoxDegree = initialBoxDegree,
+        completedBoxes = completedBoxesCount,
+        redScore = redScore,
+        blueScore = blueScore
+    }, nil, completedBoxesCount, redScore, blueScore
+end
+
+local function getCascadeLength(startEdgeIdx, edgeOccupied, boxDegree, allEdges, boxes)
+    local simEdges = {}
+    for i = 1, #allEdges do simEdges[i] = edgeOccupied[i] end
+
+    local simDegree = {}
+    for b = 1, #boxes do simDegree[b] = boxDegree[b] end
+
+    simEdges[startEdgeIdx] = true
+    local cascadeTotal = 0
+
+    for _, bId in ipairs(allEdges[startEdgeIdx].adjacentBoxIds) do
+        simDegree[bId] += 1
+        if simDegree[bId] == 4 then cascadeTotal += 1 end
+    end
+
+    local changed = true
+    while changed do
+        changed = false
+        for i = 1, #allEdges do
+            if not simEdges[i] then
+                local completes = false
+                for _, bId in ipairs(allEdges[i].adjacentBoxIds) do
+                    if simDegree[bId] == 3 then
+                        completes = true
+                        break
+                    end
+                end
+                if completes then
+                    simEdges[i] = true
+                    for _, bId in ipairs(allEdges[i].adjacentBoxIds) do
+                        simDegree[bId] += 1
+                        if simDegree[bId] == 4 then cascadeTotal += 1 end
+                    end
+                    changed = true
+                    break
+                end
+            end
+        end
+    end
+
+    return cascadeTotal
+end
+
+local function countSimulatedSafeMoves(simEdges, simDegree, totalEdges, edgeBoxes)
+    local count = 0
+    for i = 1, totalEdges do
+        if not simEdges[i] then
+            local createsThree = false
+            local bIds = edgeBoxes[i]
+            for j = 1, #bIds do
+                if simDegree[bIds[j]] >= 2 then
+                    createsThree = true
+                    break
+                end
+            end
+            if not createsThree then
+                count += 1
+            end
+        end
+    end
+    return count
+end
+
+-- ============================================================================
+-- VERIFIED DOUBLE-CROSS & ANTI-CORRIDOR ENGINE
+-- ============================================================================
+local function calculateBestMove(tableModel)
+    local state, errorText, completedBoxes, redScore, blueScore = buildBoardState(tableModel)
+    if not state then
+        return nil, errorText or "Scanning...", completedBoxes or 0, 0, 0, "Wait"
+    end
+
+    local allEdges = state.allEdges
+    local totalEdges = #allEdges
+    local edgeBoxes = state.edgeBoxes
+    local totalBoxes = #state.boxes
+    local boxes = state.boxes
+
+    local myScore = (myTeam == "Blue") and blueScore or redScore
+    local oppScore = (myTeam == "Blue") and redScore or blueScore
+
+    local edgeOccupied = {}
+    for i = 1, totalEdges do edgeOccupied[i] = allEdges[i].occupied end
+
+    local boxDegree = {}
+    for b = 1, totalBoxes do boxDegree[b] = state.initialBoxDegree[b] end
+
+    local function analyzeMove(edgeIdx)
+        local captured = 0
+        local createsThree = 0
+        local createsTwo = 0
+        local bIds = edgeBoxes[edgeIdx]
+        for i = 1, #bIds do
+            local deg = boxDegree[bIds[i]]
+            if deg == 3 then
+                captured += 1
+            elseif deg == 2 then
+                createsThree += 1
+            elseif deg == 1 then
+                createsTwo += 1
+            end
+        end
+        return captured, createsThree, createsTwo
+    end
+
+    local captureMoves = {}
+    local safeMoves = {}
+    local forcedSacrifices = {}
+
+    for i = 1, totalEdges do
+        if not edgeOccupied[i] then
+            local captured, createsThree, createsTwo = analyzeMove(i)
+            if captured > 0 then
+                local cascade = getCascadeLength(i, edgeOccupied, boxDegree, allEdges, boxes)
+                captureMoves[#captureMoves + 1] = {
+                    index = i,
+                    captured = captured,
+                    cascade = cascade,
+                    edge = allEdges[i]
+                }
+            elseif createsThree == 0 then
+                safeMoves[#safeMoves + 1] = {
+                    index = i,
+                    createsTwo = createsTwo,
+                    edge = allEdges[i]
+                }
+            else
+                local cascade = getCascadeLength(i, edgeOccupied, boxDegree, allEdges, boxes)
+                forcedSacrifices[#forcedSacrifices + 1] = {
+                    index = i,
+                    cascade = cascade,
+                    edge = allEdges[i]
+                }
+            end
+        end
+    end
+
+    -- =========================================================================
+    -- PRIORITY 1: SMART CAPTURES & AUTOMATED CORRIDOR-END BAIT
+    -- =========================================================================
+    if #captureMoves > 0 then
+        local remainingBoxes = 25 - completedBoxes
+        local canWinNow = (myScore + 2 >= 13)
+
+        -- Automated Corridor-End Bait (Double-Cross)
+        -- Triggers when:
+        -- 1. There are at least 3 boxes left on the board (not the final domino)
+        -- 2. Taking the 2 boxes does not instantly win the game
+        if remainingBoxes >= 3 and not canWinNow then
+            for _, cap in ipairs(captureMoves) do
+                local bIds = edgeBoxes[cap.index]
+                for _, bId in ipairs(bIds) do
+                    if boxDegree[bId] == 3 then
+                        -- Check all adjacent boxes of Box A to find connected Box B (degree 2)
+                        for _, eId in ipairs(boxes[bId].edgeIndices) do
+                            for _, adjId in ipairs(edgeBoxes[eId]) do
+                                if adjId ~= bId and boxDegree[adjId] == 2 then
+                                    -- Verify Box B is truly the END of the corridor:
+                                    -- Check if Box B connects to any OTHER degree-2 box
+                                    local extendsFurther = false
+                                    local baitEdgeId = nil
+
+                                    for _, bEdgeId in ipairs(boxes[adjId].edgeIndices) do
+                                        if not edgeOccupied[bEdgeId] and bEdgeId ~= eId then
+                                            baitEdgeId = bEdgeId
+                                            for _, neighborId in ipairs(edgeBoxes[bEdgeId]) do
+                                                if neighborId ~= adjId and boxDegree[neighborId] == 2 then
+                                                    extendsFurther = true
+                                                    break
+                                                end
+                                            end
+                                        end
+                                    end
+
+                                    -- If Box B has no further degree-2 neighbors, this is the final 2-box domino!
+                                    if not extendsFurther and baitEdgeId then
+                                        local baitEdge = allEdges[baitEdgeId]
+                                        return baitEdge, "BAIT: Double-Cross [Give 2, Force Bot Opening] (" .. baitEdge.orientation .. ")", completedBoxes, myScore, oppScore, "Double-Cross Bait"
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
+        -- Standard capture: Bank double completions (+2) first, then singles (+1)
+        table.sort(captureMoves, function(a, b) return a.captured > b.captured end)
+        local bestCap = captureMoves[1]
+        local desc = (bestCap.captured >= 2)
+            and ("SCORE: Bank Double-Box (+2) [" .. bestCap.edge.orientation .. "]")
+            or ("SCORE: Bank Box (+1) [" .. bestCap.edge.orientation .. "]")
+        return bestCap.edge, desc, completedBoxes, myScore, oppScore, "Banking Points"
+    end
+
+    -- =========================================================================
+    -- PRIORITY 2: ANTI-CORRIDOR CROSS-CUTS & PARITY PRESERVATION
+    -- =========================================================================
+    if #safeMoves > 0 then
+        for _, sm in ipairs(safeMoves) do
+            local edge = sm.edge
+            local bIds = edgeBoxes[sm.index]
+            local score = 1000
+
+            -- 1. CORRIDOR CRUSHER: Prioritize East-West horizontal cross-cuts inside the board
+            -- to slice vertical corridors into small 1-box units
+            if edge.orientCode == "EW" and #bIds == 2 then
+                score += 3500
+            elseif edge.orientCode == "NS" and #bIds == 2 then
+                score -= 1500 -- Penalize vertical lines that feed long corridors
+            end
+
+            -- 2. PERIMETER SUPPRESSION: Do not seal the outer perimeter early
+            if #bIds == 1 then
+                score -= 2800
+            end
+
+            -- 3. PARITY SIMULATION
+            edgeOccupied[sm.index] = true
+            for j = 1, #bIds do boxDegree[bIds[j]] += 1 end
+
+            local safeAfterMove = countSimulatedSafeMoves(edgeOccupied, boxDegree, totalEdges, edgeBoxes)
+
+            for j = 1, #bIds do boxDegree[bIds[j]] -= 1 end
+            edgeOccupied[sm.index] = false
+
+            if safeAfterMove % 2 == 0 then
+                score += 2500 -- Even remaining safe moves force the bot to run out first
+            else
+                score -= 2500
+            end
+
+            sm.score = score
+        end
+
+        table.sort(safeMoves, function(a, b) return a.score > b.score end)
+        local bestSafe = safeMoves[1]
+
+        local desc = (bestSafe.edge.orientCode == "EW")
+            and ("CROSS-CUT: Sever Vertical Corridor [" .. bestSafe.edge.orientation .. "]")
+            or ("PARITY: Force Bot Exhaustion [" .. bestSafe.edge.orientation .. "]")
+
+        return bestSafe.edge, desc, completedBoxes, myScore, oppScore, "Center Control (" .. #safeMoves .. " Left)"
+    end
+
+    -- =========================================================================
+    -- PRIORITY 3: FORCED SACRIFICE (SMALLEST LOSS)
+    -- =========================================================================
+    if #forcedSacrifices > 0 then
+        table.sort(forcedSacrifices, function(a, b) return a.cascade < b.cascade end)
+        local bestSac = forcedSacrifices[1]
+        return bestSac.edge, "SACRIFICE: Give " .. bestSac.cascade .. " [" .. bestSac.edge.orientation .. "]", completedBoxes, myScore, oppScore, "Forced Sacrifice"
+    end
+
+    return state.remainingEdges[1], "FALLBACK", completedBoxes, myScore, oppScore, "Active"
+end
+
+-- ============================================================================
+-- HIGH-VISIBILITY HOVER PREDICTION BEAM
+-- ============================================================================
+local function updatePredictionBeam(tableModel)
+    if not isMyTurn then
+        if activePredictionPart then
+            activePredictionPart.Transparency = 1
+            if activePredictionBillboard then activePredictionBillboard.Enabled = false end
+        end
+        if hintLabel then
+            hintLabel.Text = "Turn: Opponent's Turn..."
+            hintLabel.TextColor3 = Color3.fromRGB(255, 120, 120)
+        end
+        currentTargetEdge = nil
+        return
+    end
+
+    if engineBusy then return end
+    engineBusy = true
+    engineGeneration += 1
+    local generation = engineGeneration
+
+    local bestEdge, reason, completedBoxes, myScore, oppScore, modeInfo = calculateBestMove(tableModel)
+
+    if generation ~= engineGeneration then
+        engineBusy = false
+        return
+    end
+    engineBusy = false
+
+    if scoreLabel then
+        scoreLabel.Text = string.format("Me: %d | Bot: %d | Goal: 13", myScore or 0, oppScore or 0)
+    end
+
+    if modeLabel then
+        modeLabel.Text = "Status: " .. (modeInfo or "Active")
+    end
+
+    if hintLabel then
+        hintLabel.Text = "Move: " .. (reason or "Analyzing...")
+        hintLabel.TextColor3 = Color3.fromRGB(0, 255, 200)
+    end
+
+    if not bestEdge or not bestEdge.dotA or not bestEdge.dotB then
+        if activePredictionPart then
+            activePredictionPart.Transparency = 1
+            if activePredictionBillboard then activePredictionBillboard.Enabled = false end
+        end
+        currentTargetEdge = nil
+        return
+    end
+
+    if not activePredictionPart or not activePredictionPart.Parent then
+        local p = Instance.new("Part")
+        p.Name = "GridWars_OptimalArrow_Core"
+        p.Anchored = true
+        p.CanCollide = false
+        p.CanQuery = false
+        p.CanTouch = false
+        p.CastShadow = false
+        p.Material = Enum.Material.Plastic
+        p.Color = Color3.fromRGB(255, 0, 255)
+        p.Parent = Workspace
+        activePredictionPart = p
+
+        local bb = Instance.new("BillboardGui")
+        bb.Name = "GridWars_LocationHoveringTracker"
+        bb.Size = UDim2.new(0, 36, 0, 36)
+        bb.StudsOffset = Vector3.new(0, 0.15, 0)
+        bb.AlwaysOnTop = true
+        bb.Adornee = p
+        bb.Parent = p
+        activePredictionBillboard = bb
+
+        local arrow = Instance.new("TextLabel")
+        arrow.Parent = bb
+        arrow.BackgroundTransparency = 1
+        arrow.Size = UDim2.new(1, 0, 1, 0)
+        arrow.Text = "▼"
+        arrow.TextSize = 25
+        arrow.Font = Enum.Font.SourceSansBold
+        arrow.TextColor3 = Color3.fromRGB(255, 0, 255)
+        arrow.TextStrokeTransparency = 0.2
+        arrow.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        activeBillboardText = arrow
+    end
+
+    if currentTargetEdge ~= bestEdge.id then
+        currentTargetEdge = bestEdge.id
+        local p1 = bestEdge.dotA.Position
+        local p2 = bestEdge.dotB.Position
+        local length = (p2 - p1).Magnitude
+        local mid = (p1 + p2) / 2
+        local beamY = math.min(p1.Y, p2.Y) + 0.18
+
+        local flatMid = Vector3.new(mid.X, beamY, mid.Z)
+        local flatP2 = Vector3.new(p2.X, beamY, p2.Z)
+
+        activePredictionPart.Size = Vector3.new(0.46, 0.14, length)
+        activePredictionPart.CFrame = CFrame.new(flatMid, flatP2)
+    end
+
+    activePredictionPart.Transparency = 0.08
+    if activePredictionBillboard then activePredictionBillboard.Enabled = true end
+end
+
+registerCleanup(RunService.Heartbeat:Connect(function()
+    if isOnline and isMyTurn and activePredictionPart and activePredictionPart.Transparency < 1 then
+        local t = tick()
+        local pulseWidth = 0.4 + (math.sin(t * 8) * 0.1)
+        local blendInterp = math.abs(math.sin(t * 3))
+
+        local intenseBase = Color3.fromRGB(255, 30, 200)
+        local hotCore = Color3.fromRGB(255, 100, 255)
+
+        activePredictionPart.Size = Vector3.new(pulseWidth, 0.16, activePredictionPart.Size.Z)
+        activePredictionPart.Color = intenseBase:Lerp(hotCore, blendInterp)
+        if activeBillboardText then activeBillboardText.TextColor3 = activePredictionPart.Color end
+    end
+end))
+
+-- ============================================================================
+-- FAST CACHE & TABLE PROXIMITY TRACKING
+-- ============================================================================
+local cachedTables = {}
+local cachedSpawns = {}
+
+local function refreshCache()
+    table.clear(cachedTables)
+    table.clear(cachedSpawns)
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if obj:IsA("Model") and obj.Name == "Table" then
+            table.insert(cachedTables, obj)
+        elseif (obj.Name == "Spawn1" or obj.Name == "Spawn2") and obj:IsA("BasePart") then
+            table.insert(cachedSpawns, obj)
+        end
+    end
+end
+
+registerCleanup(Workspace.DescendantAdded:Connect(function(desc)
+    if desc:IsA("Model") and desc.Name == "Table" then
+        table.insert(cachedTables, desc)
+    elseif (desc.Name == "Spawn1" or desc.Name == "Spawn2") and desc:IsA("BasePart") then
+        table.insert(cachedSpawns, desc)
+    end
+end))
+
+registerCleanup(Workspace.DescendantRemoving:Connect(function(desc)
+    for i = #cachedTables, 1, -1 do if cachedTables[i] == desc then table.remove(cachedTables, i) end end
+    for i = #cachedSpawns, 1, -1 do if cachedSpawns[i] == desc then table.remove(cachedSpawns, i) end end
+end))
+
+refreshCache()
+
+local function detectCurrentTeam(char, hrp)
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if hum and hum.SeatPart then
+        local sp = hum.SeatPart
+        if sp.Name:find("Spawn1") or sp:FindFirstChild("Spawn1") then return "Blue" end
+        if sp.Name:find("Spawn2") or sp:FindFirstChild("Spawn2") then return "Red" end
+        local parentModel = sp:FindFirstAncestorOfClass("Model")
+        if parentModel then
+            if parentModel:FindFirstChild("Spawn1", true) then return "Blue" end
+            if parentModel:FindFirstChild("Spawn2", true) then return "Red" end
+        end
+    end
+    for _, spawnPart in ipairs(cachedSpawns) do
+        if spawnPart and spawnPart.Parent then
+            if (spawnPart.Position - hrp.Position).Magnitude < 4.5 then
+                return (spawnPart.Name == "Spawn1" and "Blue") or "Red"
+            end
+        end
+    end
+    return nil
+end
+
+local function getClosestTableByRadius()
+    local char = player.Character
+    if not char then return nil, nil end
+    local hrp = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso")
+    if not hrp then return nil, nil end
+
+    local teamCacheCheck = detectCurrentTeam(char, hrp)
+    local closestT, distFloor = nil, math.huge
+    for _, md in ipairs(cachedTables) do
+        if md and md.Parent then
+            local dist = math.huge
+            for _, ch in ipairs(md:GetDescendants()) do
+                if ch:IsA("BasePart") then
+                    local hZ = ch.Position.Z - hrp.Position.Z
+                    local hX = ch.Position.X - hrp.Position.X
+                    local dTemp = math.sqrt(hX * hX + hZ * hZ)
+                    if dTemp < dist then dist = dTemp end
+                end
+            end
+            if dist <= 12 and dist < distFloor then distFloor = dist; closestT = md end
+        end
+    end
+    return closestT, teamCacheCheck
+end
+
+local function countPlacedWalls(tableModel)
+    local cnt = 0
+    for _, child in ipairs(tableModel:GetDescendants()) do
+        if isMatchingWall(child) and child.Transparency < 0.95 then cnt += 1 end
+    end
+    return cnt
+end
+
+local function hookTable(model)
+    if not model then return end
+    for _, child in ipairs(model:GetDescendants()) do
+        if isMatchingWall(child) then highlightWall(child) end
+    end
+
+    boardDirty = true
+    lastWallCount = countPlacedWalls(model)
+
+    activeTableConn = model.DescendantAdded:Connect(function(child)
+        task.defer(function()
+            if isOnline and currentTargetTable == model and child and child.Parent then
+                if isMatchingWall(child) then
+                    highlightWall(child)
+                    boardDirty = true
+                end
+            end
+        end)
+    end)
+end
+
+-- ============================================================================
+-- MAIN SCAN LOOP
+-- ============================================================================
+local scanThread = task.spawn(function()
+    local cTimer = 0
+    while isAlive do
+        if isOnline then
+            cTimer += 0.2
+            if cTimer >= 3.5 then cTimer = 0; refreshCache() end
+
+            local ntStat = checkIsMyTurn()
+            if ntStat ~= isMyTurn then isMyTurn = ntStat; boardDirty = true end
+
+            local tTable, dTeam = getClosestTableByRadius()
+
+            if dTeam ~= myTeam then
+                myTeam = dTeam
+                if teamLabel then
+                    if myTeam == "Blue" then
+                        teamLabel.Text = "Team: BLUE (Mine)"
+                        teamLabel.TextColor3 = Color3.fromRGB(0, 170, 255)
+                    elseif myTeam == "Red" then
+                        teamLabel.Text = "Team: RED (Mine)"
+                        teamLabel.TextColor3 = Color3.fromRGB(255, 65, 65)
+                    else
+                        teamLabel.Text = "Team: Standing"
+                        teamLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+                    end
+                end
+                if currentTargetTable then
+                    for _, c in ipairs(currentTargetTable:GetDescendants()) do
+                        if isMatchingWall(c) then highlightWall(c) end
+                    end
+                end
+            end
+
+            if tTable ~= currentTargetTable then
+                clearActiveHighlights()
+                currentTargetTable = tTable
+                if currentTargetTable then hookTable(currentTargetTable) end
+            else
+                if currentTargetTable then
+                    if isMyTurn then
+                        local cpWalls = countPlacedWalls(currentTargetTable)
+                        if cpWalls ~= lastWallCount or boardDirty then
+                            lastWallCount = cpWalls
+                            boardDirty = false
+
+                            task.spawn(function()
+                                if not isAlive then return end
+                                updatePredictionBeam(currentTargetTable)
+                            end)
+                        end
+                    else
+                        if activePredictionPart and activePredictionPart.Transparency < 1 then
+                            activePredictionPart.Transparency = 1
+                            if activePredictionBillboard then activePredictionBillboard.Enabled = false end
+                            if hintLabel then
+                                hintLabel.Text = "Turn: Opponent's Turn..."
+                                hintLabel.TextColor3 = Color3.fromRGB(255, 120, 120)
+                            end
+                        end
+                    end
+                end
+            end
+        else
+            if currentTargetTable ~= nil then
+                clearActiveHighlights()
+                currentTargetTable = nil
+                myTeam = nil
+                boardDirty = true
+                if teamLabel then teamLabel.Text = "Team: None"; teamLabel.TextColor3 = Color3.fromRGB(150, 150, 150) end
+                if scoreLabel then scoreLabel.Text = "Me: 0 | Bot: 0 | Goal: 13" end
+                if modeLabel then modeLabel.Text = "Status: Idle" end
+                if hintLabel then hintLabel.Text = "Turn: Offline"; hintLabel.TextColor3 = Color3.fromRGB(150, 150, 150) end
+            end
+        end
+        task.wait(0.15)
+    end
+end)
+
+registerCleanup(scanThread)
+
+-- ============================================================================
+-- GUI SETUP (3-BUTTON CONTROL: ON | DESTROY | OFF)
+-- ============================================================================
+local guiParent
+if type(gethui) == "function" then
+    guiParent = gethui()
+else
+    local success = pcall(function() return game:GetService("CoreGui").Name end)
+    guiParent = success and game:GetService("CoreGui") or player:WaitForChild("PlayerGui")
+end
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "GridWarsDetector_" .. math.random(10000, 99999)
+screenGui.ResetOnSpawn = false
+screenGui.DisplayOrder = 2147483647
+screenGui.IgnoreGuiInset = true
+screenGui.Parent = guiParent
+registerCleanup(screenGui)
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Parent = screenGui
+mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+mainFrame.Size = UDim2.new(0, 175, 0, 140)
+mainFrame.Position = UDim2.new(0.35, 0, 0.45, -70)
+mainFrame.Draggable = true
+mainFrame.Active = true
+mainFrame.BorderSizePixel = 0
+
+local status = Instance.new("TextLabel", mainFrame)
+status.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+status.Size = UDim2.new(1, 0, 0, 20)
+status.Position = UDim2.new(0, 0, 0, 0)
+status.Text = "Status: Offline"
+status.TextColor3 = Color3.fromRGB(255, 0, 0)
+status.TextScaled = true
+status.BorderSizePixel = 0
+
+teamLabel = Instance.new("TextLabel", mainFrame)
+teamLabel.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+teamLabel.Size = UDim2.new(1, 0, 0, 16)
+teamLabel.Position = UDim2.new(0, 0, 0, 20)
+teamLabel.Text = "Team: None"
+teamLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+teamLabel.TextScaled = true
+teamLabel.BorderSizePixel = 0
+
+scoreLabel = Instance.new("TextLabel", mainFrame)
+scoreLabel.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+scoreLabel.Size = UDim2.new(1, 0, 0, 16)
+scoreLabel.Position = UDim2.new(0, 0, 0, 36)
+scoreLabel.Text = "Me: 0 | Bot: 0 | Goal: 13"
+scoreLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+scoreLabel.TextScaled = true
+scoreLabel.BorderSizePixel = 0
+
+modeLabel = Instance.new("TextLabel", mainFrame)
+modeLabel.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+modeLabel.Size = UDim2.new(1, 0, 0, 16)
+modeLabel.Position = UDim2.new(0, 0, 0, 52)
+modeLabel.Text = "Status: Idle"
+modeLabel.TextColor3 = Color3.fromRGB(255, 200, 50)
+modeLabel.TextScaled = true
+modeLabel.BorderSizePixel = 0
+
+hintLabel = Instance.new("TextLabel", mainFrame)
+hintLabel.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+hintLabel.Size = UDim2.new(1, 0, 0, 26)
+hintLabel.Position = UDim2.new(0, 0, 0, 68)
+hintLabel.Text = "Turn: Offline"
+hintLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+hintLabel.TextScaled = true
+hintLabel.BorderSizePixel = 0
+
+local function createButton(name, text, x, y, width, height, bgColor)
+    local btn = Instance.new("TextButton")
+    btn.Name = name
+    btn.Parent = mainFrame
+    btn.Text = text
+    btn.Size = UDim2.new(0, width, 0, height)
+    btn.Position = UDim2.new(0, x, 0, y)
+    btn.BackgroundColor3 = bgColor or Color3.fromRGB(60, 60, 60)
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.TextScaled = true
+    btn.AutoButtonColor = true
+    btn.BorderSizePixel = 0
+    return btn
+end
+
+-- 3 buttons seamlessly fitted into the existing 175-pixel width
+local onBtn = createButton("OnBtn", "On", 6, 100, 50, 30, Color3.fromRGB(40, 120, 40))
+local destroyBtn = createButton("DestroyBtn", "Destroy", 61, 100, 53, 30, Color3.fromRGB(150, 40, 40))
+local offBtn = createButton("OffBtn", "Off", 119, 100, 50, 30, Color3.fromRGB(60, 60, 60))
+
+local function setOnline()
+    isOnline = true
+    boardDirty = true
+    status.Text = "Status: Online"
+    status.TextColor3 = Color3.fromRGB(0, 255, 0)
+end
+
+local function setOffline()
+    isOnline = false
+    clearActiveHighlights()
+    currentTargetTable = nil
+    myTeam = nil
+    boardDirty = true
+    status.Text = "Status: Offline"
+    status.TextColor3 = Color3.fromRGB(255, 0, 0)
+    if teamLabel then teamLabel.Text = "Team: None"; teamLabel.TextColor3 = Color3.fromRGB(150, 150, 150) end
+    if scoreLabel then scoreLabel.Text = "Me: 0 | Bot: 0 | Goal: 13" end
+    if modeLabel then modeLabel.Text = "Status: Idle" end
+    if hintLabel then hintLabel.Text = "Turn: Offline"; hintLabel.TextColor3 = Color3.fromRGB(150, 150, 150) end
+end
+
+registerCleanup(onBtn.MouseButton1Click:Connect(setOnline))
+registerCleanup(offBtn.MouseButton1Click:Connect(setOffline))
+registerCleanup(destroyBtn.MouseButton1Click:Connect(cleanup))
