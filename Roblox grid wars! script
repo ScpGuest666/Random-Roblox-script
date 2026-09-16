@@ -118,7 +118,7 @@ local function checkIsMyTurn()
             for _, desc in ipairs(gui:GetDescendants()) do
                 if (desc:IsA("TextLabel") or desc:IsA("TextButton")) and desc.Visible then
                     local txt = desc.Text:upper()
-                    if txt:find("YOUR TURN") then
+                    if txt:find("YOUR TURN") and not txt:find("TEAMMATE") then
                         return true
                     end
                 end
@@ -143,8 +143,8 @@ local function isMatchingCylinder(part)
     if not isCylinder then return false end
 
     local s = part.Size
-    local isSmall = (s.X <= 3 and s.Y <= 3 and s.Z <= 3)
-    local isAroundOne = ((s.X >= 0.2 and s.X <= 2.2) or (s.Y >= 0.2 and s.Y <= 2.2) or (s.Z >= 0.2 and s.Z <= 2.2))
+    local isSmall = (s.X <= 3.5 and s.Y <= 3.5 and s.Z <= 3.5)
+    local isAroundOne = ((s.X >= 0.15 and s.X <= 2.5) or (s.Y >= 0.15 and s.Y <= 2.5) or (s.Z >= 0.15 and s.Z <= 2.5))
     return isSmall and isAroundOne
 end
 
@@ -216,16 +216,16 @@ local function getOrientation(dotA, dotB)
 end
 
 -- ============================================================================
--- BOARD STATE & ACCURATE SCORE MODELER
+-- DYNAMIC RECTANGULAR BOARD STATE MODELER (Any R x C Grid)
 -- ============================================================================
 local function buildBoardState(tableModel)
-    local dots = {}
+    local rawDots = {}
     local walls = {}
     local otherParts = {}
 
     for _, child in ipairs(tableModel:GetDescendants()) do
         if isMatchingCylinder(child) then
-            dots[#dots + 1] = child
+            rawDots[#rawDots + 1] = child
         elseif isMatchingWall(child) and child.Transparency < 0.95 then
             walls[#walls + 1] = child
         elseif child:IsA("BasePart") then
@@ -233,39 +233,72 @@ local function buildBoardState(tableModel)
         end
     end
 
-    if #dots < 16 then return nil, "Scanning...", 0, 0, 0 end
-
-    local N = math.round(math.sqrt(#dots))
-    if N * N ~= #dots then
-        if #dots >= 36 then N = 6 else return nil, "Scanning...", 0, 0, 0 end
-    end
+    if #rawDots < 16 then return nil, "Scanning...", 0, 0, 0 end
 
     local pivot = tableModel:GetPivot()
-    table.sort(dots, function(a, b)
-        local pA = pivot:PointToObjectSpace(a.Position)
-        local pB = pivot:PointToObjectSpace(b.Position)
-        local zA = math.round(pA.Z * 10) / 10
-        local zB = math.round(pB.Z * 10) / 10
-        if math.abs(zA - zB) > 0.6 then return zA < zB end
-        return pA.X < pB.X
-    end)
 
-    local grid = {}
-    for r = 1, N do
-        grid[r] = {}
-        for c = 1, N do grid[r][c] = dots[(r - 1) * N + c] end
+    local localDots = {}
+    for i, dot in ipairs(rawDots) do
+        local lp = pivot:PointToObjectSpace(dot.Position)
+        localDots[i] = { dot = dot, x = lp.X, z = lp.Z }
     end
 
-    local B = N - 1
+    table.sort(localDots, function(a, b)
+        if math.abs(a.z - b.z) > 0.45 then
+            return a.z < b.z
+        end
+        return a.x < b.x
+    end)
+
+    local rowClusters = {}
+    local currentRow = {}
+    local currentZ = localDots[1].z
+
+    for _, d in ipairs(localDots) do
+        if math.abs(d.z - currentZ) > 0.45 then
+            table.sort(currentRow, function(a, b) return a.x < b.x end)
+            rowClusters[#rowClusters + 1] = currentRow
+            currentRow = { d }
+            currentZ = d.z
+        else
+            currentRow[#currentRow + 1] = d
+        end
+    end
+    if #currentRow > 0 then
+        table.sort(currentRow, function(a, b) return a.x < b.x end)
+        rowClusters[#rowClusters + 1] = currentRow
+    end
+
+    local numRows = #rowClusters
+    local numCols = #rowClusters[1]
+
+    for r = 2, numRows do
+        if #rowClusters[r] ~= numCols then
+            return nil, "Grid Aligning...", 0, 0, 0
+        end
+    end
+
+    local grid = {}
+    for r = 1, numRows do
+        grid[r] = {}
+        for c = 1, numCols do
+            grid[r][c] = rowClusters[r][c].dot
+        end
+    end
+
+    local boxesR = numRows - 1
+    local boxesC = numCols - 1
+    local totalBoxesCount = boxesR * boxesC
+
     local H = {}
     local V = {}
     local allEdges = {}
     local remainingEdges = {}
     local edgeCounter = 0
 
-    for r = 1, N do
+    for r = 1, numRows do
         H[r] = {}
-        for c = 1, B do
+        for c = 1, boxesC do
             edgeCounter += 1
             local occupied = isEdgeOccupied(grid[r][c], grid[r][c + 1], walls)
             local longOrient, shortOrient = getOrientation(grid[r][c], grid[r][c + 1])
@@ -286,9 +319,9 @@ local function buildBoardState(tableModel)
         end
     end
 
-    for r = 1, B do
+    for r = 1, boxesR do
         V[r] = {}
-        for c = 1, N do
+        for c = 1, numCols do
             edgeCounter += 1
             local occupied = isEdgeOccupied(grid[r][c], grid[r + 1][c], walls)
             local longOrient, shortOrient = getOrientation(grid[r][c], grid[r + 1][c])
@@ -313,8 +346,8 @@ local function buildBoardState(tableModel)
     local completedBoxesCount = 0
     local boxCounter = 0
 
-    for r = 1, B do
-        for c = 1, B do
+    for r = 1, boxesR do
+        for c = 1, boxesC do
             boxCounter += 1
             local edgeIndices = {
                 H[r][c].index,
@@ -329,8 +362,7 @@ local function buildBoardState(tableModel)
                 id = boxCounter,
                 r = r, c = c,
                 center = centerPos,
-                edgeIndices = edgeIndices,
-                owner = nil
+                edgeIndices = edgeIndices
             }
 
             H[r][c].adjacentBoxIds[#H[r][c].adjacentBoxIds + 1] = boxCounter
@@ -346,7 +378,6 @@ local function buildBoardState(tableModel)
         end
     end
 
-    -- Precise score detection: identify parts or decals located strictly at completed box centers
     local redScore = 0
     local blueScore = 0
 
@@ -364,18 +395,13 @@ local function buildBoardState(tableModel)
                 if (dx * dx + dz * dz) < 3.0 then
                     local colorType = getWallColorType(op)
                     if colorType == "Red" then
-                        redScore += 1
-                        assigned = true
-                        break
+                        redScore += 1; assigned = true; break
                     elseif colorType == "Blue" then
-                        blueScore += 1
-                        assigned = true
-                        break
+                        blueScore += 1; assigned = true; break
                     end
                 end
             end
             if not assigned then
-                -- Fallback check: color of the enclosing walls
                 for _, eId in ipairs(boxes[b].edgeIndices) do
                     local _, w = isEdgeOccupied(allEdges[eId].dotA, allEdges[eId].dotB, walls)
                     if w then
@@ -390,7 +416,6 @@ local function buildBoardState(tableModel)
         end
     end
 
-    -- Guarantee scores never exceed actual completed boxes
     if (redScore + blueScore) > completedBoxesCount then
         local excess = (redScore + blueScore) - completedBoxesCount
         if redScore >= excess then redScore -= excess else blueScore -= excess end
@@ -411,8 +436,11 @@ local function buildBoardState(tableModel)
     end
 
     return {
-        N = N,
-        B = B,
+        numRows = numRows,
+        numCols = numCols,
+        boxesR = boxesR,
+        boxesC = boxesC,
+        totalBoxes = totalBoxesCount,
         allEdges = allEdges,
         remainingEdges = remainingEdges,
         boxes = boxes,
@@ -488,19 +516,20 @@ local function countSimulatedSafeMoves(simEdges, simDegree, totalEdges, edgeBoxe
 end
 
 -- ============================================================================
--- VERIFIED DOUBLE-CROSS & ANTI-CORRIDOR ENGINE
+-- DECISION ENGINE WITH ANTI-CORRIDOR & MULTI-PAIR GUARDED BAITING
 -- ============================================================================
 local function calculateBestMove(tableModel)
     local state, errorText, completedBoxes, redScore, blueScore = buildBoardState(tableModel)
     if not state then
-        return nil, errorText or "Scanning...", completedBoxes or 0, 0, 0, "Wait"
+        return nil, errorText or "Scanning...", completedBoxes or 0, 0, 0, "Wait", 13
     end
 
     local allEdges = state.allEdges
     local totalEdges = #allEdges
     local edgeBoxes = state.edgeBoxes
-    local totalBoxes = #state.boxes
+    local totalBoxes = state.totalBoxes
     local boxes = state.boxes
+    local goalToWin = math.floor(totalBoxes / 2) + 1
 
     local myScore = (myTeam == "Blue") and blueScore or redScore
     local oppScore = (myTeam == "Blue") and redScore or blueScore
@@ -562,46 +591,90 @@ local function calculateBestMove(tableModel)
     end
 
     -- =========================================================================
-    -- PRIORITY 1: SMART CAPTURES & AUTOMATED CORRIDOR-END BAIT
+    -- PRIORITY 1: SMART CAPTURES & STRICT ENDGAME DOUBLE-CROSS
     -- =========================================================================
     if #captureMoves > 0 then
-        local remainingBoxes = 25 - completedBoxes
-        local canWinNow = (myScore + 2 >= 13)
+        local remainingBoxes = totalBoxes - completedBoxes
+        local canWinNow = (myScore + 2 >= goalToWin)
 
-        -- Automated Corridor-End Bait (Double-Cross)
-        -- Triggers when:
-        -- 1. There are at least 3 boxes left on the board (not the final domino)
-        -- 2. Taking the 2 boxes does not instantly win the game
-        if remainingBoxes >= 3 and not canWinNow then
-            for _, cap in ipairs(captureMoves) do
+        -- Topology scan: Count how many distinct 2-box corridors exist on the entire board
+        local twoBoxChainsCount = 0
+        local registeredPairs = {}
+
+        for b = 1, totalBoxes do
+            if not registeredPairs[b] and (boxDegree[b] == 2 or boxDegree[b] == 3) then
+                for _, eId in ipairs(boxes[b].edgeIndices) do
+                    for _, adjId in ipairs(edgeBoxes[eId]) do
+                        if adjId ~= b and not registeredPairs[adjId] and (boxDegree[adjId] == 2 or boxDegree[adjId] == 3) then
+                            local bExtends = false
+                            for _, be in ipairs(boxes[b].edgeIndices) do
+                                if be ~= eId and not edgeOccupied[be] then
+                                    for _, nId in ipairs(edgeBoxes[be]) do
+                                        if nId ~= b and boxDegree[nId] == 2 then bExtends = true; break end
+                                    end
+                                end
+                            end
+                            local adjExtends = false
+                            for _, ae in ipairs(boxes[adjId].edgeIndices) do
+                                if ae ~= eId and not edgeOccupied[ae] then
+                                    for _, nId in ipairs(edgeBoxes[ae]) do
+                                        if nId ~= adjId and boxDegree[nId] == 2 then adjExtends = true; break end
+                                    end
+                                end
+                            end
+                            if not bExtends and not adjExtends then
+                                twoBoxChainsCount += 1
+                                registeredPairs[b] = true
+                                registeredPairs[adjId] = true
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
+        -- Check whether an unopened chain (>= 3 boxes) exists to trap the bot in
+        local largeChainToCrack = false
+        for _, sac in ipairs(forcedSacrifices) do
+            if sac.cascade >= 3 then
+                largeChainToCrack = true
+                break
+            end
+        end
+
+        -- STRICT BAIT RULES:
+        -- 1. All safe moves must be exhausted (#safeMoves == 0)
+        -- 2. There must NOT be multiple 2-box groups on the board (twoBoxChainsCount <= 1)
+        --    If multiple 2-boxes exist, NEVER bait: capture them all!
+        -- 3. Exactly 1 capture move available currently (#captureMoves == 1)
+        -- 4. A larger chain exists for the bot to break open, and taking these 2 doesn't immediately win
+        local allowBait = (#safeMoves == 0) 
+            and (twoBoxChainsCount <= 1) 
+            and (#captureMoves == 1) 
+            and largeChainToCrack 
+            and (remainingBoxes >= 3) 
+            and not canWinNow
+
+        if allowBait then
+            local cap = captureMoves[1]
+            if cap.cascade == 2 then
                 local bIds = edgeBoxes[cap.index]
                 for _, bId in ipairs(bIds) do
                     if boxDegree[bId] == 3 then
-                        -- Check all adjacent boxes of Box A to find connected Box B (degree 2)
                         for _, eId in ipairs(boxes[bId].edgeIndices) do
                             for _, adjId in ipairs(edgeBoxes[eId]) do
                                 if adjId ~= bId and boxDegree[adjId] == 2 then
-                                    -- Verify Box B is truly the END of the corridor:
-                                    -- Check if Box B connects to any OTHER degree-2 box
-                                    local extendsFurther = false
                                     local baitEdgeId = nil
-
                                     for _, bEdgeId in ipairs(boxes[adjId].edgeIndices) do
                                         if not edgeOccupied[bEdgeId] and bEdgeId ~= eId then
                                             baitEdgeId = bEdgeId
-                                            for _, neighborId in ipairs(edgeBoxes[bEdgeId]) do
-                                                if neighborId ~= adjId and boxDegree[neighborId] == 2 then
-                                                    extendsFurther = true
-                                                    break
-                                                end
-                                            end
+                                            break
                                         end
                                     end
 
-                                    -- If Box B has no further degree-2 neighbors, this is the final 2-box domino!
-                                    if not extendsFurther and baitEdgeId then
+                                    if baitEdgeId then
                                         local baitEdge = allEdges[baitEdgeId]
-                                        return baitEdge, "BAIT: Double-Cross [Give 2, Force Bot Opening] (" .. baitEdge.orientation .. ")", completedBoxes, myScore, oppScore, "Double-Cross Bait"
+                                        return baitEdge, "BAIT: Double-Cross [Give 2, Force Bot Opening] (" .. baitEdge.orientation .. ")", completedBoxes, myScore, oppScore, "Double-Cross Bait", goalToWin
                                     end
                                 end
                             end
@@ -617,7 +690,7 @@ local function calculateBestMove(tableModel)
         local desc = (bestCap.captured >= 2)
             and ("SCORE: Bank Double-Box (+2) [" .. bestCap.edge.orientation .. "]")
             or ("SCORE: Bank Box (+1) [" .. bestCap.edge.orientation .. "]")
-        return bestCap.edge, desc, completedBoxes, myScore, oppScore, "Banking Points"
+        return bestCap.edge, desc, completedBoxes, myScore, oppScore, "Banking Points", goalToWin
     end
 
     -- =========================================================================
@@ -629,20 +702,19 @@ local function calculateBestMove(tableModel)
             local bIds = edgeBoxes[sm.index]
             local score = 1000
 
-            -- 1. CORRIDOR CRUSHER: Prioritize East-West horizontal cross-cuts inside the board
-            -- to slice vertical corridors into small 1-box units
+            -- Corridor Crusher: Cut across the longer dimension of the grid
             if edge.orientCode == "EW" and #bIds == 2 then
                 score += 3500
             elseif edge.orientCode == "NS" and #bIds == 2 then
-                score -= 1500 -- Penalize vertical lines that feed long corridors
+                score -= 1500
             end
 
-            -- 2. PERIMETER SUPPRESSION: Do not seal the outer perimeter early
+            -- Suppress early outer perimeter moves
             if #bIds == 1 then
                 score -= 2800
             end
 
-            -- 3. PARITY SIMULATION
+            -- Parity simulation
             edgeOccupied[sm.index] = true
             for j = 1, #bIds do boxDegree[bIds[j]] += 1 end
 
@@ -652,7 +724,7 @@ local function calculateBestMove(tableModel)
             edgeOccupied[sm.index] = false
 
             if safeAfterMove % 2 == 0 then
-                score += 2500 -- Even remaining safe moves force the bot to run out first
+                score += 2500
             else
                 score -= 2500
             end
@@ -667,7 +739,7 @@ local function calculateBestMove(tableModel)
             and ("CROSS-CUT: Sever Vertical Corridor [" .. bestSafe.edge.orientation .. "]")
             or ("PARITY: Force Bot Exhaustion [" .. bestSafe.edge.orientation .. "]")
 
-        return bestSafe.edge, desc, completedBoxes, myScore, oppScore, "Center Control (" .. #safeMoves .. " Left)"
+        return bestSafe.edge, desc, completedBoxes, myScore, oppScore, "Center Control (" .. #safeMoves .. " Left)", goalToWin
     end
 
     -- =========================================================================
@@ -676,10 +748,10 @@ local function calculateBestMove(tableModel)
     if #forcedSacrifices > 0 then
         table.sort(forcedSacrifices, function(a, b) return a.cascade < b.cascade end)
         local bestSac = forcedSacrifices[1]
-        return bestSac.edge, "SACRIFICE: Give " .. bestSac.cascade .. " [" .. bestSac.edge.orientation .. "]", completedBoxes, myScore, oppScore, "Forced Sacrifice"
+        return bestSac.edge, "SACRIFICE: Give " .. bestSac.cascade .. " [" .. bestSac.edge.orientation .. "]", completedBoxes, myScore, oppScore, "Forced Sacrifice", goalToWin
     end
 
-    return state.remainingEdges[1], "FALLBACK", completedBoxes, myScore, oppScore, "Active"
+    return state.remainingEdges[1], "FALLBACK", completedBoxes, myScore, oppScore, "Active", goalToWin
 end
 
 -- ============================================================================
@@ -704,7 +776,7 @@ local function updatePredictionBeam(tableModel)
     engineGeneration += 1
     local generation = engineGeneration
 
-    local bestEdge, reason, completedBoxes, myScore, oppScore, modeInfo = calculateBestMove(tableModel)
+    local bestEdge, reason, completedBoxes, myScore, oppScore, modeInfo, goalToWin = calculateBestMove(tableModel)
 
     if generation ~= engineGeneration then
         engineBusy = false
@@ -713,7 +785,7 @@ local function updatePredictionBeam(tableModel)
     engineBusy = false
 
     if scoreLabel then
-        scoreLabel.Text = string.format("Me: %d | Bot: %d | Goal: 13", myScore or 0, oppScore or 0)
+        scoreLabel.Text = string.format("Me: %d | Bot: %d | Goal: %d", myScore or 0, oppScore or 0, goalToWin or 13)
     end
 
     if modeLabel then
@@ -1083,7 +1155,6 @@ local function createButton(name, text, x, y, width, height, bgColor)
     return btn
 end
 
--- 3 buttons seamlessly fitted into the existing 175-pixel width
 local onBtn = createButton("OnBtn", "On", 6, 100, 50, 30, Color3.fromRGB(40, 120, 40))
 local destroyBtn = createButton("DestroyBtn", "Destroy", 61, 100, 53, 30, Color3.fromRGB(150, 40, 40))
 local offBtn = createButton("OffBtn", "Off", 119, 100, 50, 30, Color3.fromRGB(60, 60, 60))
